@@ -68,3 +68,19 @@ public struct RenderInstruction: Sendable, Equatable {
     }
 }
 
+/// Where an inserted media clip lives on the render output: which decode track
+/// supplies its frames, its natural pixel size, and its source transform. The
+/// portable twin of the macOS planner's internal `Slot`; macOS fills these from
+/// AVFoundation track mappings + asset-loaded sizing/transforms.
+public struct TrackSlot: Sendable, Equatable {
+    public let trackID: TrackID
+    public let natSize: Size2D
+    public let transform: Mat3
+
+    public init(trackID: TrackID, natSize: Size2D, transform: Mat3) {
+        self.trackID = trackID
+        self.natSize = natSize
+        self.transform = transform
+    }
+}
+
