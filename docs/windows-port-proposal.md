@@ -382,3 +382,70 @@ coordination, and updates/auth/telemetry swaps. The native Windows Swift
 toolchain remains blocked by the host's Burn/MSI installer issue and is
 required before any of that work can be verified locally.
 
+## LLM multi-provider refactor — COMPLETE (verified)
+
+The agent's LLM layer was previously Anthropic-shaped end-to-end
+(`AnthropicMessage`/`AnthropicToolSchema`/`AnthropicStreamEvent`, hard-coded
+`claude-*` models, Anthropic SSE). It is now provider-neutral through the
+`ChatClient` abstraction in `PalmierCore`, with Anthropic and OpenAI both
+conforming as adapters. This was the prerequisite called out as "Next work" in
+the session handoff.
+
+**What landed (8 commits, all macOS-CI green):**
+
+1. **Neutral types** (`Sources/PalmierCore/ChatClient.swift`): `ChatMessage`,
+   `ChatContentBlock` (text/image/toolCall/toolResult), `ToolSchema`,
+   `ChatStreamEvent`, `ChatStopReason`, `ChatModel`, `ChatClient` protocol,
+   `JSONValue`. `toolResult` carries `[ToolResultBlock]` (text + image) so
+   image-bearing tool results (`capture_frame`, `inspect_media`,
+   `inspect_timeline`, `inspect_color`) are not dropped at the adapter.
+2. **`AnthropicChatAdapter`** (`Sources/PalmierPro/Agent/Clients/`): neutral →
+   Anthropic request body; Anthropic SSE → `ChatStreamEvent`.
+   `AnthropicClient` conforms to both `AgentClient` (legacy, Anthropic-typed)
+   and `ChatClient` (neutral), resolved by parameter type. `AnthropicSSE.parse`
+   decoupled from its continuation via a yield closure.
+3. **`AgentService` migrated** to neutral types end-to-end: `model: ChatModel`
+   (persisted by id to the existing `"agentModel"` UserDefaults key),
+   `apiMessages() -> [ChatMessage]`, `runLoop` uses `ChatStreamEvent`/
+   `ChatStopReason`. Anthropic specifics (`requestExtras`, API model id) stay
+   inside `AnthropicClient` via an `anthropicModel(for:)` bridge.
+4. **`OpenAIChatAdapter` + `OpenAIClient`**: second concrete provider. Handles
+   the Chat Completions impedance mismatch — system as a message, assistant
+   `tool_calls` array, tool results fanned into one `role:tool` message per
+   call, streamed `tool_calls` accumulated by `index` and flushed on
+   `finish_reason`. Configurable `baseURL` for OpenAI-compatible endpoints.
+5. **Provider picker + multi-provider keys**: `AgentService.provider`/
+   `availableProviders`/`effectiveProvider`; provider dropdown drives model
+   dropdown in the agent panel; per-provider API-key sections in Settings
+   (reusable `APIKeySection`). `OpenAIKeychain` mirrors `AnthropicKeychain`.
+
+**Verification (macOS CI, run IDs on fork `yassinebkr/palmier-pro`):**
+
+| Slice | Commit | CI run | Tests |
+|---|---|---|---|
+| 1 AnthropicClient → ChatClient | `3c774b1` | 30287416690 ✅ | 1264 |
+| 2-precond toolResult→[block] | `a56c374` | 30288302140 ✅ | 1265 |
+| 2 AgentService neutral types | `886294e` | 30289055098 ✅ | 1265 |
+| 3 OpenAI adapter | `9160a1a` | 30290086044 ✅ | 1280 |
+| 4 provider picker + keys | `ac97ba3` | 30291076387 ✅ | 1289 |
+
+Adapter pure functions additionally type-checked on native Windows Swift 6.3.3
+(isolated package technique) before each CI push.
+
+**Tests added** (`Tests/PalmierProTests/Agent/`): `AnthropicChatAdapterTests`
+(tool schema, all content blocks incl. image tool result, stop-reason map,
+per-event translator), `OpenAIChatAdapterTests` (request body, message
+fan-out, streamed tool-call accumulation by index, flush on `[DONE]`, parallel
+tool-call ordering), `ChatModelCatalogTests` (catalog resolution, provider
+clamp on switch).
+
+**What's NOT done (deferred):** end-to-end runtime verification of an actual
+OpenAI stream (requires a live key + network; not exercised in unit tests).
+The OpenAI adapter is verified by logic-level tests against the documented
+SSE shape, not by a real API call. Manual verification plan: set an OpenAI
+key in Settings, select OpenAI + a model, send an agent message that triggers
+a tool call, confirm the tool-call argument reconstruction and the tool-result
+round-trip render correctly in the panel.
+
+
+
