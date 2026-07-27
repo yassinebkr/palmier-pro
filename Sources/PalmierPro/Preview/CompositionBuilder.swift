@@ -581,7 +581,10 @@ enum CompositionBuilder {
     ) -> [CompositorInstruction] {
         let timescale = CMTimeScale(timeline.fps)
         func cmTime(_ frame: Int) -> CMTime { CMTime(value: CMTimeValue(frame), timescale: timescale) }
-        struct Slot { let trackID: CMPersistentTrackID; let natSize: CGSize; let transform: CGAffineTransform }
+        // AVFoundation-supplied sizing/transforms stay Apple-typed here (they
+        // come from asset loading); convert to portable `Size2D`/`Mat3` when
+        // constructing each `LayerPlan` so the render contract stays portable.
+        struct Slot { let trackID: TrackID; let natSize: CGSize; let transform: CGAffineTransform }
         struct Entry { let start: CMTime; let end: CMTime; let plan: LayerPlan }
 
         // Resolve each inserted media clip to the composition track it lives on.
@@ -599,7 +602,7 @@ enum CompositionBuilder {
             }
             for id in ids {
                 media[id] = Slot(
-                    trackID: mapping.compositionTrack.trackID,
+                    trackID: TrackID(rawValue: mapping.compositionTrack.trackID),
                     natSize: clipNaturalSizes[id] ?? mapping.naturalSize,
                     transform: clipTransforms[id] ?? .identity
                 )
@@ -620,6 +623,7 @@ enum CompositionBuilder {
         // Group layer for one segment window; empty children still render (nest gaps are opaque black).
         func nestGroupPlan(carrier: Clip, depth: Int, window: Range<Int>) -> LayerPlan? {
             guard let flat = flattened(for: carrier, depth: depth) else { return nil }
+            let childCanvas = Size2D(flat.childCanvas)
             var children: [LayerPlan] = []
             for childClips in flat.videoTracks.reversed() {
                 var prevEnd = Int.min
@@ -627,7 +631,7 @@ enum CompositionBuilder {
                     let overlapsWindow = clip.startFrame < window.upperBound && clip.endFrame > window.lowerBound
                     if clip.mediaType == .text {
                         guard overlapsWindow, !(clip.textContent ?? "").isEmpty else { continue }
-                        children.append(LayerPlan(source: .text, clip: clip, natSize: flat.childCanvas, preferredTransform: .identity))
+                        children.append(LayerPlan(source: .text, clip: clip, natSize: childCanvas, preferredTransform: .identity))
                     } else if clip.mediaType == .sequence {
                         guard clip.startFrame >= prevEnd else { continue }
                         prevEnd = clip.endFrame
@@ -637,12 +641,12 @@ enum CompositionBuilder {
                         guard clip.startFrame >= prevEnd, let slot = media[clip.id] else { continue }
                         prevEnd = clip.endFrame
                         guard overlapsWindow else { continue }
-                        children.append(LayerPlan(source: .track(slot.trackID), clip: clip, natSize: slot.natSize, preferredTransform: slot.transform))
+                        children.append(LayerPlan(source: .track(slot.trackID), clip: clip, natSize: Size2D(slot.natSize), preferredTransform: Mat3(slot.transform)))
                     }
                 }
             }
-            return LayerPlan(source: .group(children: children, canvas: flat.childCanvas),
-                             clip: carrier, natSize: flat.childCanvas, preferredTransform: .identity)
+            return LayerPlan(source: .group(children: children, canvas: childCanvas),
+                             clip: carrier, natSize: childCanvas, preferredTransform: .identity)
         }
 
         // Child clip boundaries: segments scope decoder demand to what's visible.
@@ -669,7 +673,7 @@ enum CompositionBuilder {
                 let plan: LayerPlan
                 if clip.mediaType == .text {
                     guard !(clip.textContent ?? "").isEmpty else { continue }
-                    plan = LayerPlan(source: .text, clip: clip, natSize: renderSize, preferredTransform: .identity)
+                    plan = LayerPlan(source: .text, clip: clip, natSize: Size2D(renderSize), preferredTransform: .identity)
                 } else if clip.mediaType == .sequence {
                     guard clip.startFrame >= prevEndFrame else { continue }
                     prevEndFrame = clip.endFrame
@@ -687,7 +691,7 @@ enum CompositionBuilder {
                     continue
                 } else {
                     guard clip.startFrame >= prevEndFrame, let slot = media[clip.id] else { continue }
-                    plan = LayerPlan(source: .track(slot.trackID), clip: clip, natSize: slot.natSize, preferredTransform: slot.transform)
+                    plan = LayerPlan(source: .track(slot.trackID), clip: clip, natSize: Size2D(slot.natSize), preferredTransform: Mat3(slot.transform))
                     prevEndFrame = clip.endFrame
                 }
                 entries.append(Entry(start: cmTime(clip.startFrame), end: cmTime(clip.endFrame), plan: plan))

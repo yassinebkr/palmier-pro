@@ -156,7 +156,7 @@ struct FrameRendererColorTagTests {
         CVBufferSetAttachment(source, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
 
         let clip = Fixtures.clip(id: "clip", mediaRef: "src", start: 0, duration: 1)
-        let layer = LayerPlan(source: .track(7), clip: clip, natSize: CGSize(width: 2, height: 2), preferredTransform: .identity)
+        let layer = LayerPlan(source: .track(TrackID(rawValue: 7)), clip: clip, natSize: Size2D(width: 2, height: 2), preferredTransform: .identity)
         let instruction = CompositorInstruction(
             timeRange: CMTimeRange(start: .zero, duration: CMTime(value: 1, timescale: 30)),
             layers: [layer],
