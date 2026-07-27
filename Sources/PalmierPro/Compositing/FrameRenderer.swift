@@ -1,27 +1,36 @@
 import AVFoundation
 import CoreImage
+import PalmierCore
 
-/// Composites a frame from a CompositorInstruction's layers with Core Image:
+/// Composites a frame from a segment's layers with Core Image:
 /// per-layer crop → effects → corner mask → transform → opacity, stacked bottom→top.
+///
+/// The contract is portable: `layers`, `renderSize`, `fps`, `frame`, and the
+/// `sourceFrame` track id are all `PalmierCore` types. The only Apple types left
+/// are the pixel buffers themselves (`CVPixelBuffer`) and the `CIContext`, which
+/// are the CoreImage boundary this renderer exists to satisfy — they stay here,
+/// not in the planner or the layer contract.
 enum FrameRenderer {
 
     static func render(
-        instruction: CompositorInstruction,
-        sourceFrame: (CMPersistentTrackID) -> CVPixelBuffer?,
-        compositionTime: CMTime,
+        layers: [LayerPlan],
+        renderSize: Size2D,
+        fps: Int,
+        frame: Int,
+        sourceFrame: (TrackID) -> CVPixelBuffer?,
         into output: CVPixelBuffer,
         context: CIContext
     ) {
-        let renderRect = CGRect(origin: .zero, size: instruction.renderSize)
-        let frame = Int((compositionTime.seconds * Double(instruction.fps)).rounded())
+        let renderCGSize = CGSize(width: renderSize.width, height: renderSize.height)
+        let renderRect = CGRect(origin: .zero, size: renderCGSize)
 
         let base = CIImage(color: .black).cropped(to: renderRect)
         let accum = composite(
-            layers: instruction.layers, over: base, frame: frame,
-            renderSize: instruction.renderSize, sourceFrame: sourceFrame, gateByClipRange: false
+            layers: layers, over: base, frame: frame,
+            renderSize: renderCGSize, sourceFrame: sourceFrame, gateByClipRange: false
         )
         let tagSource = colorTagSource(
-            layers: instruction.layers,
+            layers: layers,
             frame: frame,
             sourceFrame: sourceFrame,
             gateByClipRange: false
@@ -37,7 +46,7 @@ enum FrameRenderer {
         over background: CIImage,
         frame: Int,
         renderSize: CGSize,
-        sourceFrame: (CMPersistentTrackID) -> CVPixelBuffer?,
+        sourceFrame: (TrackID) -> CVPixelBuffer?,
         gateByClipRange: Bool
     ) -> CIImage {
         var accum = background
@@ -73,7 +82,7 @@ enum FrameRenderer {
             let image: CIImage?
             switch layer.source {
             case .track(let id):
-                guard let buffer = sourceFrame(id.cmPersistentTrackID) else { continue }
+                guard let buffer = sourceFrame(id) else { continue }
                 image = composedLayer(layer, buffer: buffer, frame: frame,
                                       renderSize: renderSize, bakeOpacity: isNormal)
             case .text:
@@ -116,7 +125,7 @@ enum FrameRenderer {
         canvas: CGSize,
         frame: Int,
         renderSize: CGSize,
-        sourceFrame: (CMPersistentTrackID) -> CVPixelBuffer?,
+        sourceFrame: (TrackID) -> CVPixelBuffer?,
         bakeOpacity: Bool
     ) -> CIImage? {
         let alpha = min(1.0, max(0.0, layer.clip.opacityAt(frame: frame)))
@@ -162,7 +171,7 @@ enum FrameRenderer {
     private static func colorTagSource(
         layers: [LayerPlan],
         frame: Int,
-        sourceFrame: (CMPersistentTrackID) -> CVPixelBuffer?,
+        sourceFrame: (TrackID) -> CVPixelBuffer?,
         gateByClipRange: Bool
     ) -> CVPixelBuffer? {
         for layer in layers.reversed() {

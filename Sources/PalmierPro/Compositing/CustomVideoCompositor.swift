@@ -75,9 +75,11 @@ final class CustomVideoCompositor: NSObject, AVVideoCompositing, @unchecked Send
             return
         }
         FrameRenderer.render(
-            instruction: instruction,
-            sourceFrame: { request.sourceFrame(byTrackID: $0) },
-            compositionTime: request.compositionTime,
+            layers: instruction.layers,
+            renderSize: Size2D(instruction.renderSize),
+            fps: instruction.fps,
+            frame: Int((request.compositionTime.seconds * Double(instruction.fps)).rounded()),
+            sourceFrame: { request.sourceFrame(byTrackID: $0.rawValue) },
             into: output,
             context: ciContext
         )
