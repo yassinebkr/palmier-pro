@@ -104,6 +104,34 @@ enum AnthropicChatAdapter {
             yield(chatStreamEvent(from: event))
         }
     }
+
+    /// Wraps an `AgentClient`'s Anthropic-shaped stream as a neutral
+    /// `ChatStreamEvent` stream. Shared by every client that proxies the
+    /// Anthropic wire format (`AnthropicClient` direct, `PalmierClient` via
+    /// Convex), so the neutral surface is identical regardless of transport.
+    static func wrapStream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage],
+        agentClient: any AgentClient
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        let anthropicTools = tools.map(toolSchema(from:))
+        let anthropicMessages = messages.map(message(from:))
+        let upstream = agentClient.stream(system: system, tools: anthropicTools, messages: anthropicMessages)
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in upstream {
+                        continuation.yield(chatStreamEvent(from: event))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 }
 
 // MARK: - ChatClient conformance
@@ -118,21 +146,19 @@ extension AnthropicClient: ChatClient {
         tools: [ToolSchema],
         messages: [ChatMessage]
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        let anthropicTools = tools.map(AnthropicChatAdapter.toolSchema(from:))
-        let anthropicMessages = messages.map(AnthropicChatAdapter.message(from:))
-        let upstream = stream(system: system, tools: anthropicTools, messages: anthropicMessages)
-        return AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    for try await event in upstream {
-                        continuation.yield(AnthropicChatAdapter.chatStreamEvent(from: event))
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
+        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self)
+    }
+}
+
+extension PalmierClient: ChatClient {
+    /// Provider-neutral `ChatClient` surface. `PalmierClient` proxies the
+    /// Anthropic wire format through Convex, so it reuses the same adapter
+    /// translation as `AnthropicClient`.
+    func stream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage]
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self)
     }
 }
