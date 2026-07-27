@@ -12,7 +12,7 @@ struct AnthropicChatAdapterTests {
         let schema = ToolSchema(
             name: "manage_project",
             description: "Manage the project.",
-            inputSchema: .object(["type": "object", "properties": .null])
+            inputSchema: JSONValue(["type": "object"])
         )
         let result = AnthropicChatAdapter.toolSchema(from: schema)
         #expect(result.name == "manage_project")
@@ -20,15 +20,15 @@ struct AnthropicChatAdapterTests {
     }
 
     @Test func toolSchemaUnwrapsJSONValueToPlainDict() {
+        // ToolDefinitions builds schemas as [String: Any]; JSONValue(_:) is the
+        // bridge into ToolSchema. Mirror that here.
         let schema = ToolSchema(
             name: "t",
             description: "",
-            inputSchema: .object([
-                "type": .string("object"),
-                "required": .array([.string("frame")]),
-                "properties": .object([
-                    "frame": .object(["type": .string("integer")]),
-                ]),
+            inputSchema: JSONValue([
+                "type": "object",
+                "required": ["frame"],
+                "properties": ["frame": ["type": "integer"]],
             ])
         )
         let result = AnthropicChatAdapter.toolSchema(from: schema)
