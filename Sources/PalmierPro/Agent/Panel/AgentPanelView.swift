@@ -138,34 +138,63 @@ struct AgentPanelView: View {
 
     @ViewBuilder
     private var modelPicker: some View {
-        if service.hasApiKey {
-            Menu {
-                ForEach(service.availableModels, id: \.self) { m in
-                    Button(m.displayName) { service.model = m }
+        if !service.availableProviders.isEmpty {
+            HStack(spacing: AppTheme.Spacing.xs) {
+                if service.availableProviders.count > 1 {
+                    providerMenu
                 }
-            } label: {
-                HStack(spacing: AppTheme.Spacing.xs) {
-                    Text(service.effectiveModel.displayName)
-                        .font(.system(size: AppTheme.FontSize.xs, weight: .medium))
-                        .foregroundStyle(AppTheme.Text.secondaryColor)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: AppTheme.FontSize.micro, weight: .semibold))
-                        .foregroundStyle(AppTheme.Text.tertiaryColor)
-                }
+                modelMenu
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
         }
+    }
+
+    private var providerMenu: some View {
+        Menu {
+            ForEach(service.availableProviders) { p in
+                Button(p.displayName) { service.provider = p }
+            }
+        } label: {
+            HStack(spacing: AppTheme.Spacing.xxs) {
+                Text(service.effectiveProvider.displayName)
+                    .font(.system(size: AppTheme.FontSize.xs, weight: .medium))
+                    .foregroundStyle(AppTheme.Text.secondaryColor)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: AppTheme.FontSize.micro, weight: .semibold))
+                    .foregroundStyle(AppTheme.Text.tertiaryColor)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            ForEach(service.availableModels, id: \.self) { m in
+                Button(m.displayName) { service.model = m }
+            }
+        } label: {
+            HStack(spacing: AppTheme.Spacing.xxs) {
+                Text(service.effectiveModel.displayName)
+                    .font(.system(size: AppTheme.FontSize.xs, weight: .medium))
+                    .foregroundStyle(AppTheme.Text.secondaryColor)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: AppTheme.FontSize.micro, weight: .semibold))
+                    .foregroundStyle(AppTheme.Text.tertiaryColor)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     @ViewBuilder
     private var byokIndicator: some View {
-        if service.hasApiKey {
+        if service.effectiveProvider.requiresAPIKey {
             Text("using API key")
                 .font(.system(size: AppTheme.FontSize.xs).italic())
                 .foregroundStyle(AppTheme.Text.tertiaryColor)
-                .help("Streaming through your Anthropic API key (BYOK)")
+                .help("Streaming through your \(service.effectiveProvider.displayName) API key (BYOK)")
         }
     }
 
