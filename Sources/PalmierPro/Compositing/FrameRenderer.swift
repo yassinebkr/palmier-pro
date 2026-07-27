@@ -179,7 +179,7 @@ enum FrameRenderer {
             guard layer.clip.opacityAt(frame: frame) > 0 else { continue }
             switch layer.source {
             case .track(let id):
-                if let buffer = sourceFrame(id.cmPersistentTrackID) { return buffer }
+                if let buffer = sourceFrame(id) { return buffer }
             case .text:
                 continue
             case .group(let children, _):
