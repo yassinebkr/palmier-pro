@@ -5,67 +5,94 @@ import Observation
 @MainActor
 final class AgentService {
 
-    private var apiKey: String = ""
-    private var apiKeyObserver: NSObjectProtocol?
+    private var apiKeys: [String: String] = [:]
+    private var apiKeyObservers: [NSObjectProtocol] = []
 
     init() {
-        reloadAPIKey()
-        apiKeyObserver = NotificationCenter.default.addObserver(
-            forName: .anthropicAPIKeyChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.reloadAPIKey()
-            }
+        reloadAPIKeys()
+        for name in [Notification.Name.anthropicAPIKeyChanged, .openaiAPIKeyChanged] {
+            apiKeyObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: nil, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.reloadAPIKeys() }
+                }
+            )
         }
     }
 
-    private func reloadAPIKey() {
+    private func reloadAPIKeys() {
         Task { [weak self] in
-            let key = await Task.detached(priority: .utility) {
-                AnthropicKeychain.load() ?? ""
+            let keys = await Task.detached(priority: .utility) {
+                [
+                    "anthropic": AnthropicKeychain.load() ?? "",
+                    "openai": OpenAIKeychain.load() ?? "",
+                ]
             }.value
-            self?.apiKey = key
+            self?.apiKeys = keys
         }
     }
 
     isolated deinit {
-        if let token = apiKeyObserver {
+        for token in apiKeyObservers {
             NotificationCenter.default.removeObserver(token)
         }
     }
 
-    var hasApiKey: Bool { !apiKey.isEmpty }
+    func apiKey(for provider: String) -> String { apiKeys[provider] ?? "" }
+    var hasAnthropicKey: Bool { !apiKey(for: "anthropic").isEmpty }
+    var hasOpenAIKey: Bool { !apiKey(for: "openai").isEmpty }
+    var hasAnyAPIKey: Bool { !apiKeys.values.allSatisfy { $0.isEmpty } }
 
     var canStream: Bool {
-        if hasApiKey { return true }
+        if hasAnyAPIKey { return true }
         let account = AccountService.shared
         return account.isSignedIn && account.hasCredits
     }
 
+    /// Providers selectable given the user's keys and sign-in state. API-key
+    /// providers appear only when their key is set; the Palmier cloud backend
+    /// appears when signed in with credits.
+    var availableProviders: [ChatProvider] {
+        var providers: [ChatProvider] = []
+        if hasAnthropicKey { providers.append(.anthropic) }
+        if hasOpenAIKey { providers.append(.openai) }
+        if AccountService.shared.isSignedIn && AccountService.shared.hasCredits {
+            providers.append(.palmier)
+        }
+        return providers
+    }
+
     var availableModels: [ChatModel] {
-        if hasApiKey { return ChatModelCatalog.anthropic }
-        return [ChatModelCatalog.defaultModel]
+        ChatModelCatalog.models(for: effectiveProvider.id)
     }
 
     private func selectClient() -> (any ChatClient)? {
-        let chosen = effectiveModel
-        if hasApiKey, let anthropic = anthropicModel(for: chosen) {
-            return AnthropicClient(apiKey: apiKey, model: anthropic)
+        let model = effectiveModel
+        let provider = effectiveProvider.id
+        switch provider {
+        case "anthropic":
+            let key = apiKey(for: "anthropic")
+            if !key.isEmpty, let anthropic = AnthropicModel(rawValue: model.id) {
+                return AnthropicClient(apiKey: key, model: anthropic)
+            }
+            if AccountService.shared.isSignedIn, let anthropic = AnthropicModel(rawValue: model.id) {
+                return PalmierClient(model: anthropic)
+            }
+            return nil
+        case "openai":
+            let key = apiKey(for: "openai")
+            guard !key.isEmpty else { return nil }
+            return OpenAIClient(apiKey: key, model: model.id)
+        default:
+            return nil
         }
-        if AccountService.shared.isSignedIn, let anthropic = anthropicModel(for: chosen) {
-            return PalmierClient(model: anthropic)
-        }
-        return nil
     }
 
-    /// Maps a neutral `ChatModel` to the Anthropic enum the client still owns,
-    /// so provider-specific knobs (requestExtras, API model id) stay inside the
-    /// Anthropic client. Returns nil if the stored id isn't an Anthropic model.
-    private func anthropicModel(for model: ChatModel) -> AnthropicModel? {
-        guard model.provider == "anthropic" else { return nil }
-        return AnthropicModel(rawValue: model.id)
+    var effectiveProvider: ChatProvider {
+        let available = availableProviders
+        if available.contains(provider) { return provider }
+        return available.first ?? .anthropic
     }
 
     var effectiveModel: ChatModel {
@@ -74,11 +101,32 @@ final class AgentService {
         return available.first ?? ChatModelCatalog.defaultModel
     }
 
-    var model: ChatModel = {
-        if let id = UserDefaults.standard.string(forKey: "agentModel") {
-            return ChatModelCatalog.resolve(id: id)
+    /// Selected provider, persisted by id. Defaults to Anthropic (the first
+    /// API-key provider), or Palmier cloud when only signed in.
+    var provider: ChatProvider = {
+        if let raw = UserDefaults.standard.string(forKey: "agentProvider") {
+            switch raw {
+            case "anthropic": return .anthropic
+            case "openai": return .openai
+            case "palmier": return .palmier
+            default: return .anthropic
+            }
         }
-        return ChatModelCatalog.defaultModel
+        return .anthropic
+    }() {
+        didSet {
+            UserDefaults.standard.set(provider.id, forKey: "agentProvider")
+            // Re-clamp the model into the new provider's catalog.
+            model = ChatModelCatalog.models(for: provider.id).first ?? ChatModelCatalog.defaultModel
+        }
+    }
+
+    var model: ChatModel = {
+        let p = UserDefaults.standard.string(forKey: "agentProvider") ?? "anthropic"
+        if let id = UserDefaults.standard.string(forKey: "agentModel") {
+            return ChatModelCatalog.resolve(provider: p, id: id)
+        }
+        return ChatModelCatalog.resolve(provider: p, id: "")
     }() {
         didSet { UserDefaults.standard.set(model.id, forKey: "agentModel") }
     }
