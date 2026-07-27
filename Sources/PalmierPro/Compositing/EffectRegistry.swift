@@ -360,16 +360,11 @@ enum EffectRegistry {
     static func descriptor(id: String) -> EffectDescriptor? { byId[id] }
 
     /// Canonical order the always-on adjustment sections insert their effects in.
-    static let canonicalOrder: [String] = [
-        "color.exposure", "color.contrast", "color.highlightsShadows", "color.blacksWhites",
-        "color.temperature", "color.vibrance", "color.saturation", "color.wheels", "color.curves",
-        "color.hueCurves", "color.lut", "detail.clarity", "key.chroma", "blur.gaussian", "blur.sharpen",
-        "blur.noiseReduction", "blur.motion", "stylize.invert", "stylize.grain", "stylize.vignette",
-        "stylize.glow",
-    ]
+    /// Delegates to the portable `EffectOrdering` so the order is shared with
+    /// core-side model types (e.g. `HueCurves.upsert`).
+    static var canonicalOrder: [String] { EffectOrdering.canonicalOrder }
 
     static func insertIndex(_ effects: [Effect], for id: String) -> Int {
-        let rank = canonicalOrder.firstIndex(of: id) ?? Int.max
-        return effects.firstIndex { (canonicalOrder.firstIndex(of: $0.type) ?? Int.max) > rank } ?? effects.count
+        EffectOrdering.insertIndex(effects, for: id)
     }
 }
