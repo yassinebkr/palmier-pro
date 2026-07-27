@@ -82,17 +82,41 @@ struct AnthropicChatAdapterTests {
         #expect((block["input"] as? [String: Any])?["frame"] as? Int == 120)
     }
 
-    @Test func messageMapsToolResultBlock() {
+    @Test func messageMapsToolResultTextBlock() {
         let msg = ChatMessage(role: .user, content: [
-            .toolResult(toolCallID: "tu_1", content: "done", isError: false),
+            .toolResult(toolCallID: "tu_1", content: [.text("done")], isError: false),
         ])
         let result = AnthropicChatAdapter.message(from: msg)
         #expect(result.content.count == 1)
         let block = result.content[0]
         #expect(block["type"] as? String == "tool_result")
         #expect(block["tool_use_id"] as? String == "tu_1")
-        #expect(block["content"] as? String == "done")
+        let contentArr = block["content"] as? [[String: Any]]
+        #expect(contentArr?.count == 1)
+        #expect(contentArr?[0]["type"] as? String == "text")
+        #expect(contentArr?[0]["text"] as? String == "done")
         #expect(block["is_error"] as? Bool == false)
+    }
+
+    @Test func messageMapsToolResultImageBlockPreservingBase64() {
+        // capture_frame / inspect_media return image tool results; the adapter
+        // must not drop them when translating to Anthropic's wire format.
+        let msg = ChatMessage(role: .user, content: [
+            .toolResult(
+                toolCallID: "tu_2",
+                content: [.image(mediaType: "image/jpeg", base64: "QUJD")],
+                isError: false
+            ),
+        ])
+        let result = AnthropicChatAdapter.message(from: msg)
+        let block = result.content[0]
+        let contentArr = block["content"] as? [[String: Any]]
+        #expect(contentArr?.count == 1)
+        #expect(contentArr?[0]["type"] as? String == "image")
+        let source = contentArr?[0]["source"] as? [String: Any]
+        #expect(source?["type"] as? String == "base64")
+        #expect(source?["media_type"] as? String == "image/jpeg")
+        #expect(source?["data"] as? String == "QUJD")
     }
 
     @Test func assistantRoleMapsToAssistant() {

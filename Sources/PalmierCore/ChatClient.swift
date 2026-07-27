@@ -13,7 +13,15 @@ public enum ChatContentBlock: Sendable, Equatable {
     case text(String)
     case image(mediaType: String, base64: String)
     case toolCall(id: String, name: String, inputJSON: String)
-    case toolResult(toolCallID: String, content: String, isError: Bool)
+    case toolResult(toolCallID: String, content: [ToolResultBlock], isError: Bool)
+}
+
+/// One block within a tool result. Tools may return text and/or images
+/// (e.g. `capture_frame` returns a JPEG); the neutral type preserves both so
+/// image feedback to the model is not dropped by the adapter layer.
+public enum ToolResultBlock: Sendable, Equatable {
+    case text(String)
+    case image(mediaType: String, base64: String)
 }
 
 /// A single message in a chat conversation.

@@ -45,7 +45,19 @@ enum AnthropicChatAdapter {
         case .toolResult(let toolCallID, let content, let isError):
             return [
                 "type": "tool_result", "tool_use_id": toolCallID,
-                "content": content, "is_error": isError,
+                "content": content.map(resultBlockJSON), "is_error": isError,
+            ]
+        }
+    }
+
+    private static func resultBlockJSON(_ block: ToolResultBlock) -> [String: Any] {
+        switch block {
+        case .text(let s):
+            return ["type": "text", "text": s]
+        case .image(let mediaType, let base64):
+            return [
+                "type": "image",
+                "source": ["type": "base64", "media_type": mediaType, "data": base64],
             ]
         }
     }
