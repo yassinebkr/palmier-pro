@@ -115,4 +115,35 @@ struct AnthropicChatAdapterTests {
         #expect(AnthropicChatAdapter.stopReason(.pauseTurn) == .other)
         #expect(AnthropicChatAdapter.stopReason(.other) == .other)
     }
+
+    // MARK: chatStreamEvent — Anthropic stream → neutral stream
+
+    @Test func chatStreamEventMapsTextDelta() {
+        let result = AnthropicChatAdapter.chatStreamEvent(from: .textDelta("chunk"))
+        if case .textDelta(let s) = result {
+            #expect(s == "chunk")
+        } else {
+            Issue.record("expected .textDelta")
+        }
+    }
+
+    @Test func chatStreamEventMapsToolUseComplete() {
+        let result = AnthropicChatAdapter.chatStreamEvent(from: .toolUseComplete(id: "tu_9", name: "add_clips", inputJSON: "{}"))
+        if case .toolCallComplete(let id, let name, let json) = result {
+            #expect(id == "tu_9")
+            #expect(name == "add_clips")
+            #expect(json == "{}")
+        } else {
+            Issue.record("expected .toolCallComplete")
+        }
+    }
+
+    @Test func chatStreamEventMapsMessageStop() {
+        let result = AnthropicChatAdapter.chatStreamEvent(from: .messageStop(stopReason: .toolUse))
+        if case .stop(let reason) = result {
+            #expect(reason == .toolUse)
+        } else {
+            Issue.record("expected .stop")
+        }
+    }
 }
