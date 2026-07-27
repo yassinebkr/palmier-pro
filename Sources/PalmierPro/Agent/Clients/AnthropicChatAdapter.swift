@@ -14,7 +14,7 @@ enum AnthropicChatAdapter {
         AnthropicToolSchema(
             name: schema.name,
             description: schema.description,
-            inputSchema: schema.inputSchema.unwrap()
+            inputSchema: schema.inputSchema.unwrap() as? [String: Any] ?? [:]
         )
     }
 
@@ -56,6 +56,8 @@ enum AnthropicChatAdapter {
         return obj
     }
 
+    // MARK: Anthropic → neutral
+
     static func stopReason(_ reason: AnthropicStopReason) -> ChatStopReason {
         switch reason {
         case .endTurn: .endTurn
@@ -67,7 +69,18 @@ enum AnthropicChatAdapter {
         }
     }
 
-    // MARK: Anthropic stream → neutral stream
+    /// Translates one Anthropic stream event to its neutral equivalent. Every
+    /// `AnthropicStreamEvent` case maps 1:1, so this never returns nil.
+    static func chatStreamEvent(from event: AnthropicStreamEvent) -> ChatStreamEvent {
+        switch event {
+        case .textDelta(let s):
+            return .textDelta(s)
+        case .toolUseComplete(let id, let name, let inputJSON):
+            return .toolCallComplete(id: id, name: name, inputJSON: inputJSON)
+        case .messageStop(let reason):
+            return .stop(reason: stopReason(reason))
+        }
+    }
 
     /// Decodes Anthropic SSE bytes and yields provider-neutral `ChatStreamEvent`s.
     /// An SSE `error` frame is thrown as `AnthropicClientError.streamError`.
@@ -76,14 +89,7 @@ enum AnthropicChatAdapter {
         yield: @escaping (ChatStreamEvent) -> Void
     ) async throws {
         try await AnthropicSSE.parse(bytes: bytes) { event in
-            switch event {
-            case .textDelta(let s):
-                yield(.textDelta(s))
-            case .toolUseComplete(let id, let name, let inputJSON):
-                yield(.toolCallComplete(id: id, name: name, inputJSON: inputJSON))
-            case .messageStop(let reason):
-                yield(.stop(reason: stopReason(reason)))
-            }
+            yield(chatStreamEvent(from: event))
         }
     }
 }
@@ -107,7 +113,7 @@ extension AnthropicClient: ChatClient {
             let task = Task {
                 do {
                     for try await event in upstream {
-                        continuation.yield(event)
+                        continuation.yield(AnthropicChatAdapter.chatStreamEvent(from: event))
                     }
                     continuation.finish()
                 } catch {
