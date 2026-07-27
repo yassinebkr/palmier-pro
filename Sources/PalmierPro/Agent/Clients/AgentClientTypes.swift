@@ -93,9 +93,15 @@ enum AgentUsageLog {
 // MARK: - Shared SSE parser
 
 enum AnthropicSSE {
+    /// Parses the Anthropic SSE byte stream and reports each decoded event via
+    /// `yield`. Emits `AnthropicStreamEvent.textDelta`/`.toolUseComplete`/
+    /// `.messageStop`; an SSE `error` frame is thrown as
+    /// `AnthropicClientError.streamError`. The yield-closure shape lets the
+    /// parser back both the `AgentClient` continuation and the `ChatClient`
+    /// adapter without coupling it to a particular stream element type.
     static func parse(
         bytes: URLSession.AsyncBytes,
-        continuation: AsyncThrowingStream<AnthropicStreamEvent, Error>.Continuation
+        yield: @escaping (AnthropicStreamEvent) -> Void
     ) async throws {
         var pendingTools: [Int: (id: String, name: String, json: String)] = [:]
         for try await line in bytes.lines {
@@ -126,7 +132,7 @@ enum AnthropicSSE {
                       let delta = event["delta"] as? [String: Any],
                       let deltaType = delta["type"] as? String else { break }
                 if deltaType == "text_delta", let text = delta["text"] as? String, !text.isEmpty {
-                    continuation.yield(.textDelta(text))
+                    yield(.textDelta(text))
                 } else if deltaType == "input_json_delta",
                           let partial = delta["partial_json"] as? String,
                           var acc = pendingTools[index] {
@@ -137,24 +143,32 @@ enum AnthropicSSE {
             case "content_block_stop":
                 if let index = event["index"] as? Int, let acc = pendingTools.removeValue(forKey: index) {
                     let json = acc.json.isEmpty ? "{}" : acc.json
-                    continuation.yield(.toolUseComplete(id: acc.id, name: acc.name, inputJSON: json))
+                    yield(.toolUseComplete(id: acc.id, name: acc.name, inputJSON: json))
                 }
 
             case "message_delta":
                 if let delta = event["delta"] as? [String: Any],
                    let raw = delta["stop_reason"] as? String {
-                    continuation.yield(.messageStop(stopReason: AnthropicStopReason(rawValue: raw) ?? .other))
+                    yield(.messageStop(stopReason: AnthropicStopReason(rawValue: raw) ?? .other))
                 }
 
             case "error":
                 if let err = event["error"] as? [String: Any],
                    let msg = err["message"] as? String {
-                    continuation.finish(throwing: AnthropicClientError.streamError(msg))
+                    throw AnthropicClientError.streamError(msg)
                 }
 
             default: break
             }
         }
+    }
+
+    /// Convenience for the legacy `AgentClient` continuation.
+    static func parse(
+        bytes: URLSession.AsyncBytes,
+        continuation: AsyncThrowingStream<AnthropicStreamEvent, Error>.Continuation
+    ) async throws {
+        try await parse(bytes: bytes) { continuation.yield($0) }
     }
 }
 
