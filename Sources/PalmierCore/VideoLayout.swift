@@ -1,24 +1,37 @@
 import Foundation
 
-struct LayoutRect: Equatable, Sendable {
-    var x: Double
-    var y: Double
-    var w: Double
-    var h: Double
+public struct LayoutRect: Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public var w: Double
+    public var h: Double
+
+    public init(x: Double, y: Double, w: Double, h: Double) {
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+    }
 }
 
-struct LayoutSlot: Equatable, Sendable {
-    let id: String
-    let rect: LayoutRect
-    var z: Int = 0
+public struct LayoutSlot: Equatable, Sendable {
+    public let id: String
+    public let rect: LayoutRect
+    public var z: Int
+
+    public init(id: String, rect: LayoutRect, z: Int = 0) {
+        self.id = id
+        self.rect = rect
+        self.z = z
+    }
 }
 
-enum LayoutFit: String, Sendable {
+public enum LayoutFit: String, Sendable {
     case fill
     case fit
 }
 
-enum VideoLayout: String, CaseIterable, Sendable {
+public enum VideoLayout: String, CaseIterable, Sendable {
     case full
     case sideBySide = "side_by_side"
     case topBottom = "top_bottom"
@@ -27,10 +40,12 @@ enum VideoLayout: String, CaseIterable, Sendable {
     case pipTopRight = "pip_top_right"
     case pipTopLeft = "pip_top_left"
     case grid2x2 = "grid_2x2"
+    case grid3x3 = "grid_3x3"
+    case grid4x4 = "grid_4x4"
     case mainSidebar = "main_sidebar"
     case threeUp = "three_up"
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .full: "Full Frame"
         case .sideBySide: "Side by Side"
@@ -40,6 +55,8 @@ enum VideoLayout: String, CaseIterable, Sendable {
         case .pipTopRight: "PiP Top Right"
         case .pipTopLeft: "PiP Top Left"
         case .grid2x2: "Grid 2×2"
+        case .grid3x3: "Grid 3×3"
+        case .grid4x4: "Grid 4×4"
         case .mainSidebar: "Main + Sidebar"
         case .threeUp: "Three-Up"
         }
@@ -48,7 +65,7 @@ enum VideoLayout: String, CaseIterable, Sendable {
     private static let pipInset = 0.28
     private static let pipMargin = 0.035
 
-    var slots: [LayoutSlot] {
+    public var slots: [LayoutSlot] {
         switch self {
         case .full:
             return [LayoutSlot(id: "main", rect: LayoutRect(x: 0, y: 0, w: 1, h: 1))]
@@ -70,13 +87,9 @@ enum VideoLayout: String, CaseIterable, Sendable {
         case .pipTopRight:    return Self.pip(insetX: 1 - Self.pipMargin - Self.pipInset, insetY: Self.pipMargin)
         case .pipTopLeft:     return Self.pip(insetX: Self.pipMargin,                     insetY: Self.pipMargin)
 
-        case .grid2x2:
-            return [
-                LayoutSlot(id: "top_left",     rect: LayoutRect(x: 0,   y: 0,   w: 0.5, h: 0.5)),
-                LayoutSlot(id: "top_right",    rect: LayoutRect(x: 0.5, y: 0,   w: 0.5, h: 0.5)),
-                LayoutSlot(id: "bottom_left",  rect: LayoutRect(x: 0,   y: 0.5, w: 0.5, h: 0.5)),
-                LayoutSlot(id: "bottom_right", rect: LayoutRect(x: 0.5, y: 0.5, w: 0.5, h: 0.5)),
-            ]
+        case .grid2x2: return Self.grid(rows: 2, columns: 2)
+        case .grid3x3: return Self.grid(rows: 3, columns: 3)
+        case .grid4x4: return Self.grid(rows: 4, columns: 4)
 
         case .mainSidebar:
             return [
@@ -91,6 +104,18 @@ enum VideoLayout: String, CaseIterable, Sendable {
                 LayoutSlot(id: "center", rect: LayoutRect(x: third,     y: 0, w: third, h: 1)),
                 LayoutSlot(id: "right",  rect: LayoutRect(x: third * 2, y: 0, w: third, h: 1)),
             ]
+        }
+    }
+
+    private static func grid(rows: Int, columns: Int) -> [LayoutSlot] {
+        let width = 1.0 / Double(columns), height = 1.0 / Double(rows)
+        return (0..<rows).flatMap { row in
+            (0..<columns).map { column in
+                LayoutSlot(
+                    id: "r\(row + 1)c\(column + 1)",
+                    rect: LayoutRect(x: Double(column) * width, y: Double(row) * height, w: width, h: height)
+                )
+            }
         }
     }
 
