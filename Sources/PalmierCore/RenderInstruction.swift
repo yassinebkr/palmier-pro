@@ -1,17 +1,18 @@
 import Foundation
 
-/// Immutable per-clip snapshot read on the render queue — never the live timeline.
-/// Portable render-contract twin of the macOS `LayerPlan`. Bridges to/from the
-/// AVFoundation-bound app-side `LayerPlan` via `preferredTransform: Mat3`
-/// (which is byte-identical to CGAffineTransform under the layout documented
-/// in `Mat3.concatenating`) and `TrackID` (rawValue == CMPersistentTrackID).
-public struct PortableLayerPlan: Sendable, Equatable {
+/// Immutable per-clip snapshot read on the render queue — never the live
+/// timeline. This is the authoritative render-contract layer type, portable
+/// across macOS and Windows. macOS bridges to AVFoundation at the
+/// `CompositorInstruction`/`FrameRenderer` boundary: `preferredTransform: Mat3`
+/// is byte-identical to `CGAffineTransform` under the layout documented in
+/// `Mat3.concatenating`, and `TrackID.rawValue == CMPersistentTrackID`.
+public struct LayerPlan: Sendable, Equatable {
     public enum Source: Sendable, Equatable {
         case track(TrackID)
         case text
         /// Nested timeline: children composite into a `canvas`-sized unit, then
         /// the nest clip's pipeline applies.
-        case group(children: [PortableLayerPlan], canvas: Size2D)
+        case group(children: [LayerPlan], canvas: Size2D)
     }
     public let source: Source
     public let clip: Clip
@@ -41,16 +42,16 @@ public struct PortableLayerPlan: Sendable, Equatable {
 }
 
 /// One timeline segment between clip boundaries, in portable form. Layers are
-/// ordered bottom → top. Twin of the macOS `CompositorInstruction` minus the
-/// AVFoundation `AVVideoCompositionInstructionProtocol` conformance, which
-/// stays app-side.
+/// ordered bottom → top. The macOS `CompositorInstruction` adapts this to
+/// AVFoundation's `AVVideoCompositionInstructionProtocol`; Windows consumes it
+/// directly without that protocol layer.
 public struct RenderInstruction: Sendable, Equatable {
     public let frameRange: FrameRange
-    public let layers: [PortableLayerPlan]
+    public let layers: [LayerPlan]
     public let renderSize: Size2D
     public let fps: Int
 
-    public init(frameRange: FrameRange, layers: [PortableLayerPlan], renderSize: Size2D, fps: Int) {
+    public init(frameRange: FrameRange, layers: [LayerPlan], renderSize: Size2D, fps: Int) {
         self.frameRange = frameRange
         self.layers = layers
         self.renderSize = renderSize
@@ -66,3 +67,4 @@ public struct RenderInstruction: Sendable, Equatable {
         return all.filter { seen.insert($0).inserted }
     }
 }
+
