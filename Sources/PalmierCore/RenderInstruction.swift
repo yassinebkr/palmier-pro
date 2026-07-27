@@ -60,7 +60,7 @@ public struct RenderInstruction: Sendable, Equatable {
 
     public var requiredTrackIDs: [TrackID] {
         var all: [TrackID] = []
-        var seen = Set<TrackID]()
+        var seen = Set<TrackID>()
         for layer in layers {
             layer.collectTrackIDs(into: &all)
         }
