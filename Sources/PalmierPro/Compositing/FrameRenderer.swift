@@ -73,14 +73,14 @@ enum FrameRenderer {
             let image: CIImage?
             switch layer.source {
             case .track(let id):
-                guard let buffer = sourceFrame(id) else { continue }
+                guard let buffer = sourceFrame(id.cmPersistentTrackID) else { continue }
                 image = composedLayer(layer, buffer: buffer, frame: frame,
                                       renderSize: renderSize, bakeOpacity: isNormal)
             case .text:
                 image = composedTextLayer(layer, frame: frame, renderSize: renderSize,
                                           bakeOpacity: isNormal)
             case .group(let children, let canvas):
-                image = composedGroupLayer(layer, children: children, canvas: canvas, frame: frame,
+                image = composedGroupLayer(layer, children: children, canvas: canvas.cgSize, frame: frame,
                                            renderSize: renderSize, sourceFrame: sourceFrame, bakeOpacity: isNormal)
             }
             guard let image else { continue }
@@ -170,7 +170,7 @@ enum FrameRenderer {
             guard layer.clip.opacityAt(frame: frame) > 0 else { continue }
             switch layer.source {
             case .track(let id):
-                if let buffer = sourceFrame(id) { return buffer }
+                if let buffer = sourceFrame(id.cmPersistentTrackID) { return buffer }
             case .text:
                 continue
             case .group(let children, _):
@@ -268,12 +268,14 @@ enum FrameRenderer {
         let crop = clip.cropAt(frame: frame)
         if !crop.isIdentity {
             // Display-space insets → source pixels → CI's bottom-left origin.
+            let natW = CGFloat(layer.natSize.width)
+            let natH = CGFloat(layer.natSize.height)
             let avRect = CGRect(
-                x: crop.left * layer.natSize.width,
-                y: crop.top * layer.natSize.height,
-                width: max(1, crop.visibleWidthFraction * layer.natSize.width),
-                height: max(1, crop.visibleHeightFraction * layer.natSize.height)
-            ).applying(layer.preferredTransform.inverted())
+                x: crop.left * natW,
+                y: crop.top * natH,
+                width: max(1, crop.visibleWidthFraction * natW),
+                height: max(1, crop.visibleHeightFraction * natH)
+            ).applying(layer.preferredTransform.inverted().cgAffineTransform)
             image = image.cropped(to: CGRect(
                 x: avRect.origin.x,
                 y: srcHeight - avRect.origin.y - avRect.height,
@@ -298,8 +300,9 @@ enum FrameRenderer {
         )
 
         let t = clip.transformAt(frame: frame)
-        let av = layer.preferredTransform.concatenating(
-            CompositionBuilder.affineTransform(for: t, natSize: layer.natSize, renderSize: renderSize)
+        let natCGSize = CGSize(width: layer.natSize.width, height: layer.natSize.height)
+        let av = layer.preferredTransform.cgAffineTransform.concatenating(
+            CompositionBuilder.affineTransform(for: t, natSize: natCGSize, renderSize: renderSize)
         )
         // Conjugate the AV top-left-origin mapping into CI's bottom-left space.
         let ci = flipY(srcHeight).concatenating(av).concatenating(flipY(renderSize.height))

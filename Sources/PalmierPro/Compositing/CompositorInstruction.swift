@@ -1,34 +1,16 @@
 import AVFoundation
+import CoreGraphics
+import PalmierCore
 
-/// Immutable per-clip snapshot read on the render queue — never the live timeline.
-struct LayerPlan: Sendable {
-    enum Source: Sendable {
-        case track(CMPersistentTrackID)
-        case text
-        /// Nested timeline: children composite into a `canvas`-sized unit, then the nest clip's pipeline applies.
-        case group(children: [LayerPlan], canvas: CGSize)
-    }
-    let source: Source
-    let clip: Clip
-    let natSize: CGSize
-    let preferredTransform: CGAffineTransform
+// `LayerPlan` lives in `PalmierCore` (portable: `TrackID`/`Size2D`/`Mat3`).
+// This file adapts the portable segment type to AVFoundation's compositor
+// protocol — the only place Apple types appear in the render contract.
 
-    var trackID: CMPersistentTrackID? {
-        if case .track(let id) = source { return id }
-        return nil
-    }
-
-    func collectTrackIDs(into ids: inout [CMPersistentTrackID]) {
-        switch source {
-        case .track(let id): ids.append(id)
-        case .text: break
-        case .group(let children, _):
-            for child in children { child.collectTrackIDs(into: &ids) }
-        }
-    }
-}
-
-/// One timeline segment between clip boundaries. Layers are ordered bottom → top.
+/// One timeline segment adapted to `AVVideoCompositionInstructionProtocol`.
+/// Layers are the portable `PalmierCore.LayerPlan`; AVFoundation-required
+/// fields (`requiredSourceTrackIDs`, `passthroughTrackID`) bridge to
+/// `CMPersistentTrackID` here, the only layer that needs to know that
+/// `TrackID.rawValue == CMPersistentTrackID`.
 final class CompositorInstruction: NSObject, AVVideoCompositionInstructionProtocol, @unchecked Sendable {
     let timeRange: CMTimeRange
     let enablePostProcessing = true
@@ -45,12 +27,32 @@ final class CompositorInstruction: NSObject, AVVideoCompositionInstructionProtoc
         self.layers = layers
         self.renderSize = renderSize
         self.fps = fps
-        var all: [CMPersistentTrackID] = []
+        var all: [TrackID] = []
         for layer in layers { layer.collectTrackIDs(into: &all) }
-        var seen = Set<CMPersistentTrackID>()
+        var seen = Set<TrackID>()
         self.requiredSourceTrackIDs = all.compactMap {
-            seen.insert($0).inserted ? NSNumber(value: $0) : nil
+            seen.insert($0).inserted ? NSNumber(value: $0.rawValue) : nil
         }
         super.init()
     }
+}
+
+// MARK: - macOS bridges for portable render primitives
+
+extension TrackID {
+    /// `TrackID.rawValue` is `CMPersistentTrackID` on macOS.
+    var cmPersistentTrackID: CMPersistentTrackID { rawValue }
+}
+
+extension Size2D {
+    init(_ size: CGSize) { self.init(width: size.width, height: size.height) }
+    var cgSize: CGSize { CGSize(width: width, height: height) }
+}
+
+extension Mat3 {
+    /// Zero-math bridge: `Mat3` and `CGAffineTransform` share the
+    /// `(a, b, c, d, tx, ty)` stored-tuple layout (verified empirically; see
+    /// `Mat3.concatenating`).
+    init(_ t: CGAffineTransform) { self.init(a: t.a, b: t.b, c: t.c, d: t.d, tx: t.tx, ty: t.ty) }
+    var cgAffineTransform: CGAffineTransform { CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }
 }
