@@ -10,8 +10,8 @@ struct RenderPlannerTests {
         return c
     }
 
-    private func slot(_ id: String) -> TrackSlot {
-        TrackSlot(trackID: TrackID(rawValue: Int32(id.hashValue)), natSize: Size2D(width: 1920, height: 1080), transform: .identity)
+    private func slot(_ rawID: Int32) -> TrackSlot {
+        TrackSlot(trackID: TrackID(rawValue: rawID), natSize: Size2D(width: 1920, height: 1080), transform: .identity)
     }
 
     private func timeline(_ tracks: [Track]) -> Timeline {
@@ -25,7 +25,7 @@ struct RenderPlannerTests {
         let tl = timeline([Track(type: .video, clips: [clip])])
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
-            totalFrames: 60, trackSlots: ["a": slot("a")], resolveTimeline: { _ in nil }
+            totalFrames: 60, trackSlots: ["a": slot(1)], resolveTimeline: { _ in nil }
         )
         #expect(planned.count == 1)
         #expect(planned[0].frameRange == FrameRange(start: 0, end: 60))
@@ -39,7 +39,7 @@ struct RenderPlannerTests {
         let tl = timeline([Track(type: .video, clips: [a, b])])
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
-            totalFrames: 60, trackSlots: ["a": slot("a"), "b": slot("b")], resolveTimeline: { _ in nil }
+            totalFrames: 60, trackSlots: ["a": slot(1), "b": slot(2)], resolveTimeline: { _ in nil }
         )
         #expect(planned.count == 2)
         #expect(planned[0].frameRange == FrameRange(start: 0, end: 30))
@@ -54,7 +54,7 @@ struct RenderPlannerTests {
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
             totalFrames: 60,
-            trackSlots: ["top": slot("top"), "bottom": slot("bottom")],
+            trackSlots: ["top": slot(10), "bottom": slot(20)],
             resolveTimeline: { _ in nil }
         )
         #expect(planned.count == 3)
@@ -71,7 +71,7 @@ struct RenderPlannerTests {
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
             totalFrames: 60,
-            trackSlots: ["top": slot("top"), "bottom": slot("bottom")],
+            trackSlots: ["top": slot(10), "bottom": slot(20)],
             resolveTimeline: { _ in nil }
         )
         #expect(planned.count == 1)
