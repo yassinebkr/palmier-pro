@@ -63,31 +63,37 @@ struct RenderPlannerTests {
     }
 
     @Test func layersOrderedBottomToTopAcrossTracks() {
-        // Tracks are walked in reverse to produce bottom→top. With two
-        // overlapping clips, each overlapping segment carries both layers.
-        let top = mediaClip("top", start: 0, duration: 60)
-        let bottom = mediaClip("bottom", start: 0, duration: 60)
-        let tl = timeline([Track(type: .video, clips: [bottom]), Track(type: .video, clips: [top])])
+        // The planner walks timeline.tracks.reversed(), so the FIRST track in
+        // the array becomes the TOP layer. With two overlapping clips, the
+        // segment's layers read [first-track clip, second-track clip] = bottom→top.
+        let firstTrackClip = mediaClip("first", start: 0, duration: 60)
+        let secondTrackClip = mediaClip("second", start: 0, duration: 60)
+        let tl = timeline([Track(type: .video, clips: [firstTrackClip]), Track(type: .video, clips: [secondTrackClip])])
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
             totalFrames: 60,
-            trackSlots: ["top": slot(10), "bottom": slot(20)],
+            trackSlots: ["first": slot(10), "second": slot(20)],
             resolveTimeline: { _ in nil }
         )
         #expect(planned.count == 1)
-        // First layer is the bottom track (rendered first); second is top.
+        // Reversed walk: second-track clip is composited first (bottom of stack).
         let layerIDs = planned[0].layers.compactMap { $0.clip.id }
-        #expect(layerIDs == ["bottom", "top"])
+        #expect(layerIDs == ["second", "first"])
     }
 
-    @Test func clipWithoutTrackSlotIsSkipped() {
-        // Offline clip (no slot) is skipped entirely, so it produces no segment.
+    @Test func clipWithoutTrackSlotYieldsEmptyLayersSegment() {
+        // An offline clip (no slot) is skipped at LayerPlan construction, so it
+        // contributes no layer. The segment scaffolding still covers its range
+        // with an empty layer list — matches the AVFoundation planner's behavior
+        // (an all-offline timeline renders black, not nothing).
         let offline = mediaClip("offline", start: 0, duration: 30)
         let tl = timeline([Track(type: .video, clips: [offline])])
         let planned = RenderPlanner.plan(
             timeline: tl, renderSize: Size2D(width: 1920, height: 1080),
             totalFrames: 30, trackSlots: [:], resolveTimeline: { _ in nil }
         )
-        #expect(planned.isEmpty)
+        #expect(planned.count == 1)
+        #expect(planned[0].frameRange == FrameRange(start: 0, end: 30))
+        #expect(planned[0].layers.isEmpty)
     }
 }
