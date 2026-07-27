@@ -579,16 +579,10 @@ enum CompositionBuilder {
         compositionDuration: CMTime,
         renderSize: CGSize
     ) -> [CompositorInstruction] {
-        let timescale = CMTimeScale(timeline.fps)
-        func cmTime(_ frame: Int) -> CMTime { CMTime(value: CMTimeValue(frame), timescale: timescale) }
-        // AVFoundation-supplied sizing/transforms stay Apple-typed here (they
-        // come from asset loading); convert to portable `Size2D`/`Mat3` when
-        // constructing each `LayerPlan` so the render contract stays portable.
-        struct Slot { let trackID: TrackID; let natSize: CGSize; let transform: CGAffineTransform }
-        struct Entry { let start: CMTime; let end: CMTime; let plan: LayerPlan }
-
-        // Resolve each inserted media clip to the composition track it lives on.
-        var media: [String: Slot] = [:]
+        // Resolve each inserted media clip to the portable decode slot it lives
+        // on. AVFoundation-supplied sizing/transforms (from asset loading) are
+        // converted here; the planner itself is frame-domain and platform-free.
+        var trackSlots: [String: TrackSlot] = [:]
         for mapping in trackMappings where mapping.isVideo {
             let ids: Set<String>
             switch mapping.kind {
@@ -601,172 +595,38 @@ enum CompositionBuilder {
                 continue
             }
             for id in ids {
-                media[id] = Slot(
+                trackSlots[id] = TrackSlot(
                     trackID: TrackID(rawValue: mapping.compositionTrack.trackID),
-                    natSize: clipNaturalSizes[id] ?? mapping.naturalSize,
-                    transform: clipTransforms[id] ?? .identity
+                    natSize: Size2D(clipNaturalSizes[id] ?? mapping.naturalSize),
+                    transform: Mat3(clipTransforms[id] ?? .identity)
                 )
             }
         }
 
-        // Flatten is pure per carrier — memoize; segments reuse one result.
-        var flattenCache: [String: NestFlattener.Flattened] = [:]
-        func flattened(for carrier: Clip, depth: Int) -> NestFlattener.Flattened? {
-            guard depth < NestFlattener.maxDepth else { return nil }
-            if let cached = flattenCache[carrier.id] { return cached }
-            guard let child = resolveTimeline(carrier.mediaRef) else { return nil }
-            let flat = NestFlattener.flatten(carrier: carrier, child: child, visual: true)
-            flattenCache[carrier.id] = flat
-            return flat
+        let totalFrames = Int((compositionDuration.seconds * Double(timeline.fps)).rounded())
+        let planned = RenderPlanner.plan(
+            timeline: timeline,
+            renderSize: Size2D(renderSize),
+            totalFrames: totalFrames,
+            trackSlots: trackSlots,
+            resolveTimeline: resolveTimeline
+        )
+
+        // Wrap each portable segment in AVFoundation's compositor-instruction
+        // protocol: FrameRange -> CMTimeRange at the fps timescale.
+        let timescale = CMTimeScale(timeline.fps)
+        func cmTime(_ frame: Int) -> CMTime { CMTime(value: CMTimeValue(frame), timescale: timescale) }
+        return planned.map { instruction in
+            CompositorInstruction(
+                timeRange: CMTimeRange(
+                    start: cmTime(instruction.frameRange.start),
+                    end: cmTime(instruction.frameRange.end)
+                ),
+                layers: instruction.layers,
+                renderSize: renderSize,
+                fps: instruction.fps
+            )
         }
-
-        // Group layer for one segment window; empty children still render (nest gaps are opaque black).
-        func nestGroupPlan(carrier: Clip, depth: Int, window: Range<Int>) -> LayerPlan? {
-            guard let flat = flattened(for: carrier, depth: depth) else { return nil }
-            let childCanvas = Size2D(flat.childCanvas)
-            var children: [LayerPlan] = []
-            for childClips in flat.videoTracks.reversed() {
-                var prevEnd = Int.min
-                for clip in childClips where clip.durationFrames > 0 {
-                    let overlapsWindow = clip.startFrame < window.upperBound && clip.endFrame > window.lowerBound
-                    if clip.mediaType == .text {
-                        guard overlapsWindow, !(clip.textContent ?? "").isEmpty else { continue }
-                        children.append(LayerPlan(source: .text, clip: clip, natSize: childCanvas, preferredTransform: .identity))
-                    } else if clip.mediaType == .sequence {
-                        guard clip.startFrame >= prevEnd else { continue }
-                        prevEnd = clip.endFrame
-                        guard overlapsWindow, let plan = nestGroupPlan(carrier: clip, depth: depth + 1, window: window) else { continue }
-                        children.append(plan)
-                    } else {
-                        guard clip.startFrame >= prevEnd, let slot = media[clip.id] else { continue }
-                        prevEnd = clip.endFrame
-                        guard overlapsWindow else { continue }
-                        children.append(LayerPlan(source: .track(slot.trackID), clip: clip, natSize: Size2D(slot.natSize), preferredTransform: Mat3(slot.transform)))
-                    }
-                }
-            }
-            return LayerPlan(source: .group(children: children, canvas: childCanvas),
-                             clip: carrier, natSize: childCanvas, preferredTransform: .identity)
-        }
-
-        // Child clip boundaries: segments scope decoder demand to what's visible.
-        func nestCutFrames(carrier: Clip, depth: Int) -> [Int] {
-            guard let flat = flattened(for: carrier, depth: depth) else { return [] }
-            var frames: [Int] = []
-            for childClips in flat.videoTracks {
-                for clip in childClips {
-                    frames.append(clip.startFrame)
-                    frames.append(clip.endFrame)
-                    if clip.mediaType == .sequence {
-                        frames.append(contentsOf: nestCutFrames(carrier: clip, depth: depth + 1))
-                    }
-                }
-            }
-            return frames.filter { $0 > carrier.startFrame && $0 < carrier.endFrame }
-        }
-
-        // Walk tracks in reverse to produce bottom→top entries. Text layers follow track order.
-        var entries: [Entry] = []
-        for track in timeline.tracks.reversed() where !track.hidden {
-            var prevEndFrame = Int.min
-            for clip in track.clips.sorted(by: { $0.startFrame < $1.startFrame }) where clip.durationFrames > 0 {
-                let plan: LayerPlan
-                if clip.mediaType == .text {
-                    guard !(clip.textContent ?? "").isEmpty else { continue }
-                    plan = LayerPlan(source: .text, clip: clip, natSize: Size2D(renderSize), preferredTransform: .identity)
-                } else if clip.mediaType == .sequence {
-                    guard clip.startFrame >= prevEndFrame else { continue }
-                    prevEndFrame = clip.endFrame
-                    // One entry per child-boundary segment: each requires only the
-                    // source tracks visible in that segment.
-                    let bounds = ([clip.startFrame, clip.endFrame] + nestCutFrames(carrier: clip, depth: 0))
-                        .reduce(into: Set<Int>()) { $0.insert($1) }
-                        .sorted()
-                    for i in 0..<(bounds.count - 1) {
-                        let window = bounds[i]..<bounds[i + 1]
-                        guard window.count > 0,
-                              let group = nestGroupPlan(carrier: clip, depth: 0, window: window) else { continue }
-                        entries.append(Entry(start: cmTime(window.lowerBound), end: cmTime(window.upperBound), plan: group))
-                    }
-                    continue
-                } else {
-                    guard clip.startFrame >= prevEndFrame, let slot = media[clip.id] else { continue }
-                    plan = LayerPlan(source: .track(slot.trackID), clip: clip, natSize: Size2D(slot.natSize), preferredTransform: Mat3(slot.transform))
-                    prevEndFrame = clip.endFrame
-                }
-                entries.append(Entry(start: cmTime(clip.startFrame), end: cmTime(clip.endFrame), plan: plan))
-            }
-        }
-
-        var cutSet = Set<CMTime>()
-        for e in entries {
-            cutSet.insert(e.start)
-            cutSet.insert(e.end)
-        }
-        let cuts = cutSet.filter { $0 > .zero && $0 < compositionDuration }.sorted()
-        let bounds = [.zero] + cuts + [compositionDuration]
-
-        var startsByTime: [CMTime: [Int]] = [:]
-        var endsByTime: [CMTime: [Int]] = [:]
-        for (index, entry) in entries.enumerated() {
-            startsByTime[entry.start, default: []].append(index)
-            endsByTime[entry.end, default: []].append(index)
-        }
-
-        var active: [Int] = []
-        var activeSet = Set<Int>()
-
-        func insertActive(_ index: Int) {
-            guard activeSet.insert(index).inserted else { return }
-            var low = 0
-            var high = active.count
-            while low < high {
-                let mid = (low + high) / 2
-                if active[mid] < index {
-                    low = mid + 1
-                } else {
-                    high = mid
-                }
-            }
-            active.insert(index, at: low)
-        }
-
-        func removeActive(_ index: Int) {
-            guard activeSet.remove(index) != nil else { return }
-            var low = 0
-            var high = active.count
-            while low < high {
-                let mid = (low + high) / 2
-                if active[mid] < index {
-                    low = mid + 1
-                } else {
-                    high = mid
-                }
-            }
-            if low < active.count, active[low] == index {
-                active.remove(at: low)
-            }
-        }
-
-        for (index, entry) in entries.enumerated() where entry.start < .zero && entry.end > .zero {
-            insertActive(index)
-        }
-
-        var instructions: [CompositorInstruction] = []
-        instructions.reserveCapacity(max(0, bounds.count - 1))
-        for i in 0..<(bounds.count - 1) {
-            let start = bounds[i]
-            for index in endsByTime[start] ?? [] { removeActive(index) }
-            for index in startsByTime[start] ?? [] { insertActive(index) }
-
-            let range = CMTimeRange(start: bounds[i], end: bounds[i + 1])
-            guard range.duration > .zero else { continue }
-            let layers = active.map { entries[$0].plan }
-            instructions.append(CompositorInstruction(
-                timeRange: range, layers: layers, renderSize: renderSize, fps: timeline.fps
-            ))
-        }
-        return instructions
     }
 
     /// Smooth-curve subdivision count for non-linear keyframe segments.
