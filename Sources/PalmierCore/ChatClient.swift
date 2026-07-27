@@ -34,54 +34,61 @@ public struct ChatMessage: Sendable, Equatable {
 public struct ToolSchema: Sendable, Equatable {
     public var name: String
     public var description: String
-    public var inputSchema: [String: AnyCodable]
+    public var inputSchema: JSONValue
 
-    public init(name: String, description: String, inputSchema: [String: AnyCodable]) {
+    public init(name: String, description: String, inputSchema: JSONValue) {
         self.name = name
         self.description = description
         self.inputSchema = inputSchema
     }
 }
 
-/// Type-erased JSON value for tool schemas (plain `[String: Any]` isn't Sendable
-/// or Equatable). Wraps any JSON-serializable nesting.
-public struct AnyCodable: Sendable, Equatable {
-    public let value: Any
+/// Type-safe, Sendable JSON value tree for tool schemas and other arbitrary
+/// JSON payloads. Swift 6 forbids storing `Any` in a Sendable struct; this
+/// recursive enum is the Sendable-correct equivalent of `[String: Any]`.
+public indirect enum JSONValue: Sendable, Equatable {
+    case null
+    case bool(Bool)
+    case number(Double)
+    case string(String)
+    case array([JSONValue])
+    case object([String: JSONValue])
 
+    /// Initialize from a plain JSON tree of stdlib types
+    /// (`String/Bool/Int/Double/[Any]/[String:Any]`). Non-JSON inputs become
+    /// `.null`. Lets app code build schemas from literals while the stored
+    /// form stays type-safe.
     public init(_ value: Any) {
-        self.value = AnyCodable.normalize(value)
+        self = JSONValue.from(value)
     }
 
-    /// Recursively normalize containers so value-equality works and Sendable
-    /// conformance is sound (only Sendable JSON types are retained).
-    private static func normalize(_ value: Any) -> Any {
-        if let dict = value as? [String: Any] {
-            return dict.mapValues(normalize)
+    private static func from(_ value: Any) -> JSONValue {
+        switch value {
+        case is NSNull: return .null
+        case let v as Bool: return .bool(v)
+        case let v as Int: return .number(Double(v))
+        case let v as Double: return .number(v)
+        case let v as String: return .string(v)
+        case let v as [Any]: return .array(v.map(from))
+        case let v as [String: Any]: return .object(v.mapValues(from))
+        default: return .null
         }
-        if let array = value as? [Any] {
-            return array.map(normalize)
-        }
-        return value
     }
 
-    public static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
-        isEqual(lhs.value, rhs.value)
-    }
-
-    private static func isEqual(_ a: Any, _ b: Any) -> Bool {
-        switch (a, b) {
-        case let (x as String, y as String): return x == y
-        case let (x as Bool, y as Bool): return x == y
-        case let (x as Int, y as Int): return x == y
-        case let (x as Double, y as Double): return x == y
-        case let (x as [String: Any], y as [String: Any]):
-            return x.count == y.count && x.allSatisfy { k, v in
-                guard let w = y[k] else { return false }
-                return isEqual(v, w)
+    /// Encode back to a plain JSON tree suitable for JSONSerialization.
+    public func unwrap() -> Any {
+        switch self {
+        case .null: return NSNull()
+        case .bool(let v): return v
+        case .number(let v):
+            // Preserve integer-ness for clean JSON.
+            if v == v.rounded() && v.isFinite && abs(v) < 1e15 {
+                return Int(v)
             }
-        case let (x as [Any], y as [Any]):
-            return x.count == y.count && zip(x, y).allSatisfy(isEqual)
-        default: return false
+            return v
+        case .string(let v): return v
+        case .array(let v): return v.map { $0.unwrap() }
+        case .object(let v): return v.mapValues { $0.unwrap() }
         }
     }
 }
