@@ -165,9 +165,11 @@ struct FrameRendererColorTagTests {
         )
 
         FrameRenderer.render(
-            instruction: instruction,
-            sourceFrame: { $0 == 7 ? source : nil },
-            compositionTime: .zero,
+            layers: instruction.layers,
+            renderSize: Size2D(instruction.renderSize),
+            fps: instruction.fps,
+            frame: 0,
+            sourceFrame: { $0.rawValue == 7 ? source : nil },
             into: output,
             context: CustomVideoCompositor.ciContext
         )
