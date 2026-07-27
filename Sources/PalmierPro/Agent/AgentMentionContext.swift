@@ -1,8 +1,9 @@
 import Foundation
+import PalmierCore
 
 enum AgentMentionContext {
     struct InlinedMentions {
-        var blocks: [[String: Any]] = []
+        var blocks: [ChatContentBlock] = []
         var inlinedIds: Set<String> = []
         var failures: [String: String] = [:]  // mediaRef -> reason
     }
