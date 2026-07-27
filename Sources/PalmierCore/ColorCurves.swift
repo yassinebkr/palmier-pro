@@ -20,8 +20,6 @@ public struct GradeCurve: Codable, Sendable, Equatable {
 
     public static let identityPoints = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
-    public init() {}
-
     public var isIdentity: Bool {
         [master, red, green, blue].allSatisfy { $0.isEmpty || $0 == Self.identityPoints }
     }
@@ -42,8 +40,10 @@ public struct GradeCurve: Codable, Sendable, Equatable {
     public func encoded() -> String? {
         (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) }
     }
+}
 
-    /// Failable JSON init in an extension so the memberwise initializer survives.
+/// Failable JSON init kept in an extension so the memberwise initializer survives.
+extension GradeCurve {
     public init?(json: String) {
         guard let data = json.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(GradeCurve.self, from: data) else { return nil }
@@ -66,14 +66,6 @@ public struct HueCurves: Codable, Sendable, Equatable {
     public static let neutralY = 0.5
     public static let effectType = "color.hueCurves"
     public static let defaultPoints: [CurvePoint] = (0..<6).map { CurvePoint(x: Double($0) / 6, y: neutralY) }
-
-    public init() {}
-
-    public init?(json: String) {
-        guard let data = json.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode(HueCurves.self, from: data) else { return nil }
-        self = decoded
-    }
 
     public func points(_ c: Channel) -> [CurvePoint] {
         switch c { case .hue: hueVsHue; case .sat: hueVsSat; case .lum: hueVsLum }
@@ -128,5 +120,14 @@ public struct HueCurves: Codable, Sendable, Equatable {
             effect.params["curves"] = EffectParam(string: json)
             effects.insert(effect, at: EffectOrdering.insertIndex(effects, for: Self.effectType))
         }
+    }
+}
+
+/// Failable JSON init kept in an extension so the memberwise initializer survives.
+extension HueCurves {
+    public init?(json: String) {
+        guard let data = json.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(HueCurves.self, from: data) else { return nil }
+        self = decoded
     }
 }
