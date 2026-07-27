@@ -20,6 +20,11 @@ public struct GradeCurve: Codable, Sendable, Equatable {
 
     public static let identityPoints = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
+    public init() {}
+    public init(master: [CurvePoint] = [], red: [CurvePoint] = [], green: [CurvePoint] = [], blue: [CurvePoint] = []) {
+        self.master = master; self.red = red; self.green = green; self.blue = blue
+    }
+
     public var isIdentity: Bool {
         [master, red, green, blue].allSatisfy { $0.isEmpty || $0 == Self.identityPoints }
     }
@@ -66,6 +71,11 @@ public struct HueCurves: Codable, Sendable, Equatable {
     public static let neutralY = 0.5
     public static let effectType = "color.hueCurves"
     public static let defaultPoints: [CurvePoint] = (0..<6).map { CurvePoint(x: Double($0) / 6, y: neutralY) }
+
+    public init() {}
+    public init(hueVsHue: [CurvePoint] = [], hueVsSat: [CurvePoint] = [], hueVsLum: [CurvePoint] = []) {
+        self.hueVsHue = hueVsHue; self.hueVsSat = hueVsSat; self.hueVsLum = hueVsLum
+    }
 
     public func points(_ c: Channel) -> [CurvePoint] {
         switch c { case .hue: hueVsHue; case .sat: hueVsSat; case .lum: hueVsLum }
