@@ -44,34 +44,43 @@ final class AgentService {
         return account.isSignedIn && account.hasCredits
     }
 
-    var availableModels: [AnthropicModel] {
-        if hasApiKey { return AnthropicModel.allCases }
-        return [.sonnet5]
+    var availableModels: [ChatModel] {
+        if hasApiKey { return ChatModelCatalog.anthropic }
+        return [ChatModelCatalog.defaultModel]
     }
 
-    private func selectClient() -> (any AgentClient)? {
+    private func selectClient() -> (any ChatClient)? {
         let chosen = effectiveModel
-        if hasApiKey { return AnthropicClient(apiKey: apiKey, model: chosen) }
-        if AccountService.shared.isSignedIn {
-            return PalmierClient(model: chosen)
+        if hasApiKey, let anthropic = anthropicModel(for: chosen) {
+            return AnthropicClient(apiKey: apiKey, model: anthropic)
+        }
+        if AccountService.shared.isSignedIn, let anthropic = anthropicModel(for: chosen) {
+            return PalmierClient(model: anthropic)
         }
         return nil
     }
 
-    var effectiveModel: AnthropicModel {
-        let available = availableModels
-        if available.contains(model) { return model }
-        return available.first ?? .sonnet5
+    /// Maps a neutral `ChatModel` to the Anthropic enum the client still owns,
+    /// so provider-specific knobs (requestExtras, API model id) stay inside the
+    /// Anthropic client. Returns nil if the stored id isn't an Anthropic model.
+    private func anthropicModel(for model: ChatModel) -> AnthropicModel? {
+        guard model.provider == "anthropic" else { return nil }
+        return AnthropicModel(rawValue: model.id)
     }
 
-    var model: AnthropicModel = {
-        if let raw = UserDefaults.standard.string(forKey: "agentModel"),
-           let m = AnthropicModel(rawValue: raw) {
-            return m
+    var effectiveModel: ChatModel {
+        let available = availableModels
+        if available.contains(model) { return model }
+        return available.first ?? ChatModelCatalog.defaultModel
+    }
+
+    var model: ChatModel = {
+        if let id = UserDefaults.standard.string(forKey: "agentModel") {
+            return ChatModelCatalog.resolve(id: id)
         }
-        return .sonnet5
+        return ChatModelCatalog.defaultModel
     }() {
-        didSet { UserDefaults.standard.set(model.rawValue, forKey: "agentModel") }
+        didSet { UserDefaults.standard.set(model.id, forKey: "agentModel") }
     }
 
     var sessions: [ChatSession] = []
@@ -312,7 +321,7 @@ final class AgentService {
         )
         let analyticsPayload: [String: Any] = [
             "project_id": editor?.projectId ?? "unknown",
-            "model": effectiveModel.rawValue,
+            "model": effectiveModel.id,
         ]
         if sessionActivation.activate() {
             Analytics.capture(.agentSessionStarted, properties: analyticsPayload)
@@ -359,7 +368,7 @@ final class AgentService {
         }
         await SkillStore.shared.reloadInBackground()
         let tools = ToolDefinitions.inAppAgent.map {
-            AnthropicToolSchema(name: $0.name.rawValue, description: $0.description, inputSchema: $0.inputSchema)
+            ToolSchema(name: $0.name.rawValue, description: $0.description, inputSchema: JSONValue($0.inputSchema))
         }
 
         loop: while !Task.isCancelled {
@@ -376,16 +385,16 @@ final class AgentService {
                     messages: apiMsgs
                 )
 
-                var stopReason: AnthropicStopReason = .endTurn
+                var stopReason: ChatStopReason = .endTurn
 
                 for try await event in stream {
                     try Task.checkCancellation()
                     switch event {
                     case .textDelta(let chunk):
                         appendTextDelta(chunk, toAssistant: assistantID)
-                    case .toolUseComplete(let id, let name, let inputJSON):
+                    case .toolCallComplete(let id, let name, let inputJSON):
                         appendToolUse(id: id, name: name, inputJSON: inputJSON, toAssistant: assistantID)
-                    case .messageStop(let reason):
+                    case .stop(let reason):
                         stopReason = reason
                     }
                 }
@@ -532,20 +541,20 @@ final class AgentService {
         }
     }
 
-    private func apiMessages() async -> [AnthropicMessage] {
-        var result: [AnthropicMessage] = []
+    private func apiMessages() async -> [ChatMessage] {
+        var result: [ChatMessage] = []
         for msg in messages {
             if msg.role == .system { continue }
-            var content = msg.blocks.compactMap(Self.contentBlockJSON)
+            var content = msg.blocks.compactMap(Self.chatBlock(from:))
             if msg.role == .user, !msg.mentions.isEmpty {
                 let inlined = await inlineImageBlocks(for: msg.mentions)
                 var hint = msg.contextHint ?? AgentMentionContext.hint(msg.mentions, editor: editor)
                 if let note = AgentMentionContext.inlineNote(for: inlined) { hint += " " + note }
                 content.insert(contentsOf: inlined.blocks, at: 0)
-                content.insert(["type": "text", "text": hint], at: 0)
+                content.insert(.text(hint), at: 0)
             }
             guard !content.isEmpty else { continue }
-            result.append(AnthropicMessage(role: msg.role == .user ? .user : .assistant, content: content))
+            result.append(ChatMessage(role: msg.role == .user ? .user : .assistant, content: content))
         }
         return result
     }
@@ -579,37 +588,35 @@ final class AgentService {
                 out.failures[mediaRef] = "could not read or decode image file"
                 continue
             }
-            out.blocks.append([
-                "type": "image",
-                "source": ["type": "base64", "media_type": mime, "data": base64],
-            ])
+            out.blocks.append(.image(mediaType: mime, base64: base64))
             out.inlinedIds.insert(mediaRef)
         }
         return out
     }
 
-    private static func contentBlockJSON(_ block: AgentContentBlock) -> [String: Any]? {
+    /// Maps an app `AgentContentBlock` to a provider-neutral `ChatContentBlock`,
+    /// or nil when the block carries nothing to send (empty text).
+    private static func chatBlock(from block: AgentContentBlock) -> ChatContentBlock? {
         switch block {
         case .text(let s):
             guard !s.isEmpty else { return nil }
-            return ["type": "text", "text": s]
+            return .text(s)
         case .toolUse(let id, let name, let inputJSON):
-            return [
-                "type": "tool_use", "id": id, "name": name,
-                "input": parseJSONObject(inputJSON),
-            ]
+            return .toolCall(id: id, name: name, inputJSON: inputJSON)
         case .toolResult(let toolUseId, let content, let isError):
-            let contentJSON: [[String: Any]] = content.map {
-                switch $0 {
-                case .text(let s): return ["type": "text", "text": s]
-                case .image(let base64, let mime):
-                    return ["type": "image", "source": ["type": "base64", "media_type": mime, "data": base64]]
-                }
-            }
-            return [
-                "type": "tool_result", "tool_use_id": toolUseId,
-                "content": contentJSON, "is_error": isError,
-            ]
+            return .toolResult(
+                toolCallID: toolUseId,
+                content: content.map(Self.chatResultBlock(from:)),
+                isError: isError
+            )
+        }
+    }
+
+    private static func chatResultBlock(from block: ToolResult.Block) -> ToolResultBlock {
+        switch block {
+        case .text(let s): return .text(s)
+        case .image(let base64, let mediaType):
+            return .image(mediaType: mediaType, base64: base64)
         }
     }
 
