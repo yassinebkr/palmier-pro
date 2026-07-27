@@ -1,22 +1,23 @@
-import CoreGraphics
 import Foundation
 
 /// Expands a nest carrier one level: child clips remapped into parent frames.
-enum NestFlattener {
-    static let maxDepth = 8
+public enum NestFlattener {
+    public static let maxDepth = 8
 
-    struct Flattened: Sendable {
+    public struct Flattened: Sendable {
         /// Child visual tracks, child track order preserved (text clips included).
-        var videoTracks: [[Clip]] = []
+        public var videoTracks: [[Clip]] = []
         /// Unmuted child audio tracks; clips within a track never overlap.
-        var audioTracks: [[Clip]] = []
-        var childCanvas: CGSize = .zero
+        public var audioTracks: [[Clip]] = []
+        public var childCanvas: Size2D = .zero
+
+        public init() {}
     }
 
     /// `carrier` = the video `.sequence` clip or its linked audio clip.
-    static func flatten(carrier: Clip, child: Timeline, visual: Bool) -> Flattened {
+    public static func flatten(carrier: Clip, child: Timeline, visual: Bool) -> Flattened {
         var out = Flattened()
-        out.childCanvas = CGSize(width: child.width, height: child.height)
+        out.childCanvas = Size2D(width: Double(child.width), height: Double(child.height))
         let window = carrier.trimStartFrame..<(carrier.trimStartFrame + carrier.durationFrames)
         let shift = carrier.startFrame - carrier.trimStartFrame
 
