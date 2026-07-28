@@ -1,0 +1,7 @@
+module CFFmpeg {
+    umbrella header "CFFmpeg.h"
+    link "avformat"
+    link "avcodec"
+    link "avutil"
+    export *
+}
