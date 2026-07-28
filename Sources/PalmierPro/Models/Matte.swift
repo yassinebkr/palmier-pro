@@ -1,58 +1,14 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import SwiftUI
 
-enum MatteAspect: String, CaseIterable, Identifiable {
-    case project = "Project", sixteenNine = "16:9", nineSixteen = "9:16"
-    case oneOne = "1:1", fourThree = "4:3", nineFourteen = "9:14", twoPointFourOne = "2.4:1"
-    var id: String { rawValue }
+// `Matte` and `MatteAspect` (model + sizing math) live in `PalmierCore`. This
+// file holds only the CoreGraphics/AppKit rendering surface that extends them.
 
-    private var ratio: (Int, Int)? {
-        switch self {
-        case .project: nil
-        case .sixteenNine: (16, 9)
-        case .nineSixteen: (9, 16)
-        case .oneOne: (1, 1)
-        case .fourThree: (4, 3)
-        case .nineFourteen: (9, 14)
-        case .twoPointFourOne: (24, 10)
-        }
-    }
-
-    func pixelSize(timelineWidth w: Int, timelineHeight h: Int) -> (width: Int, height: Int) {
-        guard let (aw, ah) = ratio else { return Matte.even(w, h) }
-        return Matte.fit(short: min(w, h), aspectW: aw, aspectH: ah)
-    }
-
-    static func parse(_ raw: String?) -> MatteAspect? {
-        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        if raw.caseInsensitiveCompare("project") == .orderedSame { return .project }
-        return MatteAspect(rawValue: raw)
-    }
-}
-
-enum Matte {
-    enum Error: LocalizedError {
-        case renderFailed, noProject
-        var errorDescription: String? {
-            switch self {
-            case .renderFailed: "Couldn't render matte image."
-            case .noProject: "Open a project before creating a matte."
-            }
-        }
-    }
-
-    static func even(_ w: Int, _ h: Int) -> (width: Int, height: Int) {
-        (max(2, (max(2, w) / 2) * 2), max(2, (max(2, h) / 2) * 2))
-    }
-
-    static func fit(short edge: Int, aspectW: Int, aspectH: Int) -> (width: Int, height: Int) {
-        let e = max(2, edge)
-        let aw = Double(aspectW), ah = Double(aspectH)
-        if aw >= ah { return even(Int((Double(e) * aw / ah).rounded()), e) }
-        return even(e, Int((Double(e) * ah / aw).rounded()))
-    }
-
+extension Matte {
+    /// Renders a flat-color PNG matte. CoreGraphics-bound; the portable sizing
+    /// math (`Matte.even`) is inherited from core.
     static func png(hex: String, width: Int, height: Int) throws -> Data {
         guard let color = TextStyle.RGBA(hex: hex) else { throw Error.renderFailed }
         let (ew, eh) = even(width, height)
