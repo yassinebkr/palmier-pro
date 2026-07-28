@@ -264,3 +264,127 @@ This design is based on a complete read of:
 
 The single load-bearing function is `FrameRenderer.render` at
 `Sources/PalmierPro/Compositing/FrameRenderer.swift:8`.
+
+---
+
+## REVISION (2026-07): FFmpeg + Vulkan replaces Media Foundation + Direct3D/Direct2D/DirectWrite
+
+> **Status: active plan.** The MF/D3D/Direct2D/DirectWrite architecture above
+> is **superseded** for the Windows renderer by the decision below. The macOS
+> renderer is unchanged (AVFoundation + CoreImage + Metal). The shared
+> `PalmierCore` (render contract + planner) is unchanged and drives both.
+
+### The COM wall that forced the revision
+
+Media Foundation decode (`IMFSourceReader`) and Direct3D/Direct2D/DirectWrite
+render are **COM interfaces** (vtable-based C++ classes via `IUnknown` macros).
+Swift-on-Windows today cannot bind COM cleanly:
+
+- `#include <mfapi.h>` fails under Swift's Clang importer (`mediaobj.h:460` —
+  `DECLSPEC_XFGVIRT`/`STDMETHOD` vtable macros don't parse without full MSVC
+  compatibility). The filtered-C-wrapper trick that made flat `MFStartup`
+  bind does **not** extend to COM interface *methods*.
+- The toolchain's `import WinSDK` module exposes neither `IMFSourceReader` /
+  `ID3D11Device` nor the flat `MFCreateSourceReaderFromURL`.
+- `compnerd/swift-com` provides COM *machinery* but not the MF/D3D interface
+  definitions; hand-authoring ~20 COM vtables is months of error-prone work.
+- First-class Swift COM interop is only a pitch
+  (https://forums.swift.org/t/pitch-a-vision-for-com-interoperability-in-swift/86049).
+
+Binding the full MF + D3D/Direct2D/DirectWrite stack is therefore blocked on
+either hand-authored COM (the deferred "option 2") or the upstream Swift COM
+interop proposal landing. **We are not waiting on either** — see the decision.
+
+### Decision: FFmpeg + Vulkan (option 3c)
+
+Both FFmpeg (libavformat/libavcodec/libswscale) and Vulkan are **flat-C APIs
+with no COM**, so they bind via the same `systemLibrary` + filtered-wrapper
+pattern already proven for `CMediaFoundation`/`MFStartup`. This removes the
+COM wall from the entire media pipeline and adds cross-platform upside (the
+same renderer could run Windows *and* Linux). When Swift COM interop ships,
+option 2 (MF + D3D parity) can be revisited as a refactor behind the existing
+FFmpeg/Vulkan engine — it is not a prerequisite for a working MVP.
+
+**Verified empirically on the dev host before this decision** (Swift 6.3.3 /
+`x86_64-unknown-windows-msvc`, MSVC env sourced):
+
+| Probe | Result |
+|---|---|
+| `vulkaninfo --summary` | Vulkan **1.4.341**, NVIDIA RTX 3070 Ti, driver 610.74, `VK_KHR_win32_surface` present |
+| Swift `CVulkan` systemLibrary (umbrella `vulkan.h`) | compiles (Khronos Vulkan-Headers, flat C — no parse wall) |
+| `vkCreateInstance` from Swift | **`VK_SUCCESS`** (`0`) against the RTX 3070 Ti; `vkDestroyInstance` OK |
+| Swift `CFFmpeg` systemLibrary (umbrella `avformat.h`+`avcodec.h`) | compiles (BtbN shared build, flat C) |
+| `avformat_network_init` from Swift | OK; `av_version_info()` → `N-125781-gacf6b520c1-20260727` |
+
+### Revised target architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  PalmierCore (portable, shared, already done)                    │
+│  Timeline, Clip, Effect, …, LayerPlan, RenderInstruction,        │
+│  RenderPlanner, FrameRendering protocol                          │
+└───────────────────────────────┬──────────────────────────────────┘
+                                 │ (same FrameRendering call both sides)
+                ┌────────────────┴────────────────┐
+                ▼                                  ▼
+  ┌──────────────────────────┐      ┌──────────────────────────────┐
+  │ macOS renderer (current) │      │ Windows renderer (new)       │
+  │ AVFoundation + CoreImage │      │ FFmpeg decode/export +       │
+  │ + Metal kernels          │      │ Vulkan render (SPIR-V)       │
+  │ FrameRenderer (CoreImage)│      │ WinVulkanRenderer (Vulkan)   │
+  └──────────────────────────┘      └──────────────────────────────┘
+```
+
+Revised macOS → Windows mapping:
+
+| macOS | Windows (revised) | Notes |
+|---|---|---|
+| `AVAssetReader`/`AVPlayer` decode | **FFmpeg `libavformat`+`libavcodec`** | Flat C; more codecs than MF. Bound via `CFFmpeg`. |
+| `CVPixelBuffer` (BGRA) | **`VkImage`** (BGRA8_UNORM) via a staging/upload buffer | Decode → CPU BGRA → `vkCmdCopyBufferToImage`. |
+| `CIContext`+`CIImage` chain | **Vulkan render pass + descriptor sets + SPIR-V shaders** | The `WinVulkanRenderer` implements `FrameRendering`; per-layer pipeline `crop → effects → transform → opacity` becomes a Vulkan graphics pipeline. |
+| 12 Metal kernels | **SPIR-V fragment/compute shaders** | Re-author each as GLSL→SPIR-V (or HLSL→DXC→SPIR-V). Same per-kernel A/B plan. |
+| `TextFrameRenderer` (CoreText) | **Text via FFmpeg `libavfilter` drawtext OR a CPU rasterizer** to a texture (deferred until after MVP) | Avoids DirectWrite (COM). Cross-platform. |
+| `AVAssetExportSession`/`AVAssetWriter` | **FFmpeg `libavformat` mux + `libavcodec` encode** | Same `CFFmpeg` binding; reuses the decoder surface. |
+| Accelerate/vDSP | **Accelerate-via-Vulkan compute** or a small SIMD module | TBD; not MVP-blocking. |
+
+### Revised attack order (MVP-first)
+
+1. ✅ ~~Fix the two contract leaks~~ (done — `LayerPlan` portable)
+2. ✅ ~~Move planner into `PalmierCore`~~ (done — `RenderPlanner`)
+3. ✅ ~~Define `FrameRendering` protocol~~ (done — `PalmierCore/RenderInstruction`)
+4. ✅ ~~Windows vertical slice~~ (done — `palmierwin-spike` exe)
+5. **`CVulkan` + `CFFmpeg` systemLibrarys in `PalmierWin`** (proven in throwaway
+   spikes; now as production targets, with CI fetching the Vulkan loader lib
+   and the FFmpeg shared build). No COM.
+6. **Vulkan device + swapchain + textured quad.** One decoded frame (FFmpeg) →
+   CPU BGRA → `VkImage` → render to swapchain. *First real frame on screen.*
+7. **`WinVulkanRenderer` implements `FrameRendering`**: basic composite
+   (crop → transform → opacity, no effects) for cuts-only timelines.
+8. **Win32 window (flat-C `CreateWindowExW` via `WinSDK`) + playback loop.**
+   Real-time-ish frame-pull on a high-res timer; audio via FFmpeg `libavcodec`
+   audio + a tiny WASAPI/SDL sink (flat-C). MVP plays a basic timeline.
+9. **Export via FFmpeg encode.** Reuses the renderer end-to-end.
+10. **Port the 12 kernels as SPIR-V**, one at a time, A/B vs macOS. Then text.
+    Then realtime A/V sync (the hardest piece, same as before).
+
+Each step compiles and runs on Windows before the next. **The goal through
+step 9 is a working MVP matching the upstream's core editing/preview/export
+interface** — not full parity (kernels/text/fancy UI come after).
+
+### What the revision does NOT change
+
+- The macOS renderer — untouched.
+- The shared core + render contract + planner — already portable (Steps 1–2).
+- The `FrameRendering` protocol (Step 3) — Vulkan implements it the same way a
+  Direct2D renderer would have.
+- Realtime A/V-synced playback remains the hardest piece; the pragmatic-v1
+  frame-pull loop is still the recommendation.
+
+### Cost honesty
+
+Vulkan is famously verbose (hundreds of lines for a textured quad) and the 12
+kernels must be re-authored as SPIR-V (not a translation of MSL). But every
+line is verifiable on this host (compile + link + run against the RTX 3070 Ti,
+with no COM wall anywhere). That tractability — not lower total effort — is
+why FFmpeg+Vulkan was chosen over MF+D3D for the first working engine.
+
