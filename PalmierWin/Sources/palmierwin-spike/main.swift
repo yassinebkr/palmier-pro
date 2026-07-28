@@ -49,7 +49,8 @@ struct VerticalSlice {
         //    the chosen render path; MF/D3D deferred — see
         //    docs/windows-media-engine-design.md).
         print("FFmpeg: \(FFmpeg.versionInfo)")
-        if let instance = Vulkan.createInstance(appName: "palmier-spike", extensions: ["VK_KHR_surface"]) {
+        if let instance = Vulkan.createInstance(appName: "palmier-spike",
+                                                extensions: ["VK_KHR_surface", "VK_KHR_win32_surface"]) {
             print("Vulkan: instance created OK")
             if let dev = VulkanDevice.create(instance: instance) {
                 print("Vulkan device: \(dev.deviceName) (graphics family \(dev.graphicsFamily), pool OK)")
@@ -57,8 +58,13 @@ struct VerticalSlice {
                 // 6) Win32 window (flat-C via WinSDK) — backs the Vulkan surface.
                 if let win = Win32Window(title: "Palmier Pro Windows", width: 1280, height: 720) {
                     print("Win32 window: created OK (HWND present)")
-                    // Don't show + pump in the spike; just prove creation works.
-                    _ = win
+
+                    // 7) Swapchain: surface + swapchain + render pass + framebuffers.
+                    if let swap = VulkanSwapchain(device: dev, instance: instance, window: win) {
+                        print("Vulkan swapchain: \(swap.extent.width)x\(swap.extent.height), \(swap.imageViews.count) image(s), render pass OK")
+                    } else {
+                        print("Vulkan swapchain: FAILED to create")
+                    }
                 } else {
                     print("Win32 window: FAILED to create")
                 }
