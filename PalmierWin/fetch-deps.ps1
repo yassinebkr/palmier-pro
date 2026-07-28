@@ -25,11 +25,14 @@ New-Item -ItemType Directory -Force -Path $ThirdParty | Out-Null
 # behavior (under ErrorActionPreference=Stop, any native stderr line aborts
 # before 2>&1 can redirect it — a notorious PS gotcha that killed the fetch).
 function Invoke-Native([string]$Exe, [string[]]$CmdArgs) {
+    $outFile = Join-Path $env:TEMP "nat-out-$(Get-Random).txt"
+    $errFile = Join-Path $env:TEMP "nat-err-$(Get-Random).txt"
+    Write-Host "[Invoke-Native] $Exe $($CmdArgs -join ' ')"
     $proc = Start-Process -FilePath $Exe -ArgumentList $CmdArgs -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput (Join-Path $env:TEMP "nat-out.txt") `
-        -RedirectStandardError  (Join-Path $env:TEMP "nat-err.txt")
-    Get-Content (Join-Path $env:TEMP "nat-out.txt") | ForEach-Object { Write-Host $_ }
-    Get-Content (Join-Path $env:TEMP "nat-err.txt") | ForEach-Object { Write-Host $_ }
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    Write-Host "[Invoke-Native] exit code: $($proc.ExitCode)"
+    if (Test-Path $outFile) { Write-Host "--- stdout ---"; Get-Content $outFile | ForEach-Object { Write-Host $_ } }
+    if (Test-Path $errFile) { Write-Host "--- stderr ---"; Get-Content $errFile | ForEach-Object { Write-Host $_ } }
     if ($proc.ExitCode -ne 0) { throw "$Exe exited with code $($proc.ExitCode)" }
 }
 
