@@ -15,5 +15,10 @@ let package = Package(
             dependencies: ["CMediaFoundation", "PalmierCore"],
             path: "Sources/PalmierWin"
         ),
+        .executableTarget(
+            name: "palmierwin-spike",
+            dependencies: ["PalmierCore", "PalmierWin"],
+            path: "Sources/palmierwin-spike"
+        ),
     ]
 )
