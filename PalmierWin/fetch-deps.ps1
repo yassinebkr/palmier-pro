@@ -40,11 +40,11 @@ function Invoke-Native([string]$Exe, [string[]]$CmdArgs) {
 $VkHeaders = Join-Path $ThirdParty "Vulkan-Headers"
 if (-not (Test-Path (Join-Path $VkHeaders "include/vulkan/vulkan_core.h"))) {
     Write-Host "==> fetching Vulkan-Headers"
-    $tmpDir = Join-Path $env:TEMP "vk-hdrs-$(Get-Random)"
-    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
-    Invoke-Native "git" @("clone", "--depth", "1", "https://github.com/KhronosGroup/Vulkan-Headers.git", $tmpDir)
+    # Clone directly into ThirdParty (same volume as the workspace) — cloning to
+    # $env:TEMP then Move-Item across volumes (C: -> D: on GH runners) fails on
+    # the read-only files inside .git. Remove a stale checkout first.
     if (Test-Path $VkHeaders) { Remove-Item -Recurse -Force $VkHeaders }
-    Move-Item $tmpDir $VkHeaders
+    Invoke-Native "git" @("clone", "--depth", "1", "https://github.com/KhronosGroup/Vulkan-Headers.git", $VkHeaders)
 } else { Write-Host "==> Vulkan-Headers present, skipping" }
 
 # --- 2. vulkan-1.lib (generated from the system loader) ----------------------
@@ -66,13 +66,16 @@ if (-not (Test-Path $VkLib)) {
 $FFRoot = Join-Path $ThirdParty "ffmpeg"
 if (-not (Test-Path (Join-Path $FFRoot "include/libavformat"))) {
     Write-Host "==> fetching BtbN FFmpeg shared build"
-    $zip = Join-Path $env:TEMP "ffmpeg-shared.zip"
+    $zip = Join-Path $ThirdParty "ffmpeg-shared.zip"
     Invoke-Native "curl.exe" @("-sL", "-o", $zip, "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip")
-    $tmp = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "ffmpeg-ex-$(Get-Random)")
-    Expand-Archive -Path $zip -DestinationPath $tmp.FullName -Force
-    $extracted = Get-ChildItem -Directory $tmp.FullName | Where-Object Name -like "ffmpeg-*" | Select-Object -First 1
+    # The zip's top dir is ffmpeg-master-latest-win64-gpl-shared. Extract into
+    # ThirdParty, then move that single child to ThirdParty/ffmpeg (same-volume
+    # move — metadata-only, works across runner volumes unlike TEMP->workspace).
     if (Test-Path $FFRoot) { Remove-Item -Recurse -Force $FFRoot }
+    Expand-Archive -Path $zip -DestinationPath $ThirdParty -Force
+    $extracted = Get-ChildItem -Directory $ThirdParty | Where-Object Name -like "ffmpeg-*" | Select-Object -First 1
     Move-Item $extracted.FullName $FFRoot
+    Remove-Item $zip
 } else { Write-Host "==> ffmpeg present, skipping" }
 
 Write-Host "==> deps ready under $ThirdParty"
