@@ -1,21 +1,36 @@
 # PalmierWin
 
-Windows-only Swift package for the Palmier Pro Windows media engine: Swift bindings to the Windows media/render APIs (Media Foundation, Direct3D, Direct2D, DirectWrite) and the future `WinFrameRenderer`. This package is intentionally kept out of the repo-root `Package.swift` (which builds the macOS-only `PalmierPro` app and its Apple-only dependencies — Sparkle/Sentry/MLX/etc.), so macOS CI never sees it and Windows CI builds it explicitly.
+Windows-only Swift package for the Palmier Pro Windows media engine. Per the FFmpeg+Vulkan decision (`docs/windows-media-engine-design.md` REVISION), the render path is **FFmpeg (decode/export) + Vulkan (GPU render)** — both flat-C, both bound here, neither COM. `CMediaFoundation` is kept as a flat-C reference (MFStartup works) but Media Foundation's COM decode surface is unbindable today; the active engine uses FFmpeg/Vulkan. This package is intentionally kept out of the repo-root `Package.swift` (which builds the macOS-only `PalmierPro` app and its Apple-only dependencies — Sparkle/Sentry/MLX/etc.), so macOS CI never sees it and Windows CI builds it explicitly.
 
 ## Why a separate package
 
-The repo-root `Package.swift` resolves Apple-only SwiftPM dependencies that don't exist on Windows. A Windows-only package lets the Windows media work build in isolation against just the portable `PalmierCore` + the Windows SDK, mirroring the isolated-package technique used throughout the port (see `docs/windows-port-proposal.md`).
+The repo-root `Package.swift` resolves Apple-only SwiftPM dependencies that don't exist on Windows. A Windows-only package lets the Windows media work build in isolation against just the portable `PalmierCore` + flat-C Windows/native libs, mirroring the isolated-package technique used throughout the port (see `docs/windows-port-proposal.md`).
 
 ## Layout
 
 ```
 PalmierWin/
   Package.swift              Windows-only manifest; PalmierCore is a path target
-  CMediaFoundation/          SwiftPM systemLibrary: filtered C wrapper + module map
+  fetch-deps.ps1             Reproducibly fetches Vulkan-Headers + vulkan-1.lib + FFmpeg
+  CMediaFoundation/          SwiftPM systemLibrary: filtered C wrapper (MFStartup etc.)
+  CVulkan/                   SwiftPM systemLibrary: umbrella include of vulkan.h (flat C)
+  CFFmpeg/                   SwiftPM systemLibrary: umbrella include of libavformat/avcodec (flat C)
+  ThirdParty/                (gitignored — fetched by fetch-deps.ps1)
   Sources/
     PalmierCore/             (gitignored — symlinked in CI, copied in for local builds)
-    PalmierWin/              Swift overlay (MF lifecycle now; WinFrameRenderer later)
+    PalmierWin/              Swift overlays (Vulkan/FFmpeg/MediaFoundation lifecycle)
+    palmierwin-spike/        Console exe proving the stack links + runs end-to-end
 ```
+
+## Native deps (fetch-deps.ps1)
+
+`CVulkan`/`CFFmpeg` bind third-party headers + libs that aren't in the Windows SDK. `fetch-deps.ps1` reproducibly fetches them into `ThirdParty/` (gitignored):
+
+- **Vulkan-Headers** (Khronos, MIT) — `git clone --depth 1`. Flat-C; what `CVulkan` umbrella-includes.
+- **vulkan-1.lib** — generated from the system loader `C:\Windows\System32\vulkan-1.dll` via `dumpbin` + `lib.exe` (needs the MSVC env sourced).
+- **FFmpeg shared dev build** (BtbN, GPL) — `curl.exe` download + `Expand-Archive`. Provides `lib/{avformat,avcodec,avutil}.lib` + `include/` + runtime DLLs.
+
+Run it before building (CI does this automatically). Idempotent — skips a step if its output exists.
 
 ## PalmierCore dependency
 
