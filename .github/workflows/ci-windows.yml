@@ -1,0 +1,63 @@
+name: CI (Windows core)
+
+# Portability guardrail: PalmierCore (the portable editor data model) must
+# build and test on Windows Swift. The root Package.swift cannot build on
+# Windows (Sparkle/Sentry/Lottie/MLX xcframeworks are Apple-only), so this
+# isolates PalmierCore + its tests into a throwaway package that references
+# only the portable sources — the same technique used to verify the initial
+# extraction (see docs/windows-port-proposal.md, "Verification record").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-core:
+    name: PalmierCore build & test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build-core-windows
+          key: spm-core-windows-${{ hashFiles('Sources/PalmierCore/**/*.swift') }}
+          restore-keys: spm-core-windows-
+
+      - name: Build & test isolated PalmierCore
+        shell: pwsh
+        run: |
+          $iso = Join-Path $env:RUNNER_TEMP "palmiercore-iso"
+          New-Item -ItemType Directory -Force -Path (Join-Path $iso "Sources/PalmierCore") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $iso "Tests/PalmierCoreTests") | Out-Null
+
+          Get-ChildItem -Path "Sources/PalmierCore" -Filter *.swift | ForEach-Object {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $iso "Sources/PalmierCore" $_.Name) -Value $_.FullName | Out-Null
+          }
+          Get-ChildItem -Path "Tests/PalmierCore" -Filter *.swift | ForEach-Object {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $iso "Tests/PalmierCoreTests" $_.Name) -Value $_.FullName | Out-Null
+          }
+
+          @"
+          // swift-tools-version: 6.0
+          import PackageDescription
+          let package = Package(name: "PalmierCoreIso", targets: [
+              .target(name: "PalmierCore", path: "Sources/PalmierCore"),
+              .testTarget(name: "PalmierCoreTests", dependencies: ["PalmierCore"],
+                          path: "Tests/PalmierCoreTests"),
+          ])
+          "@ | Set-Content -Path (Join-Path $iso "Package.swift")
+
+          Push-Location $iso
+          swift test --build-path "$env:GITHUB_WORKSPACE/.build-core-windows"
+          Pop-Location
