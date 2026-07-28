@@ -62,6 +62,13 @@ struct VerticalSlice {
                     // 7) Swapchain: surface + swapchain + render pass + framebuffers.
                     if let swap = VulkanSwapchain(device: dev, instance: instance, window: win) {
                         print("Vulkan swapchain: \(swap.extent.width)x\(swap.extent.height), \(swap.imageViews.count) image(s), render pass OK")
+
+                        // 8) Graphics pipeline: SPIR-V textured-quad shaders.
+                        if let pipe = VulkanPipeline(device: dev, renderPass: swap.renderPass, extent: swap.extent) {
+                            print("Vulkan pipeline: created OK (shaders loaded, descriptor layout + pipeline built)")
+                        } else {
+                            print("Vulkan pipeline: FAILED to create")
+                        }
                     } else {
                         print("Vulkan swapchain: FAILED to create")
                     }
