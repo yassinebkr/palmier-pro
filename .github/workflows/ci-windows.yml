@@ -116,12 +116,17 @@ jobs:
           Pop-Location
 
       # Run the vertical slice: proves PalmierCore + PalmierWin (CMediaFoundation,
-      # CVulkan, CFFmpeg) link AND execute together on Windows. FFmpeg DLLs must
-      # be on PATH for the exe to load them at runtime.
+      # CVulkan, CFFmpeg) link AND execute together on Windows. FFmpeg's runtime
+      # DLLs must sit beside the exe (Windows searches the exe dir first) —
+      # `swift run` launches from a CWD where relative PATH lookups are unreliable.
+      # Note: GitHub's windows-latest has no GPU, so vkCreateInstance returns nil
+      # at runtime and the slice prints "Vulkan: FAILED to create instance" —
+      # that's expected on CI and not a build/link failure.
       - name: Run vertical slice
         shell: pwsh
         run: |
           Push-Location PalmierWin
-          $env:PATH = "$(Resolve-Path "ThirdParty/ffmpeg/bin"),$env:PATH"
-          swift run palmierwin-spike
+          $exeDir = ".build\x86_64-unknown-windows-msvc\debug"
+          Copy-Item -Path "ThirdParty\ffmpeg\bin\*.dll" -Destination $exeDir -Force
+          & "$exeDir\palmierwin-spike.exe"
           Pop-Location
