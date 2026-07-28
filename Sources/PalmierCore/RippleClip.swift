@@ -8,3 +8,8 @@ public protocol RippleClip {
     var trimStartFrame: Int { get }
     var speed: Double { get }
 }
+
+// `Clip` reads exactly the fields `RippleClip` requires; the conformance lives
+// in core (not the app re-export) so the engines work for any core consumer,
+// including the Windows package that depends on PalmierCore directly.
+extension Clip: RippleClip {}

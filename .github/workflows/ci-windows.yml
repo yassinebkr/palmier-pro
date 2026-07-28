@@ -104,3 +104,12 @@ jobs:
           Push-Location PalmierWin
           swift build
           Pop-Location
+
+      # Run the vertical slice: proves PalmierCore + PalmierWin link AND execute
+      # together on Windows (ripple engine, render planner, MF startup).
+      - name: Run vertical slice
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          swift run palmierwin-spike
+          Pop-Location
