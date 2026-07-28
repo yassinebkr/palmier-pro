@@ -376,11 +376,26 @@ model files) requires abstracting the rendering/media surfaces themselves,
 which overlaps with the much larger media-engine rewrite. Further core
 extraction has diminishing returns until the media layer is addressed.
 
-Next major sub-projects, in order of size: media engine (Direct3D/Media
-Foundation, ~40%), UI (WinUI 3, ~30%), then undo/ViewModel rehost, media I/O
-coordination, and updates/auth/telemetry swaps. The native Windows Swift
-toolchain remains blocked by the host's Burn/MSI installer issue and is
-required before any of that work can be verified locally.
+Next major sub-projects, in order of size: media engine (**FFmpeg + Vulkan**,
+~40% — see `docs/windows-media-engine-design.md` REVISION; MF/D3D deferred
+behind the Swift COM interop proposal), UI (WinUI 3, ~30%), then
+undo/ViewModel rehost, media I/O coordination, and updates/auth/telemetry
+swaps. The native Windows Swift toolchain is verified working on the dev host
+(PalmierCore builds in 26s; the `palmierwin-spike` exe runs the ripple engine,
+render planner, and `MFStartup`/`vkCreateInstance` end-to-end against an
+NVIDIA RTX 3070 Ti).
+
+## Windows media engine — UNDERWAY (FFmpeg + Vulkan, MVP-first)
+
+Spiked and proven on the dev host (Swift 6.3.3 / `x86_64-unknown-windows-msvc`):
+both FFmpeg (`libavformat`/`libavcodec`, flat C) and Vulkan (Khronos headers,
+flat C) bind via the same `systemLibrary` pattern already used for
+`CMediaFoundation`, with **no COM wall** — the binding blocker that forced
+this choice over Media Foundation + Direct3D. Vulkan 1.4.341 live on the host's
+RTX 3070 Ti; `vkCreateInstance` returns `VK_SUCCESS` from Swift. See
+`docs/windows-media-engine-design.md` for the full decision record and the
+revised attack order (steps 5–10: production bindings → textured quad →
+`WinVulkanRenderer` → Win32 window + playback → FFmpeg export → kernels/text).
 
 ## LLM multi-provider refactor — COMPLETE (verified)
 
