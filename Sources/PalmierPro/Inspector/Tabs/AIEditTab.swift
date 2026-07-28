@@ -20,15 +20,21 @@ struct AIEditTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.zero) {
-                if hasScopeToggles {
-                    EditorPanelGroup("Scope", contentSpacing: AppTheme.Spacing.smMd) {
-                        if isVisualClipContext, clipId != nil { replaceToggle }
-                        if trimmedClipAvailable { trimmedClipToggle }
-                    }
+                if trimmedClipAvailable {
+                    trimmedClipToggle
+                        .padding(AppTheme.Spacing.smMd)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.Background.surfaceColor)
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(AppTheme.Border.primaryColor)
+                                .frame(height: AppTheme.BorderWidth.thin)
+                        }
                 }
 
                 if isVisualClipContext {
                     EditorPanelGroup("AI Enhance", isExpanded: $aiEnhanceExpanded, contentSpacing: AppTheme.Spacing.smMd) {
+                        if clipId != nil { replaceToggle }
                         actionRow(
                             action: .upscale,
                             icon: "sparkles.rectangle.stack",
@@ -48,6 +54,26 @@ struct AIEditTab: View {
                             description: "Regenerate with the same parameters",
                             detail: rerunCost
                         )
+                        if asset.type == .video, let model = VideoModelConfig.lipSync {
+                            actionRow(
+                                action: .lipSync,
+                                icon: "mouth",
+                                title: "Lip Sync",
+                                description: "Match mouth movement to replacement audio",
+                                detail: model.sourceDurationLimitLabel.map { "Up to \($0)" },
+                                triggerTitle: "Choose Audio"
+                            )
+                        }
+                        if asset.type == .video {
+                            actionRow(
+                                action: .reframe,
+                                icon: "aspectratio",
+                                title: "Reframe",
+                                description: "Change aspect ratio and extend the frame with AI",
+                                detail: VideoModelConfig.reframe?.sourceDurationLimitLabel
+                                    .map { "Up to \($0)" }
+                            )
+                        }
                         if asset.type == .image {
                             actionRow(
                                 action: .createVideo,
@@ -86,10 +112,6 @@ struct AIEditTab: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var hasScopeToggles: Bool {
-        (isVisualClipContext && clipId != nil) || trimmedClipAvailable
     }
 
     private var showsAudioOutputOptions: Bool {
@@ -198,7 +220,7 @@ struct AIEditTab: View {
             for: asset,
             effectiveDurationOverride: effectiveDurationForAvailability
         )
-        let paidBlocked = (action == .upscale || action == .edit) && !account.isPaid
+        let paidBlocked = action.requiresPaidPlan && !account.isPaid
         let isEnabled = availability.isAvailable && !paidBlocked && aiDisabledReason == nil
         let disabledReason = aiDisabledReason
             ?? (paidBlocked ? "Requires a paid plan" : availability.reason)
@@ -321,7 +343,7 @@ struct AIEditTab: View {
             .controlSize(.small)
             .hoverHighlight(cornerRadius: AppTheme.Radius.sm)
             .disabled(!isEnabled)
-        case .edit, .generateMusic, .generateSFX, .rerun:
+        case .lipSync, .reframe, .edit, .generateMusic, .generateSFX, .rerun:
             Button(title) {
                 present(action)
             }
@@ -345,6 +367,13 @@ struct AIEditTab: View {
                 stored: EditSubmitter.upscaleSeed(for: asset, model: model, trimmedSource: trim),
                 trimmed: trim
             )
+        case .reframe:
+            guard let stored = EditSubmitter.reframeSeed(for: asset) else { return }
+            seedPanel(stored: stored, trimmed: trimmedSourceIfEnabled())
+        case .lipSync:
+            guard let model = VideoModelConfig.lipSync,
+                  let stored = EditSubmitter.lipSyncSeed(for: asset, model: model) else { return }
+            seedPanel(stored: stored, trimmed: trimmedSourceIfEnabled())
         case .createVideo: break // handled via menu
         case .edit:
             guard let stored = EditSubmitter.editSeed(for: asset) else { return }
