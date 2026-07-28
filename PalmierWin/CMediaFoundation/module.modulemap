@@ -1,0 +1,5 @@
+module CMediaFoundation {
+    header "CMediaFoundation.h"
+    link "Mfplat"
+    export *
+}

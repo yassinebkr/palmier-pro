@@ -1,0 +1,5 @@
+# PalmierCore is symlinked in (CI) or copied in (local builds without Developer
+# Mode) from the repo-root Sources/PalmierCore — never committed here.
+.build/
+.swiftpm/
+Sources/PalmierCore/
