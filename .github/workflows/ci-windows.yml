@@ -98,6 +98,16 @@ jobs:
           $coreSrc = (Resolve-Path "Sources/PalmierCore").Path
           New-Item -ItemType SymbolicLink -Path "PalmierWin/Sources/PalmierCore" -Value $coreSrc | Out-Null
 
+      # Fetch the native deps CVulkan/CFFmpeg bind: Vulkan-Headers, vulkan-1.lib
+      # (generated from the system loader), and the BtbN FFmpeg shared build.
+      # Needs dumpbin/lib.exe (msvc-dev-cmd above) and git/curl.exe.
+      - name: Fetch Windows media deps
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          ./fetch-deps.ps1
+          Pop-Location
+
       - name: Build PalmierWin
         shell: pwsh
         run: |
@@ -105,11 +115,13 @@ jobs:
           swift build
           Pop-Location
 
-      # Run the vertical slice: proves PalmierCore + PalmierWin link AND execute
-      # together on Windows (ripple engine, render planner, MF startup).
+      # Run the vertical slice: proves PalmierCore + PalmierWin (CMediaFoundation,
+      # CVulkan, CFFmpeg) link AND execute together on Windows. FFmpeg DLLs must
+      # be on PATH for the exe to load them at runtime.
       - name: Run vertical slice
         shell: pwsh
         run: |
           Push-Location PalmierWin
+          $env:PATH = "$(Resolve-Path "ThirdParty/ffmpeg/bin"),$env:PATH"
           swift run palmierwin-spike
           Pop-Location

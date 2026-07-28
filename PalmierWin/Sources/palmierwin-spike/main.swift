@@ -45,6 +45,17 @@ struct VerticalSlice {
         let mf = MediaFoundationSession()
         print("Media Foundation: \(mf.isActive ? "started OK" : "FAILED to start")")
 
+        // 5) Vulkan: create an instance against the GPU driver (FFmpeg+Vulkan is
+        //    the chosen render path; MF/D3D deferred — see
+        //    docs/windows-media-engine-design.md).
+        print("FFmpeg: \(FFmpeg.versionInfo)")
+        if let instance = Vulkan.createInstance(appName: "palmier-spike", extensions: ["VK_KHR_surface"]) {
+            print("Vulkan: instance created OK")
+            Vulkan.destroyInstance(instance)
+        } else {
+            print("Vulkan: FAILED to create instance")
+        }
+
         print("=== slice complete ===")
     }
 }
