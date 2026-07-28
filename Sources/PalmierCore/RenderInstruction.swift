@@ -84,3 +84,25 @@ public struct TrackSlot: Sendable, Equatable {
     }
 }
 
+/// Composites one frame of a `RenderInstruction` into a destination pixel
+/// buffer. The single render entry point both platforms implement: macOS
+/// (`FrameRenderer` over CoreImage/`CVPixelBuffer`), Windows
+/// (`WinFrameRenderer` over Direct2D/D3D11). The pixel-buffer type is an
+/// associated type so each platform supplies its own (`CVPixelBuffer` on
+/// macOS, an `ID3D11Texture2D` wrapper on Windows) without the protocol
+/// depending on either.
+///
+/// `instruction` is the segment being rendered; `frame` is the timeline frame
+/// index (derived from composition time at the call site); `sourceFrame`
+/// returns the decoded source frame for a track id, or nil if offline.
+public protocol FrameRendering: Sendable {
+    associatedtype PixelBuffer
+
+    func render(
+        instruction: RenderInstruction,
+        frame: Int,
+        sourceFrame: (TrackID) -> PixelBuffer?,
+        into output: PixelBuffer
+    )
+}
+
