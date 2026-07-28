@@ -67,3 +67,40 @@ jobs:
           Push-Location $iso
           swift test --build-path "$env:GITHUB_WORKSPACE/.build-core-windows"
           Pop-Location
+
+  build-winmedia:
+    name: PalmierWin build (media bindings)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3-release
+          swift-build: 6.3-RELEASE
+
+      - name: Show toolchain
+        run: swift --version
+
+      # Source the MSVC dev environment so Swift's linker can find the Windows
+      # SDK import libs (Mfplat.lib, etc.). Required to link the C* bindings.
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      # PalmierWin consumes PalmierCore as a path target. Symlink the core
+      # sources in (Windows runners permit symlinks; local hosts without
+      # Developer Mode copy instead — see PalmierWin/README.md).
+      - name: Link PalmierCore into PalmierWin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path PalmierWin/Sources | Out-Null
+          $coreSrc = (Resolve-Path "Sources/PalmierCore").Path
+          New-Item -ItemType SymbolicLink -Path "PalmierWin/Sources/PalmierCore" -Value $coreSrc | Out-Null
+
+      - name: Build PalmierWin
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          swift build
+          Pop-Location
