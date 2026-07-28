@@ -51,6 +51,20 @@ struct VerticalSlice {
         print("FFmpeg: \(FFmpeg.versionInfo)")
         if let instance = Vulkan.createInstance(appName: "palmier-spike", extensions: ["VK_KHR_surface"]) {
             print("Vulkan: instance created OK")
+            if let dev = VulkanDevice.create(instance: instance) {
+                print("Vulkan device: \(dev.deviceName) (graphics family \(dev.graphicsFamily), pool OK)")
+
+                // 6) Win32 window (flat-C via WinSDK) — backs the Vulkan surface.
+                if let win = Win32Window(title: "Palmier Pro Windows", width: 1280, height: 720) {
+                    print("Win32 window: created OK (HWND present)")
+                    // Don't show + pump in the spike; just prove creation works.
+                    _ = win
+                } else {
+                    print("Win32 window: FAILED to create")
+                }
+            } else {
+                print("Vulkan device: FAILED to create")
+            }
             Vulkan.destroyInstance(instance)
         } else {
             print("Vulkan: FAILED to create instance")
