@@ -36,7 +36,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "palmierwin-spike",
-            dependencies: ["PalmierCore", "PalmierWin"],
+            dependencies: ["PalmierCore", "PalmierWin", "CVulkan"],
             path: "Sources/palmierwin-spike",
             // linkerSettings belong on the final linked product (the exe), not
             // the library — SwiftPM only applies them when linking this target.
