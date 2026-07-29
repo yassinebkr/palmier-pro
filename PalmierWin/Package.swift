@@ -18,6 +18,8 @@ let vkInc = (root as NSString).appendingPathComponent("ThirdParty/Vulkan-Headers
 let vkLib = (root as NSString).appendingPathComponent("ThirdParty")
 let ffInc = (root as NSString).appendingPathComponent("ThirdParty/ffmpeg/include")
 let ffLib = (root as NSString).appendingPathComponent("ThirdParty/ffmpeg/lib")
+let imguiInc = (root as NSString).appendingPathComponent("CImGui/deps/imgui")
+let imguiBackInc = (root as NSString).appendingPathComponent("CImGui/deps/imgui/backends")
 
 let package = Package(
     name: "PalmierWin",
@@ -32,10 +34,33 @@ let package = Package(
                 publicHeadersPath: ".", cSettings: [
                     .headerSearchPath("."),
                 ]),
+        // Dear ImGui flat-C wrapper. C++ target — compiles the wrapper + ImGui
+        // core + Vulkan/Win32 backends. Exposes extern "C" functions for Swift.
+        .target(name: "CImGui", path: "CImGui",
+                exclude: ["deps/imgui/.github", "deps/imgui/docs", "deps/imgui/examples",
+                          "deps/imgui/backends/imgui_impl_opengl3*",
+                          "deps/imgui/backends/imgui_impl_glfw*",
+                          "deps/imgui/backends/imgui_impl_sdl*"],
+                sources: ["src/CImGui.cpp",
+                          "deps/imgui/imgui.cpp",
+                          "deps/imgui/imgui_draw.cpp",
+                          "deps/imgui/imgui_tables.cpp",
+                          "deps/imgui/imgui_widgets.cpp",
+                          "deps/imgui/imgui_demo.cpp",
+                          "deps/imgui/backends/imgui_impl_vulkan.cpp",
+                          "deps/imgui/backends/imgui_impl_win32.cpp"],
+                publicHeadersPath: "include",
+                cSettings: [
+                    .headerSearchPath("include"),
+                    .headerSearchPath("deps/imgui"),
+                    .headerSearchPath("deps/imgui/backends"),
+                    .headerSearchPath("../ThirdParty/Vulkan-Headers/include"),
+                    .unsafeFlags(["-DVK_USE_PLATFORM_WIN32_KHR=1"]),
+                ]),
         .target(name: "PalmierCore", path: "Sources/PalmierCore"),
         .target(
             name: "PalmierWin",
-            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "PalmierCore"],
+            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "CImGui", "PalmierCore"],
             path: "Sources/PalmierWin",
             swiftSettings: [
                 .unsafeFlags(["-I", vkInc, "-I", ffInc]),
@@ -43,7 +68,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "palmierwin-spike",
-            dependencies: ["PalmierCore", "PalmierWin", "CVulkan"],
+            dependencies: ["PalmierCore", "PalmierWin", "CVulkan", "CImGui"],
             path: "Sources/palmierwin-spike",
             // linkerSettings belong on the final linked product (the exe), not
             // the library — SwiftPM only applies them when linking this target.
