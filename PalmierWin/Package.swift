@@ -45,7 +45,7 @@ let package = Package(
                 // than -l + -L: lld-link's -l search has been flaky for these.
                 .unsafeFlags([
                     (vkLib as NSString).appendingPathComponent("vulkan-1.lib"),
-                    "-lavformat", "-lavcodec", "-lavutil",
+                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale",
                     "-L", ffLib,
                 ]),
             ]

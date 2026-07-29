@@ -1,0 +1,232 @@
+import CFFmpeg
+import Foundation
+
+/// Decodes a video file to flat tightly-packed BGRA frames (the portable
+/// interchange format for the Vulkan staging→image upload). Software decode
+/// via libavcodec; YUV→BGRA conversion via libswscale. Hardware decode
+/// (DXVA2/D3D11VA/NVDEC) is a later optimization — see
+/// docs/windows-media-engine-design.md.
+///
+/// One decoder owns one AVFormatContext + AVCodecContext + SwsContext and
+/// yields frames sequentially. Seeking flushes the codec per FFmpeg contract.
+/// Not Sendable — owned by one decode worker; callers snapshot the returned
+/// BGRA bytes before crossing isolation boundaries.
+public final class FFmpegDecoder {
+    public enum DecodeError: Error, Sendable {
+        case openFailed(Int32)
+        case noVideoStream
+        case codecNotFound(Int32)
+        case openCodecFailed(Int32)
+        case decodeFailed(Int32)
+    }
+
+    public struct VideoInfo: Sendable, Equatable {
+        public let width: Int
+        public let height: Int
+        public let codecName: String
+        public init(width: Int, height: Int, codecName: String) {
+            self.width = width; self.height = height; self.codecName = codecName
+        }
+    }
+
+    public let info: VideoInfo
+
+    private var fmt: UnsafeMutablePointer<AVFormatContext>?
+    private var codec: UnsafeMutablePointer<AVCodecContext>?
+    private var sws: UnsafeMutablePointer<SwsContext>?
+    private var swsDst: UnsafeMutablePointer<AVFrame>?  // reusable BGRA output frame
+    private var frame: UnsafeMutablePointer<AVFrame>?
+    private var packet: UnsafeMutablePointer<AVPacket>?
+    private var streamIndex: Int32 = -1
+
+    public init(path: String) throws {
+        var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
+        let openResult = path.withCString { p in avformat_open_input(&fmtCtx, p, nil, nil) }
+        guard openResult == 0, let fmtCtx else { throw DecodeError.openFailed(openResult) }
+        self.fmt = fmtCtx
+
+        if avformat_find_stream_info(fmtCtx, nil) < 0 {
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.openFailed(-1)
+        }
+
+        let vidx = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nil, 0)
+        guard vidx >= 0 else {
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.noVideoStream
+        }
+        self.streamIndex = vidx
+
+        // AVFormatContext.streams[vidx]->codecpar (the modern accessor; the
+        // legacy av_stream_get_codec_parameters helper isn't exposed by the
+        // importer as a function).
+        guard let streamsBase = fmtCtx.pointee.streams,
+              Int(vidx) < Int(fmtCtx.pointee.nb_streams),
+              let stream = streamsBase[Int(vidx)],
+              let par = stream.pointee.codecpar else {
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.noVideoStream
+        }
+        let codecId = par.pointee.codec_id
+        guard let decoder = avcodec_find_decoder(codecId) else {
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.codecNotFound(Int32(codecId.rawValue))
+        }
+
+        guard let cc = avcodec_alloc_context3(decoder) else {
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.openCodecFailed(-1)
+        }
+        if avcodec_parameters_to_context(cc, par) < 0 {
+            var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.openCodecFailed(-1)
+        }
+        let openCodec = avcodec_open2(cc, decoder, nil)
+        guard openCodec == 0 else {
+            var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.openCodecFailed(openCodec)
+        }
+        self.codec = cc
+
+        guard let frame = av_frame_alloc(),
+              let packet = av_packet_alloc() else {
+            var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
+            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
+            throw DecodeError.openCodecFailed(-1)
+        }
+        self.frame = frame
+        self.packet = packet
+
+        self.info = VideoInfo(
+            width: Int(cc.pointee.width),
+            height: Int(cc.pointee.height),
+            codecName: String(cString: avcodec_get_name(codecId))
+        )
+    }
+
+    deinit {
+        if let swsDst { var f: UnsafeMutablePointer<AVFrame>? = swsDst; av_frame_free(&f) }
+        if let sws { sws_freeContext(sws) }
+        if let packet { var p: UnsafeMutablePointer<AVPacket>? = packet; av_packet_free(&p) }
+        if let frame { var f: UnsafeMutablePointer<AVFrame>? = frame; av_frame_free(&f) }
+        if let codec { var c: UnsafeMutablePointer<AVCodecContext>? = codec; avcodec_free_context(&c) }
+        if let fmt { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
+    }
+
+    /// Lazily create (or reuse) the swscale context. The modern API
+    /// (sws_scale_frame) takes AVFrames directly; the context's source
+    /// format/dims are inferred from the input frame on each call.
+    private func ensureSws() -> UnsafeMutablePointer<SwsContext>? {
+        if sws != nil { return sws }
+        // sws_alloc_context returns a context with default fields; the actual
+        // format/dims are negotiated by sws_scale_frame per call.
+        guard let ctx = sws_alloc_context() else { return nil }
+        sws = ctx
+        return ctx
+    }
+
+    /// Decodes the next frame and converts it to tightly-packed BGRA in a
+    /// freshly-allocated Data (row stride = width * 4). Returns nil at EOF.
+    public func nextBGRAFrame() throws -> Data? {
+        guard let fmt, let codec, let frame, let packet else { throw DecodeError.decodeFailed(-1) }
+        let cc = codec
+
+        while true {
+            let recv = avcodec_receive_frame(cc, frame)
+            if recv == 0 {
+                let bgra = convertToBGRA()
+                if bgra.isEmpty { throw DecodeError.decodeFailed(-1) }
+                return bgra
+            }
+            if recv == AVERROR_EAGAIN {
+                av_packet_unref(packet)
+                let read = av_read_frame(fmt, packet)
+                if read < 0 {
+                    if read == AVERROR_EOF {
+                        avcodec_send_packet(cc, nil)  // flush decoder
+                        continue
+                    }
+                    throw DecodeError.decodeFailed(read)
+                }
+                if packet.pointee.stream_index != streamIndex { continue }
+                let send = avcodec_send_packet(cc, packet)
+                if send < 0 && send != AVERROR_EAGAIN { throw DecodeError.decodeFailed(send) }
+                continue
+            }
+            if recv == AVERROR_EOF { return nil }
+            throw DecodeError.decodeFailed(recv)
+        }
+    }
+
+    /// Scale the current decoded frame into flat BGRA via sws_scale_frame.
+    /// The dst AVFrame is reused across calls; sws_scale_frame allocates its
+    /// buffers. We then copy the tightly-packed BGRA plane into a fresh Data
+    /// so the caller owns the bytes before the next decode.
+    private func convertToBGRA() -> Data {
+        let cc = codec!
+        let frm = frame!
+        let w = cc.pointee.width
+        let h = cc.pointee.height
+        let sws = ensureSws()!
+
+        // Lazily allocate the reusable BGRA output frame.
+        if swsDst == nil { swsDst = av_frame_alloc() }
+        let dst = swsDst!
+
+        // sws_scale_frame reads dst.format/width/height to negotiate the output.
+        // bg_alloc_on_first_call uses these. Clear any prior buffer refs.
+        av_frame_unref(dst)
+        dst.pointee.format = Int32(AV_PIX_FMT_BGRA.rawValue)
+        dst.pointee.width = w
+        dst.pointee.height = h
+
+        let scaleResult = sws_scale_frame(sws, dst, frm)
+        guard scaleResult == 0 else {
+            // On failure, return an empty buffer; the caller treats it as a
+            // decode error via decodeFailed in the public path.
+            return Data()
+        }
+
+        // dst.data[0] is the tightly-packed BGRA plane; dst.linesize[0] may
+        // include padding, so copy row-by-row into a flat width*4 buffer.
+        let rowStride = Int(dst.pointee.linesize.0)
+        let tightStride = Int(w) * 4
+        var data = Data(count: Int(w) * Int(h) * 4)
+        guard rowStride > 0 else { return data }
+        if let plane = dst.pointee.data.0 {
+            data.withUnsafeMutableBytes { (dstRaw: UnsafeMutableRawBufferPointer) in
+                guard let dstBase = dstRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+                for row in 0..<Int(h) {
+                    let srcRow = plane.advanced(by: row * rowStride)
+                    let dstRow = dstBase.advanced(by: row * tightStride)
+                    memcpy(dstRow, srcRow, tightStride)
+                }
+            }
+        }
+        return data
+    }
+
+    /// Seek to a stream time_base timestamp. Pass AVSEEK_FLAG_BACKWARD for
+    /// nearest-keyframe-before behavior. Codec is flushed per FFmpeg contract.
+    public func seek(timestamp: Int64, flags: Int32 = AVSEEK_FLAG_BACKWARD) throws {
+        guard let fmt else { throw DecodeError.decodeFailed(-1) }
+        let r = avformat_seek_file(fmt, streamIndex, Int64.min, timestamp, Int64.max, flags)
+        if r < 0 { throw DecodeError.decodeFailed(r) }
+        if let codec { avcodec_flush_buffers(codec) }
+        if let frame { av_frame_unref(frame) }
+    }
+}
+
+// FFmpeg's AVERROR_EOF and AVERROR(e) macros don't import (FFERRTAG uses
+// bitwise tricks the Swift importer can't expand); define Swift constants
+// matching the on-the-wire values. FFERRTAG(a,b,c,d) = -(int)MKTAG(a,b,c,d),
+// MKTAG = a | b<<8 | c<<16 | d<<24, all UInt32.
+@inline(__always)
+private func fferrtag(_ a: UInt8, _ b: UInt8, _ c: UInt8, _ d: UInt8) -> Int32 {
+    let tag = UInt32(a) | (UInt32(b) << 8) | (UInt32(c) << 16) | (UInt32(d) << 24)
+    return -Int32(bitPattern: tag)
+}
+private let AVERROR_EOF: Int32 = fferrtag(0x45, 0x4F, 0x46, 0x20)    // 'E','O','F',' '
+private let AVERROR_EAGAIN: Int32 = -Int32(EAGAIN)                  // AVERROR(e) = -(e)
