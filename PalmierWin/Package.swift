@@ -25,10 +25,17 @@ let package = Package(
         .systemLibrary(name: "CMediaFoundation", path: "CMediaFoundation"),
         .systemLibrary(name: "CVulkan", path: "CVulkan"),
         .systemLibrary(name: "CFFmpeg", path: "CFFmpeg"),
+        // stb_truetype as a regular C target: the .c TU defines the
+        // STB_TRUETYPE_IMPLEMENTATION (single-header library pattern), the
+        // header declares the API for Swift.
+        .target(name: "CSTBTrueType", path: "CSTBTrueType",
+                publicHeadersPath: ".", cSettings: [
+                    .headerSearchPath("."),
+                ]),
         .target(name: "PalmierCore", path: "Sources/PalmierCore"),
         .target(
             name: "PalmierWin",
-            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "PalmierCore"],
+            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "PalmierCore"],
             path: "Sources/PalmierWin",
             swiftSettings: [
                 .unsafeFlags(["-I", vkInc, "-I", ffInc]),
