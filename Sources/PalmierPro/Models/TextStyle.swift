@@ -1,187 +1,16 @@
 import AppKit
 import CoreText
+import PalmierCore
 import SwiftUI
 
-struct TextStyle: Codable, Sendable, Equatable, Hashable {
-    static let axisScaleRange = 0.1...10.0
-
-    var fontName: String = "Helvetica-Bold"
-    var fontSize: Double = 96
-    var fontScale: Double = 1.0
-    var widthScale: Double = 1.0
-    var heightScale: Double = 1.0
-    var tracking: Double = 0
-    var lineSpacing: Double = 0
-    var fontCase: FontCase = .mixed
-    var isBold: Bool = true
-    var isItalic: Bool = false
-    var isUnderlined: Bool = false
-    var isStruckThrough: Bool = false
-    var isOverlined: Bool = false
-    var color: RGBA = RGBA()
-    var alignment: Alignment = .center
-    var shadow: Shadow = Shadow()
-    var background: Background = Background()
-    var border: Outline = Outline()
-
-    enum Alignment: String, Codable, Sendable, CaseIterable, Hashable {
-        case left
-        case center
-        case right
-    }
-
-    enum FontCase: String, Codable, Sendable, CaseIterable, Hashable {
-        case mixed
-        case uppercase
-        case lowercase
-
-        var label: String {
-            switch self {
-            case .mixed: "Mixed"
-            case .uppercase: "UPPERCASE"
-            case .lowercase: "lowercase"
-            }
-        }
-
-        func apply(to text: String) -> String {
-            switch self {
-            case .mixed: text
-            case .uppercase: text.uppercased()
-            case .lowercase: text.lowercased()
-            }
-        }
-    }
-
-    struct RGBA: Codable, Sendable, Equatable, Hashable {
-        var r: Double = 1
-        var g: Double = 1
-        var b: Double = 1
-        var a: Double = 1
-    }
-
-    struct Shadow: Codable, Sendable, Equatable, Hashable {
-        var enabled: Bool = true
-        /// Alpha doubles as opacity; layer.shadowOpacity stays at 1.
-        var color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 0.6)
-        /// Canvas points; scaled at render time.
-        var offsetX: Double = 0
-        var offsetY: Double = -2
-        var blur: Double = 6
-    }
-
-    struct Outline: Codable, Sendable, Equatable, Hashable {
-        var enabled: Bool = false
-        var color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 1)
-        /// Width in reference-canvas points.
-        var width: Double = 4
-
-        init(enabled: Bool = false, color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 1), width: Double = 4) {
-            self.enabled = enabled
-            self.color = color
-            self.width = width
-        }
-
-        private enum CodingKeys: String, CodingKey { case enabled, color, width }
-
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            self.init(
-                enabled: (try? c.decode(Bool.self, forKey: .enabled)) ?? false,
-                color: (try? c.decode(RGBA.self, forKey: .color)) ?? RGBA(r: 0, g: 0, b: 0, a: 1),
-                width: (try? c.decode(Double.self, forKey: .width)) ?? 4
-            )
-        }
-    }
-
-    struct Background: Codable, Sendable, Equatable, Hashable {
-        var enabled: Bool = false
-        var color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 0.6)
-        var paddingX: Double = 0
-        var paddingY: Double = 0
-        var cornerRadius: Double = 0
-        var offsetX: Double = 0
-        var offsetY: Double = 0
-        var outlineColor: RGBA = RGBA(r: 0, g: 0, b: 0, a: 1)
-        var outlineWidth: Double = 0
-
-        init(
-            enabled: Bool = false,
-            color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 0.6),
-            paddingX: Double = 0,
-            paddingY: Double = 0,
-            cornerRadius: Double = 0,
-            offsetX: Double = 0,
-            offsetY: Double = 0,
-            outlineColor: RGBA = RGBA(r: 0, g: 0, b: 0, a: 1),
-            outlineWidth: Double = 0
-        ) {
-            self.enabled = enabled
-            self.color = color
-            self.paddingX = paddingX
-            self.paddingY = paddingY
-            self.cornerRadius = cornerRadius
-            self.offsetX = offsetX
-            self.offsetY = offsetY
-            self.outlineColor = outlineColor
-            self.outlineWidth = outlineWidth
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case enabled, color, paddingX, paddingY, cornerRadius, offsetX, offsetY, outlineColor, outlineWidth
-        }
-
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            self.init(
-                enabled: (try? c.decode(Bool.self, forKey: .enabled)) ?? false,
-                color: (try? c.decode(RGBA.self, forKey: .color)) ?? RGBA(r: 0, g: 0, b: 0, a: 0.6),
-                paddingX: (try? c.decode(Double.self, forKey: .paddingX)) ?? 0,
-                paddingY: (try? c.decode(Double.self, forKey: .paddingY)) ?? 0,
-                cornerRadius: (try? c.decode(Double.self, forKey: .cornerRadius)) ?? 0,
-                offsetX: (try? c.decode(Double.self, forKey: .offsetX)) ?? 0,
-                offsetY: (try? c.decode(Double.self, forKey: .offsetY)) ?? 0,
-                outlineColor: (try? c.decode(RGBA.self, forKey: .outlineColor)) ?? RGBA(r: 0, g: 0, b: 0, a: 1),
-                outlineWidth: (try? c.decode(Double.self, forKey: .outlineWidth)) ?? 0
-            )
-        }
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case fontName, fontSize, fontScale, widthScale, heightScale, tracking, lineSpacing, fontCase
-        case isBold, isItalic, isUnderlined, isStruckThrough, isOverlined
-        case color, alignment, shadow, background, border
-    }
-}
-
-extension TextStyle {
-    /// Missing-key-tolerant decode — older files pick up defaults for fields added later.
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let fontName = (try? c.decode(String.self, forKey: .fontName)) ?? "Helvetica-Bold"
-        let fontSize = (try? c.decode(Double.self, forKey: .fontSize)) ?? 96
-        let inferredTraits = Self.symbolicTraits(fontName: fontName, size: CGFloat(fontSize))
-        self.init(
-            fontName: fontName,
-            fontSize: fontSize,
-            fontScale: (try? c.decode(Double.self, forKey: .fontScale)) ?? 1.0,
-            widthScale: (try? c.decode(Double.self, forKey: .widthScale)) ?? 1.0,
-            heightScale: (try? c.decode(Double.self, forKey: .heightScale)) ?? 1.0,
-            tracking: (try? c.decode(Double.self, forKey: .tracking)) ?? 0,
-            lineSpacing: (try? c.decode(Double.self, forKey: .lineSpacing)) ?? 0,
-            fontCase: (try? c.decode(FontCase.self, forKey: .fontCase)) ?? .mixed,
-            isBold: (try? c.decode(Bool.self, forKey: .isBold)) ?? inferredTraits.contains(.traitBold),
-            isItalic: (try? c.decode(Bool.self, forKey: .isItalic)) ?? inferredTraits.contains(.traitItalic),
-            isUnderlined: (try? c.decode(Bool.self, forKey: .isUnderlined)) ?? false,
-            isStruckThrough: (try? c.decode(Bool.self, forKey: .isStruckThrough)) ?? false,
-            isOverlined: (try? c.decode(Bool.self, forKey: .isOverlined)) ?? false,
-            color: (try? c.decode(RGBA.self, forKey: .color)) ?? RGBA(),
-            alignment: (try? c.decode(Alignment.self, forKey: .alignment)) ?? .center,
-            shadow: (try? c.decode(Shadow.self, forKey: .shadow)) ?? Shadow(),
-            background: (try? c.decode(Background.self, forKey: .background)) ?? Background(),
-            border: (try? c.decode(Outline.self, forKey: .border)) ?? Outline()
-        )
-    }
-}
+// TextStyle lives in PalmierCore (the portable data model). The app extends it
+// here with AppKit-bound rendering helpers (resolvedFont, nsColor, paragraphStyle,
+// scaledVisualStyle). This typealias makes the core type the single TextStyle
+// across both modules — any bare `TextStyle` in PalmierPro resolves to
+// PalmierCore.TextStyle, matching Clip.textStyle / TextAnimation and avoiding
+// the cross-module assignment failures that surfaced when upstream #419 added a
+// `TextStyle()` constructor in an app-side context.
+typealias TextStyle = PalmierCore.TextStyle
 
 // MARK: - Rendering helpers
 
@@ -346,10 +175,5 @@ extension TextStyle {
             return font
         }
         return CTFontCreateWithFontDescriptor(resolvedDescriptor, size, nil) as NSFont
-    }
-
-    private static func symbolicTraits(fontName: String, size: CGFloat) -> CTFontSymbolicTraits {
-        guard let font = NSFont(name: fontName, size: size) else { return [] }
-        return CTFontGetSymbolicTraits(font as CTFont)
     }
 }
