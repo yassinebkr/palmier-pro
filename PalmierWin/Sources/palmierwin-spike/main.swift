@@ -201,8 +201,16 @@ struct VerticalSlice {
         b.transform.rotation = 8
         var track2 = Track(type: .video)
         track2.clips = [b]
+        // Text layer (top): a title overlay rendered via stb_truetype (no COM).
+        var title = Clip(mediaRef: "", startFrame: 0, durationFrames: 60)
+        title.id = "title"
+        title.mediaType = .text
+        title.textContent = "PALMIER PRO"
+        title.textStyle = TextStyle()
+        var track3 = Track(type: .video)
+        track3.clips = [title]
         var timeline = Timeline()
-        timeline.tracks = [track2, track1]
+        timeline.tracks = [track3, track2, track1]  // bottom→top: video base, PiP, text
 
         let trackSlots: [String: TrackSlot] = [
             "a": TrackSlot(trackID: TrackID(rawValue: 1), natSize: renderSize, transform: .identity),
@@ -216,7 +224,7 @@ struct VerticalSlice {
         let config = FFmpegEncoder.Config(
             width: probe.info.width, height: probe.info.height, fps: 30
         )
-        print("Export: exporting 2-layer timeline → \(outPath)")
+        print("Export: exporting 3-layer timeline (video+PiP+text) → \(outPath)")
         guard let exporter = WinExporter(
             device: dev, timeline: timeline, renderSize: renderSize,
             trackSlots: trackSlots, mediaPaths: media,

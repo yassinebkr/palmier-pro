@@ -19,6 +19,12 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
     public let device: VulkanDevice
     public let layerPipeline: VulkanLayerPipeline
     public let effectPipeline: VulkanEffectPipeline
+    /// Lazy text renderer (stb_truetype). Created on first .text layer.
+    private var _textRenderer: WinTextRenderer?
+    private var textRenderer: WinTextRenderer? {
+        if _textRenderer == nil { _textRenderer = try? WinTextRenderer() }
+        return _textRenderer
+    }
 
     /// Lazily-created per-output-texture render pass + framebuffer. The output
     /// texture's lifetime bounds the framebuffer's; cleared on deinit.
@@ -70,6 +76,13 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         sourceFrame: (TrackID) -> VulkanTexture?,
         into output: VulkanTexture
     ) {
+        // Pre-resolve all source textures BEFORE allocating the command buffer.
+        // Text/group sources may submit their own GPU work (texture upload,
+        // child compositing) — that must NOT happen during command buffer
+        // recording. The resolved sources are passed into the recording method.
+        let sources = prepareSources(
+            instruction: instruction, frame: frame, sourceFrame: sourceFrame
+        )
         let dev = device.device
         var cbInfo = VkCommandBufferAllocateInfo()
         cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
@@ -88,7 +101,7 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
             return
         }
 
-        render(instruction: instruction, frame: frame, sourceFrame: sourceFrame, into: output, commandBuffer: cmd)
+        render(instruction: instruction, frame: frame, sources: sources, into: output, commandBuffer: cmd)
 
         guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
             var toFree: VkCommandBuffer? = cmd
@@ -133,10 +146,47 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
     /// Per AGENTS.md the protocol's `into:` is the offscreen pixel buffer;
     /// here it's a VulkanTexture. The `sourceFrame` closure is called per
     /// layer to fetch that layer's decoded texture.
+    /// A layer with its source texture resolved + descriptor bound + push
+    /// constants computed. Ready to draw — no GPU side effects remain.
+    public struct PreparedLayer {
+        public let texture: VulkanTexture
+        public let descriptor: VulkanDescriptor
+        public let pushConstants: LayerPlacement.PushConstants
+    }
+
+    /// Resolves all source textures for `instruction.layers` BEFORE any command
+    /// buffer recording. Text/group sources create textures and submit GPU work
+    /// (uploads, child composites); that must complete before the render pass
+    /// command buffer is allocated. Returns the prepared layers (skip zero-
+    /// opacity and unresolvable ones, matching macOS FrameRenderer).
+    public func prepareSources(
+        instruction: RenderInstruction,
+        frame: Int,
+        sourceFrame: (TrackID) -> VulkanTexture?
+    ) -> [PreparedLayer] {
+        var prepared: [PreparedLayer] = []
+        for layer in instruction.layers {
+            let opacity = layer.clip.opacityAt(frame: frame)
+            guard opacity > 0 else { continue }
+            guard let srcTexture = resolveSourceTexture(for: layer, frame: frame,
+                                                        renderSize: instruction.renderSize,
+                                                        sourceFrame: sourceFrame) else { continue }
+            guard let desc = VulkanDescriptor(device: device, layout: layerPipeline.descriptorSetLayout, texture: srcTexture) else {
+                continue
+            }
+            let pc = LayerPlacement.pushConstants(for: layer, frame: frame, renderSize: instruction.renderSize, opacity: opacity)
+            prepared.append(PreparedLayer(texture: srcTexture, descriptor: desc, pushConstants: pc))
+        }
+        return prepared
+    }
+
+    /// Records the composite of `sources` into `output`. No source resolution
+    /// happens here — all GPU work that produced the source textures completed
+    /// in `prepareSources` before this command buffer was allocated.
     public func render(
         instruction: RenderInstruction,
         frame: Int,
-        sourceFrame: (TrackID) -> VulkanTexture?,
+        sources: [PreparedLayer],
         into output: VulkanTexture,
         commandBuffer: VkCommandBuffer
     ) {
@@ -180,30 +230,16 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layerPipeline.pipeline)
 
-        // Layers are bottom → top; draw in array order. Skip layers with zero
-        // opacity or no source frame (matches macOS FrameRenderer).
-        for layer in instruction.layers {
-            // Text and group sources aren't supported in the MVP layer pipeline.
-            guard let trackID = layer.trackID else { continue }
-            let opacity = layer.clip.opacityAt(frame: frame)
-            guard opacity > 0 else { continue }
-            guard let srcTexture = sourceFrame(trackID) else { continue }
-
-            // One descriptor set per source texture would be ideal, but for the
-            // MVP we allocate+update+free a single descriptor set inline per
-            // layer. A descriptor pool/cache will replace this once multiple
-            // layers per frame are common.
-            guard let desc = VulkanDescriptor(device: device, layout: layerPipeline.descriptorSetLayout, texture: srcTexture) else {
-                continue
-            }
-
-            var setHandle: VkDescriptorSet? = desc.set
+        // Draw pass: each prepared layer is one bind + push + draw. No source
+        // resolution happens here — all GPU work that produced the source
+        // textures already completed in prepareSources.
+        for layer in sources {
+            var setHandle: VkDescriptorSet? = layer.descriptor.set
             withUnsafePointer(to: &setHandle) { s in
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layerPipeline.layout,
                                         0, 1, s, 0, nil)
             }
-
-            var pc = LayerPlacement.pushConstants(for: layer, frame: frame, renderSize: instruction.renderSize, opacity: opacity)
+            var pc = layer.pushConstants
             withUnsafePointer(to: &pc) { pcPtr in
                 pcPtr.withMemoryRebound(to: Float.self, capacity: 7) { floats in
                     vkCmdPushConstants(commandBuffer, layerPipeline.layout,
@@ -211,12 +247,7 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
                                        0, UInt32(MemoryLayout<Float>.stride * 7), floats)
                 }
             }
-
             vkCmdDraw(commandBuffer, 4, 1, 0, 0)
-            // desc is released here; its deinit destroys the descriptor pool.
-            // For the MVP single-frame-in-flight this is safe because the
-            // command buffer isn't submitted until after this method returns.
-            _ = desc
         }
 
         vkCmdEndRenderPass(commandBuffer)
@@ -350,6 +381,119 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         vkCmdDraw(commandBuffer, 3, 1, 0, 0)
         vkCmdEndRenderPass(commandBuffer)
         _ = desc  // released; safe because command buffer isn't submitted until caller does
+    }
+
+    /// Resolves a layer's source into a GPU texture to sample, handling all
+    /// three LayerPlan.Source cases:
+    /// - `.track(id)` — from the caller's sourceFrame closure (decoded video).
+    /// - `.text` — rasterize the clip's textContent via WinTextRenderer, upload.
+    /// - `.group(children, canvas)` — recurse: composite children into a canvas-
+    ///   sized texture, then return it as this layer's source.
+    private func resolveSourceTexture(
+        for layer: LayerPlan,
+        frame: Int,
+        renderSize: Size2D,
+        sourceFrame: (TrackID) -> VulkanTexture?
+    ) -> VulkanTexture? {
+        switch layer.source {
+        case .track(let id):
+            return sourceFrame(id)
+        case .text:
+            return resolveTextTexture(for: layer, frame: frame, renderSize: renderSize)
+        case .group(let children, let canvas):
+            return resolveGroupTexture(children: children, canvas: canvas, frame: frame, sourceFrame: sourceFrame)
+        }
+    }
+
+    /// Renders a text clip into a canvas-sized texture via WinTextRenderer.
+    /// MVP: single-line, white glyphs; TextStyle color/tracking/layout come
+    /// later. The text fills the clip's placement region (handled by
+    /// LayerPlacement like any other layer).
+    private func resolveTextTexture(for layer: LayerPlan, frame: Int, renderSize: Size2D) -> VulkanTexture? {
+        guard let tr = textRenderer else { return nil }
+        let content = layer.clip.textContent ?? ""
+        guard !content.isEmpty else { return nil }
+        // Font size scales with canvas height (matches macOS's reference-canvas scaling).
+        let canvasW = Int(renderSize.width)
+        let canvasH = Int(renderSize.height)
+        let fontSize = Float(renderSize.height) * Float(layer.clip.textStyle?.fontSize ?? 96) / 1080.0
+        guard let bgra = tr.render(content, fontSize: fontSize, canvasWidth: canvasW, canvasHeight: canvasH) else { return nil }
+        guard let tex = VulkanTexture(device: device, width: UInt32(canvasW), height: UInt32(canvasH)) else { return nil }
+        guard tex.upload(bgra: bgra) else { return nil }
+        return tex
+    }
+
+    /// Composites a group's children bottom→top into a canvas-sized texture.
+    /// Builds a one-segment RenderInstruction from the children and renders it
+    /// into a fresh offscreen texture, which becomes this group layer's source.
+    private func resolveGroupTexture(
+        children: [LayerPlan],
+        canvas: Size2D,
+        frame: Int,
+        sourceFrame: (TrackID) -> VulkanTexture?
+    ) -> VulkanTexture? {
+        guard !children.isEmpty, canvas.width > 0, canvas.height > 0 else { return nil }
+        guard let offscreen = VulkanTexture(device: device, width: UInt32(canvas.width), height: UInt32(canvas.height)) else { return nil }
+        // Render the children as a one-frame instruction into the offscreen.
+        let instr = RenderInstruction(
+            frameRange: FrameRange(start: frame, end: frame + 1),
+            layers: children, renderSize: canvas, fps: 30
+        )
+        // Use the recording-core render variant (no submit) into the offscreen.
+        // For the MVP group path, allocate a command buffer, render, submit,
+        // wait — mirrors the protocol method but with the children instruction.
+        let dev = device.device
+        var cbInfo = VkCommandBufferAllocateInfo()
+        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        cbInfo.commandPool = device.commandPool
+        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        cbInfo.commandBufferCount = 1
+        var cmd: VkCommandBuffer? = nil
+        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
+              let cmd else { return nil }
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        let childSources = prepareSources(instruction: instr, frame: frame, sourceFrame: sourceFrame)
+        render(instruction: instr, frame: frame, sources: childSources, into: offscreen, commandBuffer: cmd)
+        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        var fenceInfo = VkFenceCreateInfo()
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        var fence: VkFence? = nil
+        guard withUnsafePointer(to: &fenceInfo, { vkCreateFence(dev, $0, nil, &fence) }) == VK_SUCCESS, let fence else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        var cmdHandle: VkCommandBuffer? = cmd
+        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ch in
+            submitInfo.pCommandBuffers = ch
+            return withUnsafePointer(to: &submitInfo) { si in
+                vkQueueSubmit(device.graphicsQueue, 1, si, fence)
+            }
+        }
+        if submitResult == VK_SUCCESS {
+            var fenceHandle: VkFence? = fence
+            withUnsafePointer(to: &fenceHandle) { f in
+                _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
+            }
+        }
+        vkDestroyFence(dev, fence, nil)
+        var toFree: VkCommandBuffer? = cmd
+        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+        return offscreen
     }
 
     /// Returns (creating once) the render pass + framebuffer for `output`.
