@@ -183,8 +183,14 @@ struct VerticalSlice {
         }
         let renderSize = Size2D(width: Double(probe.info.width), height: Double(probe.info.height))
 
-        // Same 2-layer timeline as runPlayback (base + rotated PiP).
+        // Same 2-layer timeline as runPlayback (base + rotated PiP), plus a
+        // vignette effect on the base clip to exercise the SPIR-V effect pipeline.
         var a = Clip(mediaRef: "a", startFrame: 0, durationFrames: 60); a.id = "a"
+        a.effects = [Effect(id: "v1", type: "stylize.vignette", enabled: true, params: [
+            "amount": EffectParam(value: -0.8),
+            "midpoint": EffectParam(value: 0.2),
+            "feather": EffectParam(value: 0.6)
+        ])]
         var track1 = Track(type: .video)
         track1.clips = [a]
         var b = Clip(mediaRef: "b", startFrame: 0, durationFrames: 60); b.id = "b"
