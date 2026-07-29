@@ -15,6 +15,7 @@ public final class WinExporter {
     public let device: VulkanDevice
     public let renderer: WinFrameRenderer
     public let offscreen: VulkanTexture
+    public let scratch: VulkanTexture  // ping-pong target for effect passes
     public let encoder: FFmpegEncoder
     public let renderSize: Size2D
     private let instructions: [RenderInstruction]
@@ -45,10 +46,16 @@ public final class WinExporter {
             width: UInt32(renderSize.width),
             height: UInt32(renderSize.height)
         ) else { return nil }
+        guard let scratch = VulkanTexture(
+            device: device,
+            width: UInt32(renderSize.width),
+            height: UInt32(renderSize.height)
+        ) else { return nil }
         guard let encoder = try? FFmpegEncoder(path: outputPath, config: encoderConfig) else { return nil }
         self.device = device
         self.renderer = renderer
         self.offscreen = offscreen
+        self.scratch = scratch
         self.encoder = encoder
         self.renderSize = renderSize
         self.instructions = RenderPlanner.plan(
@@ -102,10 +109,85 @@ public final class WinExporter {
             into: offscreen
         )
 
-        // Read the offscreen back to CPU BGRA and encode it.
-        if let bgra = offscreen.download() {
+        // Apply effects (ping-pong between offscreen and scratch). The MVP
+        // applies the union of enabled effects from all clips to the composited
+        // frame; per-layer effects come later. Effect passes record into a
+        // one-shot command buffer (the render's protocol method already
+        // submitted + waited on its own).
+        var finalTexture = offscreen
+        let allEffects = instruction.layers.flatMap { $0.clip.effects ?? [] }
+        if !allEffects.isEmpty {
+            let firstLayerStart = instruction.layers.first?.clip.startFrame ?? 0
+            finalTexture = recordAndApplyEffects(
+                allEffects, frame: frame, clipStartFrame: firstLayerStart
+            ) ?? offscreen
+        }
+
+        // Read the result back to CPU BGRA and encode it.
+        if let bgra = finalTexture.download() {
             _ = encoder.writeFrame(bgra)
         }
+    }
+
+    /// Allocates a one-shot command buffer, records the effect chain via
+    /// WinFrameRenderer.applyEffects, submits, and waits. Returns the texture
+    /// holding the final result (offscreen or scratch depending on pass count).
+    private func recordAndApplyEffects(_ effects: [Effect], frame: Int, clipStartFrame: Int) -> VulkanTexture? {
+        let dev = device.device
+        var cbInfo = VkCommandBufferAllocateInfo()
+        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        cbInfo.commandPool = device.commandPool
+        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        cbInfo.commandBufferCount = 1
+        var cmd: VkCommandBuffer? = nil
+        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
+              let cmd else { return nil }
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        let result = renderer.applyEffects(
+            effects, frame: frame, clipStartFrame: clipStartFrame,
+            source: offscreen, scratch: scratch, commandBuffer: cmd
+        )
+        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+
+        var fenceInfo = VkFenceCreateInfo()
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        var fence: VkFence? = nil
+        guard withUnsafePointer(to: &fenceInfo, { vkCreateFence(dev, $0, nil, &fence) }) == VK_SUCCESS, let fence else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        var cmdHandle: VkCommandBuffer? = cmd
+        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ch in
+            submitInfo.pCommandBuffers = ch
+            return withUnsafePointer(to: &submitInfo) { si in
+                vkQueueSubmit(device.graphicsQueue, 1, si, fence)
+            }
+        }
+        if submitResult == VK_SUCCESS {
+            var fenceHandle: VkFence? = fence
+            withUnsafePointer(to: &fenceHandle) { f in
+                _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
+            }
+        }
+        vkDestroyFence(dev, fence, nil)
+        var toFree: VkCommandBuffer? = cmd
+        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+        return result
     }
 
     private func segment(for frame: Int) -> RenderInstruction? {
