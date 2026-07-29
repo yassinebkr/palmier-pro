@@ -2,6 +2,9 @@
 #   - Vulkan-Headers (Khronos, MIT) — the flat-C headers CVulkan binds.
 #   - vulkan-1.lib — import lib generated from the system loader (vulkan-1.dll).
 #   - FFmpeg shared dev build (BtbN, GPL) — libavformat/libavcodec/libavutil headers + libs + DLLs.
+#   - glslangValidator (KhronosGroup/glslang main-tot) — compiles Shaders/*.vert|.frag
+#     to .spv; the compiled bytecode is committed as Swift byte arrays in
+#     Sources/PalmierWin/Shaders.swift, so this is only needed when editing shaders.
 #
 # Run from the PalmierWin/ directory (or pass -Root). Idempotent: skips a step
 # if its output already exists. Used by both CI (.github/workflows/ci-windows.yml)
@@ -77,6 +80,21 @@ if (-not (Test-Path (Join-Path $FFRoot "include/libavformat"))) {
     Move-Item $extracted.FullName $FFRoot
     Remove-Item $zip
 } else { Write-Host "==> ffmpeg present, skipping" }
+
+# --- 4. glslangValidator (shader compiler, KhronosGroup/glslang main-tot) ----
+# Only needed when editing Shaders/*.vert|.frag — the compiled .spv bytecode is
+# committed as Swift byte arrays (Sources/PalmierWin/Shaders.swift), so a fresh
+# clone builds without this. Fetched on demand by build-shaders.ps1.
+$Glslang = Join-Path $ThirdParty "glslang/bin/glslangValidator.exe"
+if (-not (Test-Path $Glslang)) {
+    Write-Host "==> fetching glslangValidator (KhronosGroup/glslang main-tot)"
+    $work = Join-Path $ThirdParty "glslang"
+    $zip = Join-Path $ThirdParty "glslang-windows-Release.zip"
+    Invoke-Native "curl.exe" @("-sL", "-o", $zip, "https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-master-windows-Release.zip")
+    if (Test-Path $work) { Remove-Item -Recurse -Force $work }
+    Expand-Archive -Path $zip -DestinationPath $work -Force
+    Remove-Item $zip
+} else { Write-Host "==> glslangValidator present, skipping" }
 
 Write-Host "==> deps ready under $ThirdParty"
 Write-Host "    Vulkan headers: $(Join-Path $VkHeaders 'include/vulkan/vulkan_core.h')"
