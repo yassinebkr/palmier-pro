@@ -65,6 +65,11 @@ struct VerticalSlice {
                     if let swap = VulkanSwapchain(device: dev, instance: instance, window: win) {
                         print("Vulkan swapchain: \(swap.extent.width)x\(swap.extent.height), \(swap.imageViews.count) image(s), render pass OK")
                         runRenderLoop(dev: dev, instance: instance, win: win, swap: swap)
+                        // Exercise the FrameRendering protocol conformance on top
+                        // of the simple full-screen quad above. Renders a planned
+                        // timeline segment into an offscreen texture via the
+                        // portable upstream interface (the same one macOS uses).
+                        runFrameRendering(dev: dev)
                     } else {
                         print("Vulkan swapchain: FAILED to create")
                     }
@@ -152,5 +157,61 @@ struct VerticalSlice {
             print("FFmpeg decoder: error \(error)")
             return nil
         }
+    }
+
+    /// Exercises the FrameRendering protocol conformance (WinFrameRenderer):
+    /// decode a frame, build a single-clip timeline, plan it, and render one
+    /// segment into an offscreen texture via the portable upstream interface.
+    /// Proves the Windows port speaks the same render contract as macOS.
+    static func runFrameRendering(dev: VulkanDevice) {
+        let clipPath = "PalmierWin/test_media/testsrc.mp4"
+        guard FileManager.default.fileExists(atPath: clipPath) else {
+            print("FrameRendering: skipped (no \(clipPath))")
+            return
+        }
+        guard let sourceTexture = decodeAndUpload(dev: dev, clipPath: clipPath) else { return }
+        guard let renderer = WinFrameRenderer(device: dev) else {
+            print("WinFrameRenderer: FAILED to create")
+            return
+        }
+        print("WinFrameRenderer: created OK (FrameRendering conformer, layer pipeline + push constants)")
+
+        // Build a single-clip timeline matching the decoded source dimensions.
+        let renderSize = Size2D(width: Double(sourceTexture.width), height: Double(sourceTexture.height))
+        let trackID = TrackID(rawValue: 1)
+        var clip = Clip(mediaRef: "a", startFrame: 0, durationFrames: 30)
+        clip.id = "a"
+        var track = Track(type: .video)
+        track.clips = [clip]
+        var timeline = Timeline()
+        timeline.tracks = [track]
+
+        let slots: [String: TrackSlot] = [
+            "a": TrackSlot(trackID: trackID, natSize: renderSize, transform: .identity)
+        ]
+        let plan = RenderPlanner.plan(
+            timeline: timeline, renderSize: renderSize,
+            totalFrames: timeline.totalFrames, trackSlots: slots, resolveTimeline: { _ in nil }
+        )
+        guard let instruction = plan.first else {
+            print("FrameRendering: planner produced no segments")
+            return
+        }
+        print("FrameRendering: planner produced \(plan.count) segment(s); rendering segment 0 (\(instruction.layers.count) layer(s))")
+
+        guard let offscreen = VulkanTexture(device: dev, width: sourceTexture.width, height: sourceTexture.height) else {
+            print("FrameRendering: offscreen texture FAILED to create")
+            return
+        }
+
+        // The sourceFrame closure returns the decoded texture for trackID.
+        // frame=0, default identity transform → the source fills the canvas.
+        renderer.render(
+            instruction: instruction,
+            frame: 0,
+            sourceFrame: { id in id == trackID ? sourceTexture : nil },
+            into: offscreen
+        )
+        print("FrameRendering: rendered segment 0 into offscreen texture via WinFrameRenderer (protocol conformance OK)")
     }
 }
