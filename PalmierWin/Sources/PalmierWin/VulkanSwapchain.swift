@@ -20,6 +20,9 @@ public final class VulkanSwapchain: @unchecked Sendable {
     public let renderPass: VkRenderPass
 
     public let imageViews: [VkImageView]
+    /// Raw swapchain `VkImage` handles — needed for offscreen→swapchain blits.
+    /// Pair with `imageViews[i]` by index.
+    public let images: [VkImage]
     public let framebuffers: [VkFramebuffer]
 
     // One frame in flight: acquire/transfer semaphore + submit/present semaphore
@@ -95,6 +98,7 @@ public final class VulkanSwapchain: @unchecked Sendable {
             return vkCreateImageView(device.device, &viewInfo, nil, &view) == VK_SUCCESS ? view : nil
         }
         guard imageViews.count == images.count else { return nil }
+        self.images = images.compactMap { $0 }
 
         // 5) Render pass (one color attachment, BGRA8, load-clear/store-store).
         var attachment = VkAttachmentDescription()

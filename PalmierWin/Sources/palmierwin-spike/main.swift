@@ -70,6 +70,9 @@ struct VerticalSlice {
                         // timeline segment into an offscreen texture via the
                         // portable upstream interface (the same one macOS uses).
                         runFrameRendering(dev: dev)
+                        // Full timeline playback: decode→composite→blit→present
+                        // per frame, end-to-end through the portable contract.
+                        runPlayback(dev: dev, win: win, swap: swap)
                     } else {
                         print("Vulkan swapchain: FAILED to create")
                     }
@@ -213,5 +216,60 @@ struct VerticalSlice {
             into: offscreen
         )
         print("FrameRendering: rendered segment 0 into offscreen texture via WinFrameRenderer (protocol conformance OK)")
+    }
+
+    /// Full timeline playback end-to-end: builds a 2-clip timeline sourcing the
+    /// test clip twice (track 1 + track 2 as a picture-in-picture), plans it,
+    /// and plays it via WinPlayback — per frame: decode → WinFrameRenderer
+    /// composite → blit offscreen → swapchain → present. Window shows the
+    /// timeline playing. Skipped on CI (no GPU, no test clip).
+    static func runPlayback(dev: VulkanDevice, win: Win32Window, swap: VulkanSwapchain) {
+        let clipPath = "PalmierWin/test_media/testsrc.mp4"
+        guard FileManager.default.fileExists(atPath: clipPath) else {
+            print("Playback: skipped (no \(clipPath))")
+            return
+        }
+        guard let probe = try? FFmpegDecoder(path: clipPath) else {
+            print("Playback: couldn't open test clip")
+            return
+        }
+        let renderSize = Size2D(width: Double(probe.info.width), height: Double(probe.info.height))
+
+        // Two clips on two tracks. Track 1 fills the canvas (the base layer);
+        // track 2 is a smaller picture-in-picture in the corner (exercises the
+        // per-layer placement + composite path, not just a full-screen blit).
+        var a = Clip(mediaRef: "a", startFrame: 0, durationFrames: 60); a.id = "a"
+        var track1 = Track(type: .video)
+        track1.clips = [a]
+        var b = Clip(mediaRef: "b", startFrame: 0, durationFrames: 60); b.id = "b"
+        b.transform.width = 0.35
+        b.transform.height = 0.35
+        b.transform.centerX = 0.78
+        b.transform.centerY = 0.22
+        b.transform.rotation = 8
+        var track2 = Track(type: .video)
+        track2.clips = [b]
+        var timeline = Timeline()
+        timeline.tracks = [track2, track1]  // bottom→top: track1 is the base
+
+        let trackSlots: [String: TrackSlot] = [
+            "a": TrackSlot(trackID: TrackID(rawValue: 1), natSize: renderSize, transform: .identity),
+            "b": TrackSlot(trackID: TrackID(rawValue: 2), natSize: renderSize, transform: .identity)
+        ]
+        let media: [TrackID: String] = [
+            TrackID(rawValue: 1): clipPath,
+            TrackID(rawValue: 2): clipPath
+        ]
+        guard let playback = WinPlayback(
+            device: dev, swapchain: swap, timeline: timeline,
+            renderSize: renderSize, trackSlots: trackSlots, mediaPaths: media
+        ) else {
+            print("Playback: WinPlayback FAILED to create")
+            return
+        }
+        print("Playback: playing 2-layer timeline (base + PiP) end-to-end")
+        win.show()
+        playback.play(window: win, shouldStop: { !win.pollEvents() })
+        print("Playback: done")
     }
 }
