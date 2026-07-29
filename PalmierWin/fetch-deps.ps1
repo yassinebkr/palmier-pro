@@ -96,6 +96,17 @@ if (-not (Test-Path $Glslang)) {
     Remove-Item $zip
 } else { Write-Host "==> glslangValidator present, skipping" }
 
+# --- 5. Dear ImGui (ocornut/imgui, MIT) -------------------------------------
+# CImGui wraps ImGui's C++ API in extern "C" for Swift. The wrapper is committed
+# (CImGui/src/CImGui.cpp + include/CImGui.h); the upstream ImGui source is not.
+$ImguiDir = Join-Path $Root "CImGui/deps/imgui"
+if (-not (Test-Path (Join-Path $ImguiDir "imgui.h"))) {
+    Write-Host "==> fetching Dear ImGui"
+    $ImguiDeps = Join-Path $Root "CImGui/deps"
+    if (-not (Test-Path $ImguiDeps)) { New-Item -ItemType Directory -Force -Path $ImguiDeps | Out-Null }
+    Invoke-Native "git" @("clone", "--depth", "1", "https://github.com/ocornut/imgui.git", $ImguiDir)
+} else { Write-Host "==> Dear ImGui present, skipping" }
+
 Write-Host "==> deps ready under $ThirdParty"
 Write-Host "    Vulkan headers: $(Join-Path $VkHeaders 'include/vulkan/vulkan_core.h')"
 Write-Host "    vulkan-1.lib:    $VkLib"
