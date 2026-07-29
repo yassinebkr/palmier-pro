@@ -37,7 +37,9 @@ public final class VulkanTexture: @unchecked Sendable {
         imageInfo.arrayLayers = 1
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT
         imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL
-        imageInfo.usage = UInt32(VK_IMAGE_USAGE_TRANSFER_DST_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue)
+        // TRANSFER_DST for upload (staging→image), TRANSFER_SRC for download
+        // (image→staging readback, used by the exporter), SAMPLED for shader access.
+        imageInfo.usage = UInt32(VK_IMAGE_USAGE_TRANSFER_DST_BIT.rawValue | VK_IMAGE_USAGE_TRANSFER_SRC_BIT.rawValue | VK_IMAGE_USAGE_SAMPLED_BIT.rawValue)
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 
@@ -177,6 +179,158 @@ public final class VulkanTexture: @unchecked Sendable {
         vkFreeMemory(dev, stagingMem, nil)
         vkDestroyBuffer(dev, staging, nil)
         return ok
+    }
+
+    /// Reads the image's pixels back as tightly-packed BGRA (width*height*4),
+    /// the inverse of `upload`. Copies image → host-visible staging buffer
+    /// (image transitioned to TRANSFER_SRC_OPTIMAL), maps, and reads out.
+    /// Blocks until the copy completes (vkQueueWaitIdle). Returns nil on any
+    /// Vulkan error. Used by the exporter to encode rendered frames.
+    public func download() -> Data? {
+        let dev = device
+        let size = VkDeviceSize(Int(width) * Int(height) * 4)
+
+        // Staging buffer: TRANSFER_DST (we copy the image INTO it), HOST_VISIBLE
+        // + HOST_COHERENT so we can map and read without an explicit invalidate.
+        var bufInfo = VkBufferCreateInfo()
+        bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
+        bufInfo.size = size
+        bufInfo.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_DST_BIT.rawValue)
+        bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        var staging: VkBuffer? = nil
+        guard withUnsafePointer(to: &bufInfo, { vkCreateBuffer(dev, $0, nil, &staging) }) == VK_SUCCESS,
+              let staging else { return nil }
+
+        var bufReqs = VkMemoryRequirements()
+        vkGetBufferMemoryRequirements(dev, staging, &bufReqs)
+        guard let memTypeIndex = VulkanTexture.findMemoryType(
+            physical: physical, typeBits: bufReqs.memoryTypeBits,
+            properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue)
+        ) else {
+            vkDestroyBuffer(dev, staging, nil); return nil
+        }
+        var allocInfo = VkMemoryAllocateInfo()
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+        allocInfo.allocationSize = bufReqs.size
+        allocInfo.memoryTypeIndex = memTypeIndex
+        var stagingMem: VkDeviceMemory? = nil
+        guard withUnsafePointer(to: &allocInfo, { vkAllocateMemory(dev, $0, nil, &stagingMem) }) == VK_SUCCESS,
+              let stagingMem, vkBindBufferMemory(dev, staging, stagingMem, 0) == VK_SUCCESS
+        else { vkDestroyBuffer(dev, staging, nil); return nil }
+
+        let copyOk = recordAndSubmitImageToBufferCopy(staging: staging)
+        vkQueueWaitIdle(queue)
+        var data: Data? = nil
+        if copyOk {
+            var mapped: UnsafeMutableRawPointer? = nil
+            if vkMapMemory(dev, stagingMem, 0, size, 0, &mapped) == VK_SUCCESS, let mapped {
+                // The copy wrote tightly-packed rows into the staging buffer
+                // (bufferRowLength=0 ⇒ imageExtent packing), so it's a flat
+                // width*height*4 BGRA block.
+                data = Data(bytes: mapped, count: Int(width) * Int(height) * 4)
+                vkUnmapMemory(dev, stagingMem)
+            }
+        }
+        vkFreeMemory(dev, stagingMem, nil)
+        vkDestroyBuffer(dev, staging, nil)
+        return data
+    }
+
+    /// Records image→buffer copy + layout transitions into a one-shot command
+    /// buffer and submits it (the readback counterpart of
+    /// `recordAndSubmitCopy`). Image transitions SHADER_READ_ONLY → TRANSFER_SRC
+    /// for the copy, then back to SHADER_READ_ONLY.
+    private func recordAndSubmitImageToBufferCopy(staging: VkBuffer) -> Bool {
+        let dev = device
+
+        var cbInfo = VkCommandBufferAllocateInfo()
+        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        cbInfo.commandPool = commandPool
+        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        cbInfo.commandBufferCount = 1
+        var cmd: VkCommandBuffer? = nil
+        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
+              let cmd else { return false }
+
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { cPtr in vkFreeCommandBuffers(dev, commandPool, 1, cPtr) }
+            return false
+        }
+
+        var range = VkImageSubresourceRange()
+        range.aspectMask = UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue)
+        range.baseMipLevel = 0
+        range.levelCount = 1
+        range.baseArrayLayer = 0
+        range.layerCount = 1
+
+        // SHADER_READ_ONLY → TRANSFER_SRC_OPTIMAL.
+        var toSrc = VkImageMemoryBarrier2()
+        toSrc.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2
+        toSrc.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+        toSrc.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+        toSrc.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT
+        toSrc.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT
+        toSrc.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        toSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        toSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
+        toSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
+        toSrc.image = image
+        toSrc.subresourceRange = range
+        applyBarrier(cmd, toSrc)
+
+        var region = VkBufferImageCopy()
+        region.bufferOffset = 0
+        region.bufferRowLength = 0  // 0 ⇒ tightly packed per imageExtent
+        region.bufferImageHeight = 0
+        region.imageSubresource.aspectMask = UInt32(VK_IMAGE_ASPECT_COLOR_BIT.rawValue)
+        region.imageSubresource.mipLevel = 0
+        region.imageSubresource.baseArrayLayer = 0
+        region.imageSubresource.layerCount = 1
+        region.imageOffset = VkOffset3D(x: 0, y: 0, z: 0)
+        region.imageExtent = VkExtent3D(width: width, height: height, depth: 1)
+        withUnsafePointer(to: &region) { rPtr in
+            vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, rPtr)
+        }
+
+        // TRANSFER_SRC_OPTIMAL → SHADER_READ_ONLY_OPTIMAL (restore).
+        var toRead = VkImageMemoryBarrier2()
+        toRead.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2
+        toRead.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT
+        toRead.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT
+        toRead.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+        toRead.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+        toRead.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        toRead.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        toRead.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
+        toRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
+        toRead.image = image
+        toRead.subresourceRange = range
+        applyBarrier(cmd, toRead)
+
+        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { cPtr in vkFreeCommandBuffers(dev, commandPool, 1, cPtr) }
+            return false
+        }
+
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        var cmdHandle: VkCommandBuffer? = cmd
+        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ptr in
+            submitInfo.pCommandBuffers = ptr
+            return withUnsafePointer(to: &submitInfo) { sPtr in
+                vkQueueSubmit(queue, 1, sPtr, nil)
+            }
+        }
+        var toFree: VkCommandBuffer? = cmd
+        withUnsafePointer(to: &toFree) { cPtr in vkFreeCommandBuffers(dev, commandPool, 1, cPtr) }
+        return submitResult == VK_SUCCESS
     }
 
     /// Records buffer→image copy + layout transitions into a one-shot command

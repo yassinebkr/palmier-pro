@@ -27,6 +27,12 @@ public enum LayerPlacement {
 
     /// Returns the 7-float push-constant block for one layer at `frame`.
     /// `opacity` is the layer's premultiplied alpha (0..1).
+    ///
+    /// The shader applies this Mat3 to the unit quad [0,1]² to get normalized
+    /// device coords [0,1]² (top-left origin; the vert shader flips Y to clip
+    /// space). Everything here is in normalized canvas coords — no pixel math.
+    /// Order matches macOS: scale → translate → rotate-around-center, with
+    /// `preferredTransform` applied innermost (source intrinsic transform).
     public static func pushConstants(
         for layer: LayerPlan,
         frame: Int,
@@ -34,53 +40,38 @@ public enum LayerPlacement {
         opacity: Double
     ) -> PushConstants {
         let t = layer.clip.transformAt(frame: frame)
-        let natW = layer.natSize.width
-        let natH = layer.natSize.height
-        guard natW > 0, natH > 0, renderSize.width > 0, renderSize.height > 0 else {
-            return PushConstants(a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0, opacity: 0)
-        }
 
         let tl = t.topLeft
-        let rw = renderSize.width
-        let rh = renderSize.height
-        let sx = (rw / natW) * t.width * (t.flipHorizontal ? -1 : 1) / rw
-        let sy = (rh / natH) * t.height * (t.flipVertical ? -1 : 1) / rh
-        let txRaw = (t.flipHorizontal ? tl.x + t.width : tl.x) * rw
-        let tyRaw = (t.flipVertical ? tl.y + t.height : tl.y) * rh
+        let sx = t.width * (t.flipHorizontal ? -1 : 1)
+        let sy = t.height * (t.flipVertical ? -1 : 1)
+        let tx = t.flipHorizontal ? tl.x + t.width : tl.x
+        let ty = t.flipVertical ? tl.y + t.height : tl.y
 
-        // Build in pixel space first (scale → translate → rotate), matching the
-        // macOS concatenation order, then fold preferredTransform (innermost)
-        // and normalize translations by renderSize.
+        // scale then translate (concatenating applies self first).
         let scale = Mat3(a: sx, b: 0, c: 0, d: sy, tx: 0, ty: 0)
-        let translate = Mat3(a: 1, b: 0, c: 0, d: 1, tx: txRaw, ty: tyRaw)
-        // scale.concatenating(translate) applies scale first, then translate.
-        let placed = scale.concatenating(translate)
+        let translate = Mat3(a: 1, b: 0, c: 0, d: 1, tx: tx, ty: ty)
+        var placed = scale.concatenating(translate)
 
-        let rotated = t.rotation != 0 ? placed.concatenating(rotation(t: t, renderSize: renderSize)) : placed
-        // preferredTransform applies first (innermost): full = preferred.concatenating(placed)
-        let full = layer.preferredTransform.concatenating(rotated)
+        // Rotate around the clip's center (in normalized coords).
+        if t.rotation != 0 {
+            placed = placed.concatenating(rotation(t: t))
+        }
 
-        let cx = t.centerX * rw
-        let cy = t.centerY * rh
-        _ = cx; _ = cy  // rotation() recomputes these from t directly
+        // preferredTransform (source intrinsic) applies innermost.
+        let full = layer.preferredTransform.concatenating(placed)
 
-        // Normalize the translation by renderSize so the shader maps [0,1]² →
-        // normalized device coords. Scale and the linear part are already
-        // dimensionless (sx/sy divided by renderSize above).
         return PushConstants(
             a: f(full.a), b: f(full.b), c: f(full.c), d: f(full.d),
-            tx: f(full.tx / rw), ty: f(full.ty / rh),
+            tx: f(full.tx), ty: f(full.ty),
             opacity: f(min(1, max(0, opacity)))
         )
     }
 
-    /// Rotation around the clip's center, in pixel space. Matches
-    /// `canvasRotationTransform`: translate(-center) → rotate(θ) → translate(center).
-    /// `concatenating` order: apply self first, so this is
-    /// `translateToCenter.concatenating(rotate).concatenating(translateBack)`.
-    private static func rotation(t: Transform, renderSize: Size2D) -> Mat3 {
-        let cx = t.centerX * renderSize.width
-        let cy = t.centerY * renderSize.height
+    /// Rotation around the clip's center, in normalized canvas coords.
+    /// translate(-center) → rotate(θ) → translate(center).
+    private static func rotation(t: Transform) -> Mat3 {
+        let cx = t.centerX
+        let cy = t.centerY
         let rad = t.rotation * .pi / 180
         let cosR = cos(rad)
         let sinR = sin(rad)

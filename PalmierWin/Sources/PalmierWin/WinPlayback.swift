@@ -103,11 +103,10 @@ public final class WinPlayback {
         // Resolve each required track's source frame into a texture. The
         // source frame for a clip is (timelineFrame - clip.startFrame) * speed
         // (MVP: speed = 1, single clip per track per segment).
-        let required = instruction.requiredTrackIDs
         var sources: [TrackID: VulkanTexture] = [:]
         for layer in instruction.layers {
             guard let trackID = layer.trackID else { continue }
-            guard !required.contains(trackID) || sources[trackID] != nil else { continue }
+            if sources[trackID] != nil { continue }  // already resolved this frame
             let sourceFrame = sourceFrameIndex(for: layer, timelineFrame: frame)
             if let tex = texture(for: trackID, frame: sourceFrame, natSize: layer.natSize) {
                 sources[trackID] = tex
