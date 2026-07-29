@@ -77,7 +77,7 @@ struct VerticalSlice {
                         // and re-encode to a new MP4 via FFmpegEncoder. Proves
                         // the encode path works before wiring the full export
                         // pipeline (decode → composite → encode).
-                        runExport()
+                        runExport(dev: dev)
                     } else {
                         print("Vulkan swapchain: FAILED to create")
                     }
@@ -167,33 +167,60 @@ struct VerticalSlice {
         }
     }
 
-    /// Decodes the test clip frame-by-frame and re-encodes it to a new MP4 via
-    /// FFmpegEncoder — the simplest round-trip proving the encode path works
-    /// (BGRA → sws → libx264 → mp4 mux). Skipped on CI (no test clip).
-    static func runExport() {
+    /// Exports the same 2-layer timeline the playback step plays, but to a
+    /// file via WinExporter — per frame: decode → WinFrameRenderer composite →
+    /// GPU readback → FFmpegEncoder. Proves the full export pipeline
+    /// (decode → composite → readback → encode) end-to-end. Skipped on CI.
+    static func runExport(dev: VulkanDevice) {
         let clipPath = "PalmierWin/test_media/testsrc.mp4"
         guard FileManager.default.fileExists(atPath: clipPath) else {
             print("Export: skipped (no \(clipPath))")
             return
         }
+        guard let probe = try? FFmpegDecoder(path: clipPath) else {
+            print("Export: couldn't open test clip")
+            return
+        }
+        let renderSize = Size2D(width: Double(probe.info.width), height: Double(probe.info.height))
+
+        // Same 2-layer timeline as runPlayback (base + rotated PiP).
+        var a = Clip(mediaRef: "a", startFrame: 0, durationFrames: 60); a.id = "a"
+        var track1 = Track(type: .video)
+        track1.clips = [a]
+        var b = Clip(mediaRef: "b", startFrame: 0, durationFrames: 60); b.id = "b"
+        b.transform.width = 0.35
+        b.transform.height = 0.35
+        b.transform.centerX = 0.78
+        b.transform.centerY = 0.22
+        b.transform.rotation = 8
+        var track2 = Track(type: .video)
+        track2.clips = [b]
+        var timeline = Timeline()
+        timeline.tracks = [track2, track1]
+
+        let trackSlots: [String: TrackSlot] = [
+            "a": TrackSlot(trackID: TrackID(rawValue: 1), natSize: renderSize, transform: .identity),
+            "b": TrackSlot(trackID: TrackID(rawValue: 2), natSize: renderSize, transform: .identity)
+        ]
+        let media: [TrackID: String] = [
+            TrackID(rawValue: 1): clipPath,
+            TrackID(rawValue: 2): clipPath
+        ]
         let outPath = "PalmierWin/test_media/exported.mp4"
+        let config = FFmpegEncoder.Config(
+            width: probe.info.width, height: probe.info.height, fps: 30
+        )
+        print("Export: exporting 2-layer timeline → \(outPath)")
+        guard let exporter = WinExporter(
+            device: dev, timeline: timeline, renderSize: renderSize,
+            trackSlots: trackSlots, mediaPaths: media,
+            outputPath: outPath, encoderConfig: config
+        ) else {
+            print("Export: WinExporter FAILED to create")
+            return
+        }
         do {
-            let decoder = try FFmpegDecoder(path: clipPath)
-            let config = FFmpegEncoder.Config(
-                width: decoder.info.width, height: decoder.info.height, fps: 30
-            )
-            let encoder = try FFmpegEncoder(path: outPath, config: config)
-            print("Export: encoding \(decoder.info.width)x\(decoder.info.height) → \(outPath)")
-            var frames = 0
-            while let bgra = try decoder.nextBGRAFrame() {
-                if !encoder.writeFrame(bgra) {
-                    print("Export: writeFrame failed at frame \(frames)")
-                    try? encoder.close()
-                    return
-                }
-                frames += 1
-            }
-            try encoder.close()
+            let frames = try exporter.export()
             let size = (try? FileManager.default.attributesOfItem(atPath: outPath)[.size] as? Int) ?? 0
             print("Export: encoded \(frames) frame(s), \(size) bytes → \(outPath)")
         } catch {
