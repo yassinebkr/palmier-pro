@@ -11,3 +11,8 @@ ThirdParty/
 # Local-only build wrapper (host-specific MSVC/Swift paths). CI uses the
 # ilammy/msvc-dev-cmd action + system Swift instead.
 build.bat
+
+# Locally-generated test media for the FFmpegDecoder + VulkanTexture spike.
+# Produced by make-test-media.ps1; not committed. CI has no GPU, so the
+# decode+upload step is skipped via a FileManager.default.fileExists check.
+test_media/
