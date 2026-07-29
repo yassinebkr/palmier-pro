@@ -73,6 +73,11 @@ struct VerticalSlice {
                         // Full timeline playback: decode→composite→blit→present
                         // per frame, end-to-end through the portable contract.
                         runPlayback(dev: dev, win: win, swap: swap)
+                        // Encode round-trip: decode the test clip frame-by-frame
+                        // and re-encode to a new MP4 via FFmpegEncoder. Proves
+                        // the encode path works before wiring the full export
+                        // pipeline (decode → composite → encode).
+                        runExport()
                     } else {
                         print("Vulkan swapchain: FAILED to create")
                     }
@@ -159,6 +164,40 @@ struct VerticalSlice {
         } catch {
             print("FFmpeg decoder: error \(error)")
             return nil
+        }
+    }
+
+    /// Decodes the test clip frame-by-frame and re-encodes it to a new MP4 via
+    /// FFmpegEncoder — the simplest round-trip proving the encode path works
+    /// (BGRA → sws → libx264 → mp4 mux). Skipped on CI (no test clip).
+    static func runExport() {
+        let clipPath = "PalmierWin/test_media/testsrc.mp4"
+        guard FileManager.default.fileExists(atPath: clipPath) else {
+            print("Export: skipped (no \(clipPath))")
+            return
+        }
+        let outPath = "PalmierWin/test_media/exported.mp4"
+        do {
+            let decoder = try FFmpegDecoder(path: clipPath)
+            let config = FFmpegEncoder.Config(
+                width: decoder.info.width, height: decoder.info.height, fps: 30
+            )
+            let encoder = try FFmpegEncoder(path: outPath, config: config)
+            print("Export: encoding \(decoder.info.width)x\(decoder.info.height) → \(outPath)")
+            var frames = 0
+            while let bgra = try decoder.nextBGRAFrame() {
+                if !encoder.writeFrame(bgra) {
+                    print("Export: writeFrame failed at frame \(frames)")
+                    try? encoder.close()
+                    return
+                }
+                frames += 1
+            }
+            try encoder.close()
+            let size = (try? FileManager.default.attributesOfItem(atPath: outPath)[.size] as? Int) ?? 0
+            print("Export: encoded \(frames) frame(s), \(size) bytes → \(outPath)")
+        } catch {
+            print("Export: error \(error)")
         }
     }
 
