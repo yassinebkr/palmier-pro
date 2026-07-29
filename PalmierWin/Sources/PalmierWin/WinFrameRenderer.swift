@@ -18,6 +18,7 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
 
     public let device: VulkanDevice
     public let layerPipeline: VulkanLayerPipeline
+    public let effectPipeline: VulkanEffectPipeline
 
     /// Lazily-created per-output-texture render pass + framebuffer. The output
     /// texture's lifetime bounds the framebuffer's; cleared on deinit.
@@ -45,12 +46,14 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         // format, so the per-output render passes created lazily below work
         // fine. vkCreateGraphicsPipelines doesn't retain the render pass.
         guard let templateRP = WinFrameRenderer.makeRenderPass(device: dev, format: renderPassFormat),
-              let layerPipeline = VulkanLayerPipeline(device: device, renderPass: templateRP) else {
+              let layerPipeline = VulkanLayerPipeline(device: device, renderPass: templateRP),
+              let effectPipeline = VulkanEffectPipeline(device: device, renderPass: templateRP) else {
             return nil
         }
         vkDestroyRenderPass(dev, templateRP, nil)
         self.device = device
         self.layerPipeline = layerPipeline
+        self.effectPipeline = effectPipeline
     }
 
     deinit {
@@ -217,6 +220,136 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         }
 
         vkCmdEndRenderPass(commandBuffer)
+    }
+
+    /// Applies a chain of effects to the composited frame, ping-ponging between
+    /// `source` and `scratch`. Each effect is one full-screen draw: bind the
+    /// effect pipeline, push the effect type + params, bind the source texture's
+    /// descriptor set, render into the other texture, swap. After all effects,
+    /// the final result is in `source` if the count is even, `scratch` if odd —
+    /// the return value tells the caller which holds the result.
+    ///
+    /// Records into `commandBuffer`; caller submits. Both textures must be the
+    /// same size and have SHADER_READ_ONLY + COLOR_ATTACHMENT usage.
+    @discardableResult
+    public func applyEffects(
+        _ effects: [Effect],
+        frame: Int,
+        clipStartFrame: Int,
+        source: VulkanTexture,
+        scratch: VulkanTexture,
+        commandBuffer: VkCommandBuffer
+    ) -> VulkanTexture {
+        var current = source
+        var other = scratch
+        for effect in effects where effect.enabled {
+            guard let (effectType, params) = resolveEffect(effect, frame: frame, clipStartFrame: clipStartFrame, aspect: Float(Double(source.width) / Double(source.height))) else { continue }
+            applyOneEffect(effectType: effectType, params: params, from: current, into: other, commandBuffer: commandBuffer)
+            // Swap for the next pass.
+            let tmp = current; current = other; other = tmp
+        }
+        return current
+    }
+
+    /// Resolves one effect to its push-constant (type + params[30]). Returns nil
+    /// for unsupported effect types (skipped).
+    private func resolveEffect(_ effect: Effect, frame: Int, clipStartFrame: Int, aspect: Float) -> (VulkanEffectPipeline.EffectType, [Float])? {
+        let offset = frame - clipStartFrame
+        let p = effect.params
+        func param(_ key: String, _ defaultVal: Double) -> Float {
+            Float(p[key]?.resolved(at: offset, default: defaultVal) ?? defaultVal)
+        }
+        switch effect.type {
+        case "stylize.vignette":
+            return (.vignette, [
+                param("amount", -0.5), param("midpoint", 0.3),
+                param("roundness", 0.0), param("feather", 0.5), aspect
+            ])
+        case "color.wheels":
+            return (.wheels, [
+                param("lift.r", 0), param("lift.g", 0), param("lift.b", 0),
+                param("gain.r", 1), param("gain.g", 1), param("gain.b", 1),
+                1.0 / max(0.01, param("gamma.r", 1)),
+                1.0 / max(0.01, param("gamma.g", 1)),
+                1.0 / max(0.01, param("gamma.b", 1))
+            ])
+        case "color.blacksWhites":
+            return (.levels, [param("blacks", 0), param("whites", 0)])
+        case "stylize.grain":
+            return (.grain, [param("amount", 0.5), param("size", 1.0), Float(frame)])
+        case "key.chroma":
+            return (.chromaKey, [
+                param("keyColor.r", 0), param("keyColor.g", 1), param("keyColor.b", 0),
+                param("threshold", 0.4), param("spill", 0.5)
+            ])
+        case "color.highlightsShadows":
+            return (.highlightsShadows, [param("highlights", 0), param("shadows", 0)])
+        default:
+            return nil  // Unsupported effect type for the MVP
+        }
+    }
+
+    /// Records one effect pass: begin render pass into `dst`, set viewport,
+    /// bind effect pipeline, bind source texture's descriptor set, push constants, draw, end.
+    private func applyOneEffect(
+        effectType: VulkanEffectPipeline.EffectType,
+        params: [Float],
+        from src: VulkanTexture,
+        into dst: VulkanTexture,
+        commandBuffer: VkCommandBuffer
+    ) {
+        let dev = device.device
+        let target = renderTarget(for: dst, device: dev)
+        guard let desc = VulkanDescriptor(device: device, layout: effectPipeline.descriptorSetLayout, texture: src) else { return }
+
+        var rpBegin = VkRenderPassBeginInfo()
+        rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
+        rpBegin.renderPass = target.renderPass
+        rpBegin.framebuffer = target.framebuffer
+        rpBegin.renderArea = VkRect2D(offset: VkOffset2D(x: 0, y: 0),
+                                      extent: VkExtent2D(width: dst.width, height: dst.height))
+        rpBegin.clearValueCount = 0  // load-op is LOAD (not clear) — preserve? Actually effect pass overwrites fully
+        withUnsafePointer(to: &rpBegin) { rpb in
+            vkCmdBeginRenderPass(commandBuffer, rpb, VK_SUBPASS_CONTENTS_INLINE)
+        }
+
+        var viewport = VkViewport()
+        viewport.x = 0; viewport.y = 0
+        viewport.width = Float(dst.width); viewport.height = Float(dst.height)
+        viewport.minDepth = 0; viewport.maxDepth = 1
+        var scissor = VkRect2D(offset: VkOffset2D(x: 0, y: 0),
+                               extent: VkExtent2D(width: dst.width, height: dst.height))
+        withUnsafePointer(to: &viewport) { vp in
+            withUnsafePointer(to: &scissor) { sc in
+                vkCmdSetViewport(commandBuffer, 0, 1, vp)
+                vkCmdSetScissor(commandBuffer, 0, 1, sc)
+            }
+        }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, effectPipeline.pipeline)
+        var setHandle: VkDescriptorSet? = desc.set
+        withUnsafePointer(to: &setHandle) { s in
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, effectPipeline.layout,
+                                    0, 1, s, 0, nil)
+        }
+
+        // Push constants: uint effectType + 30 floats. Pack into one [UInt32]
+        // buffer; the shader reads effectType as the first uint and params[0..29]
+        // as the rest (float and uint32 have the same bit width).
+        var pushData = [UInt32](repeating: 0, count: 31)
+        pushData[0] = effectType.rawValue
+        for i in 0..<min(params.count, 30) {
+            pushData[i + 1] = params[i].bitPattern
+        }
+        pushData.withUnsafeBufferPointer { buf in
+            vkCmdPushConstants(commandBuffer, effectPipeline.layout,
+                               UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                               0, UInt32(MemoryLayout<UInt32>.stride * 31), buf.baseAddress)
+        }
+
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0)
+        vkCmdEndRenderPass(commandBuffer)
+        _ = desc  // released; safe because command buffer isn't submitted until caller does
     }
 
     /// Returns (creating once) the render pass + framebuffer for `output`.
