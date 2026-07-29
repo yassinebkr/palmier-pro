@@ -16,3 +16,10 @@ build.bat
 # Produced by make-test-media.ps1; not committed. CI has no GPU, so the
 # decode+upload step is skipped via a FileManager.default.fileExists check.
 test_media/
+
+# Dear ImGui source — cloned by fetch-deps.ps1 into CImGui/deps/imgui.
+# The flat-C wrapper (CImGui/) IS committed; the upstream ImGui source is not.
+CImGui/deps/
+
+# ImGui window layout (auto-saved by Dear ImGui at runtime).
+imgui.ini
