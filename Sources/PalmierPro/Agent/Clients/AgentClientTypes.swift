@@ -45,14 +45,10 @@ struct AnthropicToolSchema: @unchecked Sendable {
     let inputSchema: [String: Any]
 }
 
-struct AgentRequestContext: Equatable, Sendable {
-    let conversationID: UUID
-    let traceID: UUID
-    let spanID: UUID
-    let inputMessageID: UUID
-    let outputMessageID: UUID
-    let projectID: String?
-
+// AgentRequestContext itself lives in PalmierCore (ChatClient.swift) so the
+// neutral ChatClient protocol can carry it; the Palmier-specific telemetry
+// headers stay app-side here.
+extension AgentRequestContext {
     func apply(to request: inout URLRequest, telemetryEnabled: Bool) {
         request.setValue(conversationID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Conversation-Id")
         request.setValue(traceID.uuidString.lowercased(), forHTTPHeaderField: "X-Palmier-Trace-Id")
