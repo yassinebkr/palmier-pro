@@ -1,3 +1,11 @@
+> **This is a fork** of [palmier-io/palmier-pro](https://github.com/palmier-io/palmier-pro) exploring a **Windows port**. The macOS app above is upstream's; everything below this notice is the original README.
+>
+> **Windows port status** (early, in `PalmierWin/`, docs: [`docs/windows-port-proposal.md`](docs/windows-port-proposal.md), [`docs/windows-media-engine-design.md`](docs/windows-media-engine-design.md)):
+>
+> - **Works:** `PalmierCore` (portable editor model + engines, tested on both platforms), Swift 6.3.3 toolchain end-to-end, Vulkan renderer, FFmpeg decode/playback/export, all 12 effect kernels re-authored in SPIR-V, and an early ImGui editor shell (palette + panel layout only). CI green on macOS and Windows.
+> - **Not yet:** UI/UX anywhere near the macOS app (no animations, real workflows, or polish — the current shell is a static proof of concept), undo/EditorViewModel rehost, MLX/speech/transcription, agent host, audio engine, updates/auth/telemetry.
+> - Deliberate choice: flat-C bindings (Vulkan + FFmpeg + ImGui + stb_truetype), **no COM / no WinUI3** — see the design doc for why.
+
 <div align="center">
 
 # Palmier Pro
