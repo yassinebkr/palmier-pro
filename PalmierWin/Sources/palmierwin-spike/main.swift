@@ -110,8 +110,15 @@ struct VerticalSlice {
 
         let clipPath = "PalmierWin/test_media/testsrc.mp4"
         let hasClip = FileManager.default.fileExists(atPath: clipPath)
+        var decoder: FFmpegDecoder? = nil
         var texture: VulkanTexture? = nil
-        if hasClip { texture = decodeAndUpload(dev: dev, clipPath: clipPath) }
+        var videoDescriptor: VulkanDescriptor? = nil  // retained: deinit destroys the pool
+        if hasClip, let dec = try? FFmpegDecoder(path: clipPath) {
+            print("FFmpeg decoder: opened \(dec.info.width)x\(dec.info.height) (\(dec.info.codecName))")
+            decoder = dec
+            texture = VulkanTexture(device: dev, width: UInt32(dec.info.width), height: UInt32(dec.info.height))
+            if let texture { videoDescriptor = VulkanDescriptor(device: dev, layout: pipe.descriptorSetLayout, texture: texture) }
+        }
 
         // ImGui init — our Vulkan device + the swapchain's render pass.
         guard let ui = try? WinUI(device: dev, instance: instance, window: win, swapchain: swap) else {
@@ -120,31 +127,79 @@ struct VerticalSlice {
         }
         print("ImGui: init OK (Vulkan + Win32 backends, no COM)")
 
-        guard let renderer = VulkanRenderer(device: dev) else {
-            print("Vulkan renderer: FAILED to create")
-            return
+        // Build the real editor timeline for the UI to display.
+        var a = Clip(mediaRef: "a", startFrame: 0, durationFrames: 60); a.id = "Clip A"
+        var track1 = Track(type: .video)
+        track1.clips = [a]
+        var b = Clip(mediaRef: "b", startFrame: 15, durationFrames: 30); b.id = "PiP"
+        b.transform.width = 0.35
+        b.transform.height = 0.35
+        b.transform.centerX = 0.78
+        b.transform.centerY = 0.22
+        b.transform.rotation = 8
+        var track2 = Track(type: .video)
+        track2.clips = [b]
+        var title = Clip(mediaRef: "", startFrame: 5, durationFrames: 40)
+        title.id = "Title"
+        title.mediaType = .text
+        title.textContent = "PALMIER PRO"
+        title.textStyle = TextStyle()
+        var track3 = Track(type: .video)
+        track3.clips = [title]
+        var editorTimeline = Timeline()
+        editorTimeline.tracks = [track3, track2, track1]  // bottom→top
+
+        let editor = WinEditorUI(timeline: editorTimeline)
+        editor.selectedClipID = "PiP"
+        if let texture {
+            editor.videoAspect = Float(texture.width) / Float(texture.height)
+            // ImGui draws textures with its own pipeline layout — register the
+            // view/sampler with the backend instead of reusing the quad's set.
+            editor.videoTextureID = cimgui_add_texture(UnsafeMutableRawPointer(texture.sampler), UnsafeMutableRawPointer(texture.view), 5)
         }
+        print("Editor UI: initialized with \(editorTimeline.tracks.count) tracks, \(editorTimeline.totalFrames) frames")
 
         win.show()
-        print("Editor UI: running (video preview + ImGui overlay) — close window to exit")
+        print("Editor UI: running (styled Palmier Pro editor) — close window to exit")
         var frame = 0
+        var lastDecodedFrame = -1
         let framesToDraw = 600  // ~10s @ 60fps
         while frame < framesToDraw {
             if !win.pollEvents() { break }
 
+            // Advance the playhead for a live preview effect, unless the user
+            // is scrubbing the timeline.
+            if !editor.isScrubbing {
+                editor.playheadFrame = frame % max(1, editorTimeline.totalFrames)
+            }
+
+            // Decode the source frame under the playhead into the preview
+            // texture. Sequential play decodes forward; scrubs seek.
+            if let decoder, let texture {
+                let target = min(editor.playheadFrame, 59)  // clip A = 60 frames of testsrc
+                if target != lastDecodedFrame {
+                    // Wait for the previous present to stop sampling the texture.
+                    var waitFence: VkFence? = swap.inFlight
+                    withUnsafePointer(to: &waitFence) { f in
+                        _ = vkWaitForFences(dev.device, 1, f, UInt32(VK_TRUE), UInt64.max)
+                    }
+                    if let bgra = decodeVideoFrame(decoder: decoder, frame: target, lastDecoded: lastDecodedFrame),
+                       texture.upload(bgra: bgra) {
+                        lastDecodedFrame = target
+                    }
+                }
+            }
+
             // Build the ImGui UI for this frame.
             ui.newFrame()
-            buildEditorUI(frame: frame, hasVideo: texture != nil, devName: dev.deviceName)
+            editor.buildFrame()
 
-            // Draw: video quad + ImGui into the swapchain. We modify the
-            // renderer's drawFrame to also record ImGui — but since drawFrame
-            // encapsulates the whole acquire→render→present, we need to
-            // inject ImGui into the render pass. For the MVP, use the
-            // renderer's existing path if no video, else a combined draw.
-            if let texture, let desc = VulkanDescriptor(device: dev, layout: pipe.descriptorSetLayout, texture: texture) {
-                drawFrameWithUI(swap: swap, pipe: pipe, descSet: desc.set, ui: ui, dev: dev)
+            // Draw: video quad + ImGui into the swapchain. The quad path
+            // samples the texture — only valid once an upload transitioned it
+            // out of UNDEFINED layout, so gate on a successful first decode.
+            if let videoDescriptor, lastDecodedFrame >= 0 {
+                drawFrameWithUI(swap: swap, pipe: pipe, descSet: videoDescriptor.set, ui: ui, dev: dev)
             } else {
-                // No video — just clear + ImGui.
                 drawClearWithUI(swap: swap, ui: ui, dev: dev)
             }
             frame += 1
@@ -155,57 +210,6 @@ struct VerticalSlice {
             _ = vkWaitForFences(dev.device, 1, f, UInt32(VK_TRUE), UInt64.max)
         }
         print("Editor UI: drew \(frame) frame(s)")
-    }
-
-    /// Builds the ImGui editor chrome: a demo panel with app info + controls.
-    private static func buildEditorUI(frame: Int, hasVideo: Bool, devName: String) {
-        // Inspector panel (left side).
-        cimgui_set_next_window_pos(10, 30)
-        cimgui_set_next_window_size(280, 400)
-        var inspectorOpen: Int32 = 1
-        "Inspector".withCString { cimgui_begin($0, &inspectorOpen) }
-        "Device: \(devName)".withCString { cimgui_text($0) }
-        "Frame: \(frame)".withCString { cimgui_text($0) }
-        cimgui_separator()
-        "Video: \(hasVideo ? "loaded" : "no clip")".withCString { cimgui_text($0) }
-        if hasVideo {
-            var brightness: Float = 1.0
-            "Brightness".withCString { cimgui_slider_float($0, &brightness, 0, 2) }
-            var contrast: Float = 1.0
-            "Contrast".withCString { cimgui_slider_float($0, &contrast, 0.5, 2) }
-        }
-        cimgui_separator()
-        "Effects:".withCString { cimgui_text($0) }
-        var vignette: Int32 = 0
-        "Vignette".withCString { _ = cimgui_checkbox($0, &vignette) }
-        var grain: Int32 = 0
-        "Grain".withCString { _ = cimgui_checkbox($0, &grain) }
-        cimgui_end()
-
-        // Timeline panel (bottom).
-        cimgui_set_next_window_pos(10, 440)
-        cimgui_set_next_window_size(960, 200)
-        var timelineOpen: Int32 = 1
-        "Timeline".withCString { cimgui_begin($0, &timelineOpen) }
-        "Track 1: [====================]  Video Clip A".withCString { cimgui_text($0) }
-        "Track 2:     [========]  PiP Overlay".withCString { cimgui_text($0) }
-        "Track 3:  [=====]  Text: PALMIER PRO".withCString { cimgui_text($0) }
-        cimgui_separator()
-        var playhead: Int32 = Int32(min(frame, 59))
-        "Playhead".withCString { cimgui_slider_int($0, &playhead, 0, 59) }
-        cimgui_end()
-
-        // Preview info (top-right).
-        cimgui_set_next_window_pos(980, 30)
-        cimgui_set_next_window_size(280, 200)
-        var previewOpen: Int32 = 1
-        "Preview".withCString { cimgui_begin($0, &previewOpen) }
-        "320x240 @ 30fps".withCString { cimgui_text($0) }
-        "H.264 (libx264)".withCString { cimgui_text($0) }
-        "Vulkan 1.4 render".withCString { cimgui_text($0) }
-        cimgui_separator()
-        "Export".withCString { _ = cimgui_button($0, 120, 30) }
-        cimgui_end()
     }
 
     /// Draws the video frame + ImGui overlay into the swapchain. The video
@@ -379,6 +383,23 @@ struct VerticalSlice {
             return ok ? tex : nil
         } catch {
             print("FFmpeg decoder: error \(error)")
+            return nil
+        }
+    }
+
+    /// Decodes the source frame for a playhead position. Sequential +1 steps
+    /// decode forward; anything else seeks (keyframe-accurate) then decodes.
+    /// On EOF the decoder wraps by seeking back to the requested frame.
+    private static func decodeVideoFrame(decoder: FFmpegDecoder, frame: Int, lastDecoded: Int) -> Data? {
+        do {
+            if frame != lastDecoded + 1 {
+                try decoder.seek(toFrame: frame, fps: 30)
+            }
+            if let bgra = try decoder.nextBGRAFrame() { return bgra }
+            try decoder.seek(toFrame: frame, fps: 30)
+            return try decoder.nextBGRAFrame()
+        } catch {
+            print("Preview decode: \(error)")
             return nil
         }
     }
