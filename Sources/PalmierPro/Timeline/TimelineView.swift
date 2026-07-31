@@ -24,7 +24,7 @@ final class TimelineView: NSView {
         editor.mediaVisualCache.timelineView = self
         editor.onCancelTimelineDrag = { [weak self] in self?.inputController.cancelActiveDrag() }
         wantsLayer = true
-        layer?.backgroundColor = AppTheme.Background.surface.cgColor
+        updateAppearanceColors()
         canvas.wantsLayer = true
         canvas.layerContentsRedrawPolicy = .onSetNeedsDisplay
         addSubview(canvas)
@@ -37,6 +37,12 @@ final class TimelineView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateAppearanceColors()
+        needsDisplay = true
+    }
 
     // MARK: - Viewport canvas
 
@@ -70,8 +76,13 @@ final class TimelineView: NSView {
         canvas.needsDisplay = true
     }
 
-    // Cached for draw performance — avoid per-frame allocations.
-    private static let trackBg = AppTheme.Background.surface.cgColor
+    private static var trackBg: CGColor { AppTheme.Background.surface.cgColor }
+
+    private func updateAppearanceColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = Self.trackBg
+        }
+    }
 
     var externalDropTarget: TrackDropTarget?
     var externalDragAssets: [MediaAsset]?
@@ -84,6 +95,16 @@ final class TimelineView: NSView {
 
     var geometry: TimelineGeometry {
         TimelineGeometry(editor: editor, bounds: bounds)
+    }
+
+    private var displayedSilenceRemovalSettings: SilenceRemovalSettings? {
+        editor.markDeadAir ? editor.silenceRemovalSettings : nil
+    }
+
+    private func displayedDeadAirRanges(for clip: Clip) -> [Range<Double>] {
+        guard clip.mediaType == .audio,
+              let settings = displayedSilenceRemovalSettings else { return [] }
+        return editor.deadAirSourceRanges(for: clip, settings: settings)
     }
 
     private var isUpdatingContentSize = false
@@ -234,8 +255,8 @@ final class TimelineView: NSView {
 
         if case .marquee(let marq) = inputController.dragState,
            marq.current.width > 0 || marq.current.height > 0 {
-            ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.6).cgColor)
-            ctx.setFillColor(NSColor.white.withAlphaComponent(0.1).cgColor)
+            ctx.setStrokeColor(AppTheme.Text.primary.withAlphaComponent(0.6).cgColor)
+            ctx.setFillColor(AppTheme.Text.primary.withAlphaComponent(0.1).cgColor)
             ctx.setLineWidth(1)
             ctx.setLineDash(phase: 0, lengths: [3, 3])
             ctx.addRect(marq.current)
@@ -378,6 +399,7 @@ final class TimelineView: NSView {
                         ClipRenderer.draw(previewClip, type: clip.mediaType, in: previewRect,
                                           isSelected: isSelected, opacity: CGFloat(AppTheme.Opacity.prominent), context: ctx,
                                           cache: editor.mediaVisualCache,
+                                          deadAirRanges: displayedDeadAirRanges(for: previewClip),
                                           displayName: displayName(clip, in: previewRect, isSelected: isSelected),
                                           multicamAngleLabel: angleLabel(clip),
                                           fps: editor.timeline.fps, isMissing: clipMissing, isGenerating: clipGenerating)
@@ -393,6 +415,7 @@ final class TimelineView: NSView {
                         ClipRenderer.draw(clip, type: clip.mediaType, in: originalRect,
                                           isSelected: drag.isDuplicate && isSelected, opacity: originalOpacity, context: ctx,
                                           cache: editor.mediaVisualCache,
+                                          deadAirRanges: displayedDeadAirRanges(for: clip),
                                           displayName: displayName(clip, in: originalRect, isSelected: drag.isDuplicate && isSelected),
                                           multicamAngleLabel: angleLabel(clip),
                                           fps: editor.timeline.fps, isMissing: clipMissing, isGenerating: clipGenerating)
@@ -419,6 +442,7 @@ final class TimelineView: NSView {
                         ClipRenderer.draw(ghostClip, type: clip.mediaType, in: ghostRect,
                                           isSelected: true, opacity: 0.7, context: ctx,
                                           cache: editor.mediaVisualCache,
+                                          deadAirRanges: displayedDeadAirRanges(for: ghostClip),
                                           displayName: displayName(clip, in: ghostRect, isSelected: true),
                                           multicamAngleLabel: angleLabel(clip),
                                           fps: editor.timeline.fps, isMissing: clipMissing, isGenerating: clipGenerating)
@@ -457,7 +481,9 @@ final class TimelineView: NSView {
                         deferredDraws.append {
                             ClipRenderer.draw(previewClip, type: clip.mediaType, in: previewRect,
                                               isSelected: isSelected, context: ctx,
-                                              cache: cache, displayName: name,
+                                              cache: cache,
+                                              deadAirRanges: self.displayedDeadAirRanges(for: previewClip),
+                                              displayName: name,
                                               multicamAngleLabel: chip,
                                               fps: fps, isMissing: clipMissing, isGenerating: clipGenerating)
                         }
@@ -495,7 +521,9 @@ final class TimelineView: NSView {
                         deferredDraws.append {
                             ClipRenderer.draw(previewClip, type: clip.mediaType, in: rect,
                                               isSelected: isSelected, context: ctx,
-                                              cache: cache, displayName: name,
+                                              cache: cache,
+                                              deadAirRanges: self.displayedDeadAirRanges(for: previewClip),
+                                              displayName: name,
                                               multicamAngleLabel: chip,
                                               fps: fps, isMissing: clipMissing, isGenerating: clipGenerating)
                         }
@@ -512,6 +540,7 @@ final class TimelineView: NSView {
                         ClipRenderer.draw(shiftedClip, type: clip.mediaType, in: shiftedRect,
                                           isSelected: isSelected, context: ctx,
                                           cache: editor.mediaVisualCache,
+                                          deadAirRanges: displayedDeadAirRanges(for: shiftedClip),
                                           displayName: displayName(clip, in: shiftedRect, isSelected: isSelected),
                                           linkOffset: linkOffsets[clip.id],
                                           multicamAngleLabel: angleLabel(clip),
@@ -526,6 +555,7 @@ final class TimelineView: NSView {
                 ClipRenderer.draw(clip, type: clip.mediaType, in: rect,
                                   isSelected: isSelected, isHovered: hoveredClipId == clip.id, context: ctx,
                                   cache: editor.mediaVisualCache,
+                                  deadAirRanges: displayedDeadAirRanges(for: clip),
                                   displayName: displayName(clip, in: rect, isSelected: isSelected),
                                   linkOffset: linkOffsets[clip.id],
                                   multicamAngleLabel: angleLabel(clip),
@@ -584,6 +614,7 @@ final class TimelineView: NSView {
             opacity: CGFloat(AppTheme.Opacity.medium),
             context: ctx,
             cache: editor.mediaVisualCache,
+            deadAirRanges: displayedDeadAirRanges(for: sourceClip),
             displayName: editor.clipDisplayLabel(for: clip),
             multicamAngleLabel: angleLabel,
             fps: editor.timeline.fps,
@@ -688,8 +719,8 @@ final class TimelineView: NSView {
         let maxX = geo.xForFrame(gap.range.end)
         let rect = NSRect(x: minX, y: y + 2, width: maxX - minX, height: height - 4)
 
-        ctx.setFillColor(NSColor.white.withAlphaComponent(0.12).cgColor)
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.9).cgColor)
+        ctx.setFillColor(AppTheme.Text.primary.withAlphaComponent(0.12).cgColor)
+        ctx.setStrokeColor(AppTheme.Text.primary.withAlphaComponent(0.9).cgColor)
         ctx.setLineWidth(1)
         ctx.setLineDash(phase: 0, lengths: [3, 3])
         ctx.addRect(rect.insetBy(dx: 0.5, dy: 0.5))
@@ -778,6 +809,7 @@ final class TimelineView: NSView {
             ClipRenderer.draw(ghost.clip, type: ghost.clip.mediaType, in: ghost.rect,
                               isSelected: true, opacity: 0.5, context: ctx,
                               cache: editor.mediaVisualCache,
+                              deadAirRanges: displayedDeadAirRanges(for: ghost.clip),
                               fps: editor.timeline.fps,
                               isMissing: editor.isClipMediaOffline(ghost.clip),
                               isGenerating: editor.isClipMediaGenerating(ghost.clip))

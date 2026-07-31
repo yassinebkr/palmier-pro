@@ -360,6 +360,10 @@ final class AgentService {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard let conversationID = currentSessionId else {
+            streamError = .upstream("Chat session unavailable.")
+            return
+        }
         let referencedMentions = AgentMentionContext.referencedMentions(mentions, in: trimmed)
         let contextHint = referencedMentions.isEmpty
             ? nil
@@ -381,7 +385,7 @@ final class AgentService {
             mentions: referencedMentions, contextHint: contextHint
         ))
         streamError = nil
-        kickOffStream()
+        kickOffStream(conversationID: conversationID, traceID: UUID())
     }
 
     func postSystemNotice(_ text: String) {
@@ -396,7 +400,7 @@ final class AgentService {
         isStreaming = false
     }
 
-    private func kickOffStream() {
+    private func kickOffStream(conversationID: UUID, traceID: UUID) {
         currentTask?.cancel()
         isStreaming = true
         currentTask = Task { [weak self] in
@@ -405,11 +409,11 @@ final class AgentService {
                 self?.syncMessagesIntoCurrentSession()
                 self?.onSessionsChanged?()
             }
-            await self?.runLoop()
+            await self?.runLoop(conversationID: conversationID, traceID: traceID)
         }
     }
 
-    private func runLoop() async {
+    private func runLoop(conversationID: UUID, traceID: UUID) async {
         guard let client = selectClient() else {
             streamError = .upstream("No backend available.")
             return
@@ -422,6 +426,10 @@ final class AgentService {
         loop: while !Task.isCancelled {
             resolveOrphanToolUses()
             let apiMsgs = await apiMessages()
+            guard let inputMessageID = messages.last(where: { $0.role == .user })?.id else {
+                streamError = .upstream("The agent request has no user message.")
+                break loop
+            }
             let assistant = AgentMessage(role: .assistant, blocks: [])
             messages.append(assistant)
             let assistantID = assistant.id
@@ -430,7 +438,15 @@ final class AgentService {
                 let stream = client.stream(
                     system: AgentInstructions.serverInstructions + AgentInstructions.skillsSection(SkillStore.shared.skillIndex),
                     tools: tools,
-                    messages: apiMsgs
+                    messages: apiMsgs,
+                    context: AgentRequestContext(
+                        conversationID: conversationID,
+                        traceID: traceID,
+                        spanID: UUID(),
+                        inputMessageID: inputMessageID,
+                        outputMessageID: assistantID,
+                        projectID: editor?.projectId
+                    )
                 )
 
                 var stopReason: ChatStopReason = .endTurn
