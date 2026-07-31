@@ -1,4 +1,5 @@
 import CVulkan
+import Foundation
 import PalmierCore
 
 /// Windows `FrameRendering` conformer: composites one `RenderInstruction`
@@ -26,16 +27,20 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         return _textRenderer
     }
 
-    /// Lazily-created per-output-texture render pass + framebuffer. The output
-    /// texture's lifetime bounds the framebuffer's; cleared on deinit.
+    /// Lazily-created per-output-texture render pass + framebuffer. Retains the
+    /// output texture — the framebuffer references its image view, so the view
+    /// must outlive the cache entry (an `ObjectIdentifier` key can otherwise be
+    /// reused by a new texture after the old one dies). Cleared on deinit.
     private final class RenderTarget {
         let renderPass: VkRenderPass
         let framebuffer: VkFramebuffer
         let device: VkDevice
-        init(renderPass: VkRenderPass, framebuffer: VkFramebuffer, device: VkDevice) {
+        let output: VulkanTexture
+        init(renderPass: VkRenderPass, framebuffer: VkFramebuffer, device: VkDevice, output: VulkanTexture) {
             self.renderPass = renderPass
             self.framebuffer = framebuffer
             self.device = device
+            self.output = output
         }
         deinit {
             vkDestroyFramebuffer(device, framebuffer, nil)
@@ -44,6 +49,35 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
     }
 
     private var targets: [ObjectIdentifier: RenderTarget] = [:]
+
+    /// Descriptors recorded into a not-yet-submitted command buffer. Freed at
+    /// the start of the next submitting `render` — every caller submits and
+    /// waits on that buffer before rendering again (exporter, playback, spike).
+    private var inFlightDescriptors: [VulkanDescriptor] = []
+
+    /// Lazily-created 1×1 white stand-in for unused aux sampler bindings —
+    /// descriptor sets must always have all 3 bindings valid.
+    private var _fallbackTexture: VulkanTexture?
+    private var fallbackTexture: VulkanTexture? {
+        if _fallbackTexture == nil {
+            let tex = VulkanTexture(device: device, width: 1, height: 1)
+            if let tex, tex.upload(bgra: Data([255, 255, 255, 255])) { _fallbackTexture = tex }
+        }
+        return _fallbackTexture
+    }
+
+    /// Full-size scratch pair for blur pre-passes (clarity, glow). Reallocated
+    /// when the source size changes.
+    private var blurScratchA: VulkanTexture?
+    private var blurScratchB: VulkanTexture?
+    private func blurScratch(width: UInt32, height: UInt32) -> (VulkanTexture, VulkanTexture)? {
+        if blurScratchA?.width != width || blurScratchA?.height != height {
+            blurScratchA = VulkanTexture(device: device, width: width, height: height)
+            blurScratchB = VulkanTexture(device: device, width: width, height: height)
+        }
+        guard let a = blurScratchA, let b = blurScratchB else { return nil }
+        return (a, b)
+    }
 
     public init?(device: VulkanDevice, renderPassFormat: VkFormat = VK_FORMAT_B8G8R8A8_UNORM) {
         let dev = device.device
@@ -83,6 +117,9 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         let sources = prepareSources(
             instruction: instruction, frame: frame, sourceFrame: sourceFrame
         )
+        // Every caller submits + waits on the previous frame's command buffer
+        // before calling render again, so its descriptors are safe to free now.
+        inFlightDescriptors.removeAll()
         let dev = device.device
         var cbInfo = VkCommandBufferAllocateInfo()
         cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
@@ -254,11 +291,12 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
     }
 
     /// Applies a chain of effects to the composited frame, ping-ponging between
-    /// `source` and `scratch`. Each effect is one full-screen draw: bind the
-    /// effect pipeline, push the effect type + params, bind the source texture's
-    /// descriptor set, render into the other texture, swap. After all effects,
-    /// the final result is in `source` if the count is even, `scratch` if odd —
-    /// the return value tells the caller which holds the result.
+    /// `source` and `scratch`. Each effect resolves to a plan: optional blur
+    /// pre-passes into scratch textures, then one main pass — bind the effect
+    /// pipeline, push the effect type + params, bind the source texture's
+    /// descriptor set (plus aux samplers), render into the other texture, swap.
+    /// After all effects, the final result is in `source` if the count is even,
+    /// `scratch` if odd — the return value tells the caller which holds it.
     ///
     /// Records into `commandBuffer`; caller submits. Both textures must be the
     /// same size and have SHADER_READ_ONLY + COLOR_ATTACHMENT usage.
@@ -274,30 +312,53 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         var current = source
         var other = scratch
         for effect in effects where effect.enabled {
-            guard let (effectType, params) = resolveEffect(effect, frame: frame, clipStartFrame: clipStartFrame, aspect: Float(Double(source.width) / Double(source.height))) else { continue }
-            applyOneEffect(effectType: effectType, params: params, from: current, into: other, commandBuffer: commandBuffer)
+            guard let plan = resolveEffect(effect, frame: frame, clipStartFrame: clipStartFrame, src: current) else { continue }
+            for prep in plan.prep {
+                applyOneEffect(effectType: prep.type, params: prep.params, from: prep.src, into: prep.dst, commandBuffer: commandBuffer)
+            }
+            applyOneEffect(effectType: plan.type, params: plan.params, from: current, into: other,
+                           aux: plan.aux, aux2: plan.aux2, commandBuffer: commandBuffer)
             // Swap for the next pass.
             let tmp = current; current = other; other = tmp
         }
         return current
     }
 
-    /// Resolves one effect to its push-constant (type + params[30]). Returns nil
-    /// for unsupported effect types (skipped).
-    private func resolveEffect(_ effect: Effect, frame: Int, clipStartFrame: Int, aspect: Float) -> (VulkanEffectPipeline.EffectType, [Float])? {
+    /// One resolved effect: blur pre-passes (explicit src→dst scratch textures,
+    /// run before the main pass reads `src`), then the main ping-pong pass with
+    /// its aux samplers (blurred copy, LUTs, 3D-LUT strip).
+    private struct EffectPlan {
+        struct Prep {
+            let type: VulkanEffectPipeline.EffectType
+            let params: [Float]
+            let src: VulkanTexture
+            let dst: VulkanTexture
+        }
+        var prep: [Prep] = []
+        let type: VulkanEffectPipeline.EffectType
+        let params: [Float]
+        var aux: VulkanTexture? = nil
+        var aux2: VulkanTexture? = nil
+    }
+
+    /// Resolves one effect to its passes. Returns nil for unsupported effect
+    /// types and for no-op/unresolvable effects (skipped).
+    private func resolveEffect(_ effect: Effect, frame: Int, clipStartFrame: Int, src: VulkanTexture) -> EffectPlan? {
         let offset = frame - clipStartFrame
         let p = effect.params
+        let w = Float(src.width), h = Float(src.height)
+        let texel: [Float] = [1 / w, 1 / h]
         func param(_ key: String, _ defaultVal: Double) -> Float {
             Float(p[key]?.resolved(at: offset, default: defaultVal) ?? defaultVal)
         }
         switch effect.type {
         case "stylize.vignette":
-            return (.vignette, [
+            return EffectPlan(type: .vignette, params: [
                 param("amount", -0.5), param("midpoint", 0.3),
-                param("roundness", 0.0), param("feather", 0.5), aspect
+                param("roundness", 0.0), param("feather", 0.5), w / h
             ])
         case "color.wheels":
-            return (.wheels, [
+            return EffectPlan(type: .wheels, params: [
                 param("lift.r", 0), param("lift.g", 0), param("lift.b", 0),
                 param("gain.r", 1), param("gain.g", 1), param("gain.b", 1),
                 1.0 / max(0.01, param("gamma.r", 1)),
@@ -305,33 +366,142 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
                 1.0 / max(0.01, param("gamma.b", 1))
             ])
         case "color.blacksWhites":
-            return (.levels, [param("blacks", 0), param("whites", 0)])
+            return EffectPlan(type: .levels, params: [param("blacks", 0), param("whites", 0)])
         case "stylize.grain":
-            return (.grain, [param("amount", 0.5), param("size", 1.0), Float(frame)])
+            return EffectPlan(type: .grain, params: [param("amount", 0.5), param("size", 1.0), Float(frame)])
         case "key.chroma":
-            return (.chromaKey, [
+            return EffectPlan(type: .chromaKey, params: [
                 param("keyColor.r", 0), param("keyColor.g", 1), param("keyColor.b", 0),
                 param("threshold", 0.4), param("spill", 0.5)
             ])
         case "color.highlightsShadows":
-            return (.highlightsShadows, [param("highlights", 0), param("shadows", 0)])
+            return EffectPlan(type: .highlightsShadows, params: [param("highlights", 0), param("shadows", 0)])
+        case "detail.clarity":
+            let clarity = param("clarity", 0), dehaze = param("dehaze", 0)
+            guard clarity != 0 || dehaze != 0,
+                  let (bA, bB) = blurScratch(width: src.width, height: src.height) else { return nil }
+            let radius = max(w, h) / 40  // low-frequency local-contrast scale
+            var plan = EffectPlan(type: .clarity, params: [clarity, dehaze], aux: bB)
+            plan.prep = [
+                EffectPlan.Prep(type: .blur, params: [1, 0, radius] + texel, src: src, dst: bA),
+                EffectPlan.Prep(type: .blur, params: [0, 1, radius] + texel, src: bA, dst: bB)
+            ]
+            return plan
+        case "stylize.glow":
+            let intensity = param("intensity", 0)
+            guard intensity > 0,
+                  let (bA, bB) = blurScratch(width: src.width, height: src.height) else { return nil }
+            let radius = param("radius", 20)
+            var plan = EffectPlan(type: .glowComposite, params: [intensity], aux: bA)
+            plan.prep = [
+                EffectPlan.Prep(type: .glowBright, params: [param("threshold", 0.6), param("warmth", 0)], src: src, dst: bA),
+                EffectPlan.Prep(type: .blur, params: [1, 0, radius] + texel, src: bA, dst: bB),
+                EffectPlan.Prep(type: .blur, params: [0, 1, radius] + texel, src: bB, dst: bA)
+            ]
+            return plan
+        case "color.curves":
+            guard let json = p["curve"]?.string, let curve = GradeCurve(json: json), !curve.isIdentity,
+                  let luts = curveLUTs(for: curve, key: effect.id + json) else { return nil }
+            return EffectPlan(type: .gradeCurves, params: [], aux: luts.channels, aux2: luts.master)
+        case "color.hueCurves":
+            guard let json = p["curves"]?.string, let curves = HueCurves(json: json), !curves.isIdentity,
+                  let lut = hueLUT(for: curves, key: effect.id + json) else { return nil }
+            return EffectPlan(type: .hueCurves, params: [], aux: lut)
+        case "color.lut":
+            guard let path = p["path"]?.string,
+                  let (strip, n) = lutStrip(path: path) else { return nil }
+            return EffectPlan(type: .lutTetra, params: [Float(n), param("intensity", 1)], aux: strip)
         default:
             return nil  // Unsupported effect type for the MVP
         }
     }
 
+    /// 256×1 per-channel + master curve LUTs, cached per curve JSON (mirrors
+    /// macOS GradeCurveKernel.buildLUTs, quantized to BGRA8).
+    private var curveLUTCache: [String: (channels: VulkanTexture, master: VulkanTexture)] = [:]
+    private func curveLUTs(for curve: GradeCurve, key: String) -> (channels: VulkanTexture, master: VulkanTexture)? {
+        if let hit = curveLUTCache[key] { return hit }
+        if curveLUTCache.count > 64 { curveLUTCache.removeAll() }
+        let w = 256
+        func cl(_ v: Double) -> UInt8 { UInt8((min(1, max(0, v)) * 255).rounded()) }
+        var ch = [UInt8](repeating: 255, count: w * 4)
+        var ms = [UInt8](repeating: 255, count: w * 4)
+        for x in 0..<w {
+            let t = Double(x) / Double(w - 1)
+            ch[x * 4] = cl(GradeCurve.eval(curve.blue, t))
+            ch[x * 4 + 1] = cl(GradeCurve.eval(curve.green, t))
+            ch[x * 4 + 2] = cl(GradeCurve.eval(curve.red, t))
+            let m = cl(GradeCurve.eval(curve.master, t))
+            ms[x * 4] = m; ms[x * 4 + 1] = m; ms[x * 4 + 2] = m
+        }
+        guard let chTex = VulkanTexture(device: device, width: UInt32(w), height: 1),
+              let msTex = VulkanTexture(device: device, width: UInt32(w), height: 1),
+              chTex.upload(bgra: Data(ch)), msTex.upload(bgra: Data(ms)) else { return nil }
+        let luts = (channels: chTex, master: msTex)
+        curveLUTCache[key] = luts
+        return luts
+    }
+
+    /// 256×1 hue-curve LUT (R=Δhue, G=satScale, B=Δlum), cached per curve JSON.
+    /// Mirrors HueCurveKernel.buildLUT; signed values are normalized to their
+    /// ±max range and encoded 0..1, decoded in the shader (BGRA8 has no signed
+    /// channels).
+    private var hueLUTCache: [String: VulkanTexture] = [:]
+    private func hueLUT(for curves: HueCurves, key: String) -> VulkanTexture? {
+        if let hit = hueLUTCache[key] { return hit }
+        if hueLUTCache.count > 64 { hueLUTCache.removeAll() }
+        let maxHueShift = 1.0 / 12, maxLumShift = 0.5
+        let w = 256
+        func enc(_ v: Double) -> UInt8 { UInt8(((min(1, max(-1, v)) * 0.5 + 0.5) * 255).rounded()) }
+        var px = [UInt8](repeating: 255, count: w * 4)
+        for i in 0..<w {
+            let hue = (Double(i) + 0.5) / Double(w)
+            let dHue = (HueCurves.eval(curves.hueVsHue, hue) - 0.5) * 2 * maxHueShift
+            let satScale = (HueCurves.eval(curves.hueVsSat, hue) - 0.5) * 2
+            let dLum = (HueCurves.eval(curves.hueVsLum, hue) - 0.5) * 2 * maxLumShift
+            px[i * 4] = enc(dLum / maxLumShift)
+            px[i * 4 + 1] = enc(satScale)
+            px[i * 4 + 2] = enc(dHue / maxHueShift)
+        }
+        guard let tex = VulkanTexture(device: device, width: UInt32(w), height: 1),
+              tex.upload(bgra: Data(px)) else { return nil }
+        hueLUTCache[key] = tex
+        return tex
+    }
+
+    /// 3D-LUT strip texture (n wide, n² tall), cached per resolved file path.
+    private var lutStripCache: [String: (texture: VulkanTexture, dimension: Int)] = [:]
+    private func lutStrip(path: String) -> (texture: VulkanTexture, dimension: Int)? {
+        if let hit = lutStripCache[path] { return hit }
+        if lutStripCache.count > 16 { lutStripCache.removeAll() }
+        guard let lut = CubeLUTLoader.load(path: path),
+              let tex = VulkanTexture(device: device, width: UInt32(lut.dimension),
+                                      height: UInt32(lut.dimension * lut.dimension)),
+              tex.upload(bgra: lut.bgra) else { return nil }
+        let strip = (texture: tex, dimension: lut.dimension)
+        lutStripCache[path] = strip
+        return strip
+    }
+
     /// Records one effect pass: begin render pass into `dst`, set viewport,
-    /// bind effect pipeline, bind source texture's descriptor set, push constants, draw, end.
+    /// bind effect pipeline, bind the descriptor set (src + aux samplers),
+    /// push constants, draw, end. The descriptor is retained in
+    /// `inFlightDescriptors` until the caller has submitted + waited.
     private func applyOneEffect(
         effectType: VulkanEffectPipeline.EffectType,
         params: [Float],
         from src: VulkanTexture,
         into dst: VulkanTexture,
+        aux: VulkanTexture? = nil,
+        aux2: VulkanTexture? = nil,
         commandBuffer: VkCommandBuffer
     ) {
         let dev = device.device
         let target = renderTarget(for: dst, device: dev)
-        guard let desc = VulkanDescriptor(device: device, layout: effectPipeline.descriptorSetLayout, texture: src) else { return }
+        guard let fallback = fallbackTexture,
+              let desc = VulkanDescriptor(device: device, layout: effectPipeline.descriptorSetLayout,
+                                          texture: src, aux: aux, aux2: aux2, fallback: fallback) else { return }
+        inFlightDescriptors.append(desc)
 
         var rpBegin = VkRenderPassBeginInfo()
         rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
@@ -380,7 +550,6 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
 
         vkCmdDraw(commandBuffer, 3, 1, 0, 0)
         vkCmdEndRenderPass(commandBuffer)
-        _ = desc  // released; safe because command buffer isn't submitted until caller does
     }
 
     /// Resolves a layer's source into a GPU texture to sample, handling all
@@ -502,7 +671,7 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         if let existing = targets[key] { return existing }
         let rp = WinFrameRenderer.makeRenderPass(device: device, format: VK_FORMAT_B8G8R8A8_UNORM)!
         let fb = WinFrameRenderer.makeFramebuffer(device: device, renderPass: rp, view: output.view, extent: VkExtent2D(width: output.width, height: output.height))!
-        let target = RenderTarget(renderPass: rp, framebuffer: fb, device: device)
+        let target = RenderTarget(renderPass: rp, framebuffer: fb, device: device, output: output)
         targets[key] = target
         return target
     }

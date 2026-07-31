@@ -23,6 +23,13 @@ public final class VulkanEffectPipeline: @unchecked Sendable {
         case chromaKey = 5
         case highlightsShadows = 6
         case edgeRounding = 7
+        case clarity = 8
+        case glowBright = 9
+        case glowComposite = 10
+        case gradeCurves = 11
+        case hueCurves = 12
+        case lutTetra = 13
+        case blur = 14
     }
 
     public init?(device: VulkanDevice, renderPass: VkRenderPass) {
@@ -38,17 +45,22 @@ public final class VulkanEffectPipeline: @unchecked Sendable {
                 VulkanEffectPipeline.stageInfo(VK_SHADER_STAGE_FRAGMENT_BIT, module: fragModule, name: namePtr)
             ]
 
-            var binding = VkDescriptorSetLayoutBinding()
-            binding.binding = 0
-            binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-            binding.descriptorCount = 1
-            binding.stageFlags = UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue)
+            // Three combined image samplers: src (0), aux (1), aux2 (2).
+            // Single-texture effects bind a 1×1 white dummy to the unused slots.
+            var bindings: [VkDescriptorSetLayoutBinding] = (0..<3).map { i in
+                var b = VkDescriptorSetLayoutBinding()
+                b.binding = UInt32(i)
+                b.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                b.descriptorCount = 1
+                b.stageFlags = UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue)
+                return b
+            }
             var dslInfo = VkDescriptorSetLayoutCreateInfo()
             dslInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-            dslInfo.bindingCount = 1
+            dslInfo.bindingCount = 3
             var dsl: VkDescriptorSetLayout? = nil
-            let dslResult: VkResult = withUnsafePointer(to: &binding) { bPtr in
-                dslInfo.pBindings = bPtr
+            let dslResult: VkResult = bindings.withUnsafeMutableBufferPointer { bBuf in
+                dslInfo.pBindings = UnsafePointer(bBuf.baseAddress)
                 return withUnsafePointer(to: &dslInfo) { iPtr in
                     vkCreateDescriptorSetLayout(dev, iPtr, nil, &dsl)
                 }
