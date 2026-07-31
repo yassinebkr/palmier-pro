@@ -81,6 +81,9 @@ void cimgui_render(ImGuiCtx* ctx, void* command_buffer) {
 void cimgui_begin(const char* name, int* p_open) {
     ImGui::Begin(name, (bool*)p_open);
 }
+void cimgui_begin_flags(const char* name, int* p_open, int flags) {
+    ImGui::Begin(name, (bool*)p_open, (ImGuiWindowFlags)flags);
+}
 void cimgui_end(void) { ImGui::End(); }
 void cimgui_text(const char* fmt) { ImGui::Text("%s", fmt); }
 void cimgui_text_colored(float r, float g, float b, const char* fmt) {
@@ -103,6 +106,16 @@ int cimgui_input_text(const char* label, char* buf, int buf_size) {
 void cimgui_image(void* texture_id, float w, float h) {
     ImGui::Image((ImTextureID)texture_id, ImVec2(w, h));
 }
+
+// Register a Vulkan texture with ImGui's backend. Returns a descriptor set
+// allocated against ImGui's own pipeline layout — the ONLY texture id form
+// safe to pass to cimgui_image / cimgui_dl_add_image. A VkDescriptorSet made
+// for another pipeline's layout will crash the driver at submit.
+// image_layout: VkImageLayout (VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL = 5).
+void* cimgui_add_texture(void* sampler, void* image_view, int image_layout) {
+    return (void*)ImGui_ImplVulkan_AddTexture((VkSampler)sampler, (VkImageView)image_view,
+                                              (VkImageLayout)image_layout);
+}
 void cimgui_begin_child(const char* name, float w, float h) {
     ImGui::BeginChild(name, ImVec2(w, h));
 }
@@ -112,4 +125,125 @@ void cimgui_set_next_window_pos(float x, float y) {
 }
 void cimgui_set_next_window_size(float w, float h) {
     ImGui::SetNextWindowSize(ImVec2(w, h));
+}
+
+// --- Style API ---
+void cimgui_set_style_color(int col, float r, float g, float b, float a) {
+    if (col >= 0 && col < ImGuiCol_COUNT)
+        ImGui::GetStyle().Colors[col] = ImVec4(r, g, b, a);
+}
+void cimgui_set_style_rounding(int var, float v) {
+    switch (var) {
+        case ImGuiStyleVar_WindowRounding:    ImGui::GetStyle().WindowRounding = v; break;
+        case ImGuiStyleVar_ChildRounding:     ImGui::GetStyle().ChildRounding = v; break;
+        case ImGuiStyleVar_FrameRounding:     ImGui::GetStyle().FrameRounding = v; break;
+        case ImGuiStyleVar_PopupRounding:     ImGui::GetStyle().PopupRounding = v; break;
+        case ImGuiStyleVar_GrabRounding:      ImGui::GetStyle().GrabRounding = v; break;
+        case ImGuiStyleVar_ScrollbarRounding: ImGui::GetStyle().ScrollbarRounding = v; break;
+        case ImGuiStyleVar_TabRounding:       ImGui::GetStyle().TabRounding = v; break;
+    }
+}
+void cimgui_set_style_padding(int var, float x, float y) {
+    switch (var) {
+        case ImGuiStyleVar_WindowPadding:    ImGui::GetStyle().WindowPadding = ImVec2(x, y); break;
+        case ImGuiStyleVar_FramePadding:     ImGui::GetStyle().FramePadding = ImVec2(x, y); break;
+        case ImGuiStyleVar_ItemSpacing:      ImGui::GetStyle().ItemSpacing = ImVec2(x, y); break;
+        case ImGuiStyleVar_ItemInnerSpacing: ImGui::GetStyle().ItemInnerSpacing = ImVec2(x, y); break;
+    }
+}
+void cimgui_push_style_color(int col, float r, float g, float b, float a) {
+    ImGui::PushStyleColor(col, ImVec4(r, g, b, a));
+}
+void cimgui_pop_style_color(int count) { ImGui::PopStyleColor(count); }
+void cimgui_push_style_var(int var, float v) { ImGui::PushStyleVar(var, v); }
+void cimgui_push_style_var2(int var, float x, float y) { ImGui::PushStyleVar(var, ImVec2(x, y)); }
+void cimgui_pop_style_var(int count) { ImGui::PopStyleVar(count); }
+
+// --- Draw list API ---
+void cimgui_dl_add_rect_filled(float x0, float y0, float x1, float y1, uint32_t col, float rounding) {
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), col, rounding);
+}
+void cimgui_dl_add_rect(float x0, float y0, float x1, float y1, uint32_t col, float rounding, float thickness) {
+    ImGui::GetWindowDrawList()->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), col, rounding, 0, thickness);
+}
+void cimgui_dl_add_line(float x0, float y0, float x1, float y1, uint32_t col, float thickness) {
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), col, thickness);
+}
+void cimgui_dl_add_text(float x, float y, uint32_t col, const char* text) {
+    ImGui::GetWindowDrawList()->AddText(ImVec2(x, y), col, text);
+}
+void cimgui_dl_add_image(void* tex, float x0, float y0, float x1, float y1) {
+    ImGui::GetWindowDrawList()->AddImage((ImTextureID)tex, ImVec2(x0, y0), ImVec2(x1, y1));
+}
+
+// --- Layout API ---
+void cimgui_same_line(float offset) { ImGui::SameLine(offset); }
+void cimgui_dummy(float w, float h) { ImGui::Dummy(ImVec2(w, h)); }
+void cimgui_new_line(void) { ImGui::NewLine(); }
+
+// --- Tab bars ---
+int cimgui_begin_tab_bar(const char* id) { return ImGui::BeginTabBar(id, ImGuiTabBarFlags_None) ? 1 : 0; }
+void cimgui_end_tab_bar(void) { ImGui::EndTabBar(); }
+int cimgui_begin_tab_item(const char* label) { return ImGui::BeginTabItem(label) ? 1 : 0; }
+void cimgui_end_tab_item(void) { ImGui::EndTabItem(); }
+
+// --- Input / interaction ---
+int cimgui_invisible_button(const char* id, float w, float h) {
+    return ImGui::InvisibleButton(id, ImVec2(w, h)) ? 1 : 0;
+}
+int cimgui_is_item_hovered(void) { return ImGui::IsItemHovered() ? 1 : 0; }
+int cimgui_is_item_clicked(int button) { return ImGui::IsItemClicked(button) ? 1 : 0; }
+int cimgui_is_item_active(void) { return ImGui::IsItemActive() ? 1 : 0; }
+int cimgui_is_mouse_clicked(int button) { return ImGui::IsMouseClicked(button) ? 1 : 0; }
+int cimgui_is_mouse_double_clicked(int button) { return ImGui::IsMouseDoubleClicked(button) ? 1 : 0; }
+int cimgui_is_mouse_dragging(int button) { return ImGui::IsMouseDragging(button) ? 1 : 0; }
+void cimgui_get_mouse_drag_delta(int button, float* x, float* y) {
+    ImVec2 d = ImGui::GetMouseDragDelta(button);
+    if (x) *x = d.x; if (y) *y = d.y;
+}
+int cimgui_selectable(const char* label, int selected) {
+    return ImGui::Selectable(label, selected != 0) ? 1 : 0;
+}
+
+// --- Cursor / size helpers ---
+void cimgui_get_cursor_screen_pos(float* x, float* y) {
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    if (x) *x = p.x; if (y) *y = p.y;
+}
+void cimgui_set_cursor_screen_pos(float x, float y) {
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+}
+void cimgui_get_content_region_avail(float* w, float* h) {
+    ImVec2 s = ImGui::GetContentRegionAvail();
+    if (w) *w = s.x; if (h) *h = s.y;
+}
+void cimgui_get_window_size(float* w, float* h) {
+    ImVec2 s = ImGui::GetWindowSize();
+    if (w) *w = s.x; if (h) *h = s.y;
+}
+void cimgui_get_window_pos(float* x, float* y) {
+    ImVec2 p = ImGui::GetWindowPos();
+    if (x) *x = p.x; if (y) *y = p.y;
+}
+void cimgui_get_display_size(float* w, float* h) {
+    ImVec2 s = ImGui::GetIO().DisplaySize;
+    if (w) *w = s.x; if (h) *h = s.y;
+}
+void cimgui_get_mouse_pos(float* x, float* y) {
+    ImVec2 p = ImGui::GetIO().MousePos;
+    if (x) *x = p.x; if (y) *y = p.y;
+}
+
+// --- Fonts ---
+void* cimgui_add_font_from_file(const char* path, float size_pixels) {
+    return (void*)ImGui::GetIO().Fonts->AddFontFromFileTTF(path, size_pixels);
+}
+void cimgui_push_font(void* font, float size) {
+    ImGui::PushFont((ImFont*)font, size);
+}
+void cimgui_pop_font(void) { ImGui::PopFont(); }
+
+// --- Color helper ---
+uint32_t cimgui_pack_color(float r, float g, float b, float a) {
+    return IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(a * 255));
 }

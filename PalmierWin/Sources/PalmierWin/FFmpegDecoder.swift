@@ -217,6 +217,18 @@ public final class FFmpegDecoder {
         if let codec { avcodec_flush_buffers(codec) }
         if let frame { av_frame_unref(frame) }
     }
+
+    /// Seek to a frame index at the given fps, converting through the video
+    /// stream's time_base. Lands on the nearest keyframe before the frame;
+    /// callers decode forward from there.
+    public func seek(toFrame frame: Int, fps: Int) throws {
+        guard let fmt, let streamsBase = fmt.pointee.streams,
+              Int(streamIndex) < Int(fmt.pointee.nb_streams),
+              let stream = streamsBase[Int(streamIndex)] else { throw DecodeError.decodeFailed(-1) }
+        let tb = stream.pointee.time_base
+        let timestamp = Int64(frame) * Int64(tb.den) / max(1, Int64(tb.num) * Int64(fps))
+        try seek(timestamp: timestamp)
+    }
 }
 
 // FFmpeg's AVERROR_EOF and AVERROR(e) macros don't import (FFERRTAG uses
