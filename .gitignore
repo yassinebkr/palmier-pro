@@ -43,3 +43,7 @@ models/*/convert*.log
 AUDIO_SUITE_*
 # ImGui auto-saved window layout (per-machine)
 imgui.ini
+
+# .NET build output
+bin/
+obj/

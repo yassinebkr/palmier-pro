@@ -9,15 +9,30 @@ public final class Win32Window: @unchecked Sendable {
     public let hwnd: HWND
     public let instance: HINSTANCE
 
+    /// False when wrapping a foreign HWND (owned by the .NET shell) — the
+    /// wrapper must never register a class for it or destroy it.
+    private let ownsWindow: Bool
+
     // Class-name buffer kept alive for the window's lifetime (WNDCLASSEXW and
     // CreateWindowExW retain the LPCWSTR pointer).
     private let className: [WCHAR]
+
+    /// Wraps an existing HWND owned by someone else (the .NET shell). No class
+    /// registration, no DestroyWindow — the surface backs onto their window.
+    public init(foreignHwnd: HWND) {
+        self.hwnd = foreignHwnd
+        // The owning process's module handle — used only for surface creation.
+        self.instance = GetModuleHandleW(nil) ?? HINSTANCE(bitPattern: 1)!
+        self.ownsWindow = false
+        self.className = [0]
+    }
 
     /// Creates a top-level window of `size` (client area, in pixels) with `title`.
     /// The window is hidden until `show()`; pump messages via `pollEvents()`.
     public init?(title: String, width: Int, height: Int) {
         guard let hinst = GetModuleHandleW(nil) else { return nil }
         self.instance = hinst
+        self.ownsWindow = true
 
         // Win32 W APIs take wide (UTF-16) strings; own the class-name buffer.
         let clsName = Win32Window.wide("PalmierWinWindow")
@@ -61,7 +76,7 @@ public final class Win32Window: @unchecked Sendable {
     }
 
     deinit {
-        DestroyWindow(hwnd)
+        if ownsWindow { DestroyWindow(hwnd) }
     }
 
     public func show() { ShowWindow(hwnd, Int32(SW_SHOW)) }

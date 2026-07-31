@@ -23,6 +23,11 @@ let imguiBackInc = (root as NSString).appendingPathComponent("CImGui/deps/imgui/
 
 let package = Package(
     name: "PalmierWin",
+    products: [
+        // C ABI host for the .NET shell: exports @_cdecl functions over
+        // PalmierCore + the Windows media engine (see Sources/PalmierCoreHost).
+        .library(name: "PalmierCoreHost", type: .dynamic, targets: ["PalmierCoreHost"]),
+    ],
     targets: [
         .systemLibrary(name: "CMediaFoundation", path: "CMediaFoundation"),
         .systemLibrary(name: "CVulkan", path: "CVulkan"),
@@ -58,6 +63,23 @@ let package = Package(
                     .unsafeFlags(["-DVK_USE_PLATFORM_WIN32_KHR=1"]),
                 ]),
         .target(name: "PalmierCore", path: "Sources/PalmierCore"),
+        .target(
+            name: "PalmierCoreHost",
+            dependencies: ["PalmierCore", "PalmierWin"],
+            path: "Sources/PalmierCoreHost",
+            swiftSettings: [
+                .unsafeFlags(["-I", vkInc, "-I", ffInc]),
+            ],
+            // The dynamic library is a final linked product — it needs the
+            // same import libs as the spike exe.
+            linkerSettings: [
+                .unsafeFlags([
+                    (vkLib as NSString).appendingPathComponent("vulkan-1.lib"),
+                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale",
+                    "-L", ffLib,
+                ]),
+            ]
+        ),
         .target(
             name: "PalmierWin",
             dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "CImGui", "PalmierCore"],
