@@ -81,20 +81,23 @@ if (-not (Test-Path (Join-Path $FFRoot "include/libavformat"))) {
     Remove-Item $zip
 } else { Write-Host "==> ffmpeg present, skipping" }
 
-# --- 4. glslangValidator (shader compiler, KhronosGroup/glslang main-tot) ----
+# --- 4. glslang (shader compiler, KhronosGroup/glslang main-tot) -------------
 # Only needed when editing Shaders/*.vert|.frag — the compiled .spv bytecode is
 # committed as Swift byte arrays (Sources/PalmierWin/Shaders.swift), so a fresh
 # clone builds without this. Fetched on demand by build-shaders.ps1.
-$Glslang = Join-Path $ThirdParty "glslang/bin/glslangValidator.exe"
-if (-not (Test-Path $Glslang)) {
-    Write-Host "==> fetching glslangValidator (KhronosGroup/glslang main-tot)"
+# Recent glslang releases renamed the tool glslangValidator -> glslang and the
+# asset to glslang-main-windows-x86_64-release.zip; accept either binary name.
+$Glslang = Join-Path $ThirdParty "glslang/bin/glslang.exe"
+$GlslangLegacy = Join-Path $ThirdParty "glslang/bin/glslangValidator.exe"
+if (-not (Test-Path $Glslang) -and -not (Test-Path $GlslangLegacy)) {
+    Write-Host "==> fetching glslang (KhronosGroup/glslang main-tot)"
     $work = Join-Path $ThirdParty "glslang"
     $zip = Join-Path $ThirdParty "glslang-windows-Release.zip"
-    Invoke-Native "curl.exe" @("-sL", "-o", $zip, "https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-master-windows-Release.zip")
+    Invoke-Native "curl.exe" @("-fsSL", "-o", $zip, "https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-main-windows-x86_64-release.zip")
     if (Test-Path $work) { Remove-Item -Recurse -Force $work }
     Expand-Archive -Path $zip -DestinationPath $work -Force
     Remove-Item $zip
-} else { Write-Host "==> glslangValidator present, skipping" }
+} else { Write-Host "==> glslang present, skipping" }
 
 # --- 5. Dear ImGui (ocornut/imgui, MIT) -------------------------------------
 # CImGui wraps ImGui's C++ API in extern "C" for Swift. The wrapper is committed

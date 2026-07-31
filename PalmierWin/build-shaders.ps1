@@ -4,16 +4,18 @@
 # the binary (no runtime .spv loading), so a fresh clone builds without running
 # this -- glslangValidator is only a dev-time tool.
 #
-# Requires glslangValidator at ThirdParty/glslang/bin/glslangValidator.exe.
-# If absent, run ./fetch-deps.ps1 first (it downloads the KhronosGroup/glslang
-# main-tot Windows Release build).
+# Requires glslang at ThirdParty/glslang/bin/ (glslang.exe, or the legacy
+# glslangValidator.exe from older releases). If absent, run ./fetch-deps.ps1
+# first (it downloads the KhronosGroup/glslang main-tot Windows Release build).
 [CmdletBinding()]
 param(
     [string]$Root = (Get-Location)
 )
 $ErrorActionPreference = "Stop"
-$Glslang = Join-Path $Root "ThirdParty/glslang/bin/glslangValidator.exe"
-if (-not (Test-Path $Glslang)) { throw "$Glslang not found -- run ./fetch-deps.ps1 first" }
+# Newer glslang releases renamed glslangValidator -> glslang; accept either.
+$Glslang = Join-Path $Root "ThirdParty/glslang/bin/glslang.exe"
+if (-not (Test-Path $Glslang)) { $Glslang = Join-Path $Root "ThirdParty/glslang/bin/glslangValidator.exe" }
+if (-not (Test-Path $Glslang)) { throw "glslang not found under ThirdParty/glslang/bin -- run ./fetch-deps.ps1 first" }
 
 $ShadersDir = Join-Path $Root "Shaders"
 $OutDir = Join-Path $env:TEMP "palmier-spv-$(Get-Random)"
