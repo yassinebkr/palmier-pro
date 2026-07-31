@@ -133,6 +133,27 @@ public struct ChatModel: Sendable, Equatable, Hashable {
     }
 }
 
+/// Telemetry/trace identifiers attached to one agent request. Provider-neutral
+/// data; how (or whether) a client forwards it is each adapter's choice.
+public struct AgentRequestContext: Equatable, Sendable {
+    public let conversationID: UUID
+    public let traceID: UUID
+    public let spanID: UUID
+    public let inputMessageID: UUID
+    public let outputMessageID: UUID
+    public let projectID: String?
+
+    public init(conversationID: UUID, traceID: UUID, spanID: UUID,
+                inputMessageID: UUID, outputMessageID: UUID, projectID: String?) {
+        self.conversationID = conversationID
+        self.traceID = traceID
+        self.spanID = spanID
+        self.inputMessageID = inputMessageID
+        self.outputMessageID = outputMessageID
+        self.projectID = projectID
+    }
+}
+
 /// A chat-completions client. Per-provider adapters conform and translate
 /// the neutral inputs to their wire format, then parse their SSE into
 /// `ChatStreamEvent`s. `system` is the top-level system prompt, `tools` is the
@@ -143,4 +164,25 @@ public protocol ChatClient: Sendable {
         tools: [ToolSchema],
         messages: [ChatMessage]
     ) -> AsyncThrowingStream<ChatStreamEvent, Error>
+
+    /// Context-ful variant for callers that track telemetry. Declared as a
+    /// requirement so existential calls dispatch to a conformer's witness.
+    func stream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage],
+        context: AgentRequestContext
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error>
+}
+
+public extension ChatClient {
+    /// Providers without a telemetry channel ignore the context.
+    func stream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage],
+        context: AgentRequestContext
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        stream(system: system, tools: tools, messages: messages)
+    }
 }

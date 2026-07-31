@@ -113,11 +113,12 @@ enum AnthropicChatAdapter {
         system: String,
         tools: [ToolSchema],
         messages: [ChatMessage],
-        agentClient: any AgentClient
+        agentClient: any AgentClient,
+        context: AgentRequestContext
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         let anthropicTools = tools.map(toolSchema(from:))
         let anthropicMessages = messages.map(message(from:))
-        let upstream = agentClient.stream(system: system, tools: anthropicTools, messages: anthropicMessages)
+        let upstream = agentClient.stream(system: system, tools: anthropicTools, messages: anthropicMessages, context: context)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -146,7 +147,16 @@ extension AnthropicClient: ChatClient {
         tools: [ToolSchema],
         messages: [ChatMessage]
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self)
+        stream(system: system, tools: tools, messages: messages, context: .freshForDirectCall)
+    }
+
+    func stream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage],
+        context: AgentRequestContext
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self, context: context)
     }
 }
 
@@ -159,6 +169,26 @@ extension PalmierClient: ChatClient {
         tools: [ToolSchema],
         messages: [ChatMessage]
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self)
+        stream(system: system, tools: tools, messages: messages, context: .freshForDirectCall)
+    }
+
+    func stream(
+        system: String,
+        tools: [ToolSchema],
+        messages: [ChatMessage],
+        context: AgentRequestContext
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AnthropicChatAdapter.wrapStream(system: system, tools: tools, messages: messages, agentClient: self, context: context)
+    }
+}
+
+extension AgentRequestContext {
+    /// Stand-in IDs for context-less neutral call sites; telemetry headers are
+    /// only consumed by the Palmier proxy path, which always has a real context.
+    static var freshForDirectCall: AgentRequestContext {
+        AgentRequestContext(
+            conversationID: UUID(), traceID: UUID(), spanID: UUID(),
+            inputMessageID: UUID(), outputMessageID: UUID(), projectID: nil
+        )
     }
 }

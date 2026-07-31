@@ -60,8 +60,6 @@ final class EditorViewModel {
         }
     }
     var mediaManifest = MediaManifest()
-    var generationLog = GenerationLog()
-
     // MARK: - Denoise bake state (session-scoped, keyed by mediaRef)
 
     var denoiseInFlight: Set<String> = []
@@ -153,15 +151,6 @@ final class EditorViewModel {
     var sourcePlayheadFrame: Int = 0 {
         didSet { playheadState.sourceFrame = sourcePlayheadFrame }
     }
-    var layoutPreset: LayoutPreset = {
-        if let raw = UserDefaults.standard.string(forKey: "layoutPreset"),
-           let preset = LayoutPreset(rawValue: raw) {
-            return preset
-        }
-        return .default
-    }() {
-        didSet { UserDefaults.standard.set(layoutPreset.rawValue, forKey: "layoutPreset") }
-    }
     // MARK: - Media library (in-memory, rebuilt on project open)
 
     var mediaAssets: [MediaAsset] = [] {
@@ -225,6 +214,12 @@ final class EditorViewModel {
     }() {
         didSet {
             UserDefaults.standard.set(markDeadAir, forKey: "markDeadAir")
+            mediaVisualCache.timelineView?.needsDisplay = true
+        }
+    }
+
+    var silenceRemovalSettings = SilenceRemovalSettings.default {
+        didSet {
             mediaVisualCache.timelineView?.needsDisplay = true
         }
     }
@@ -332,7 +327,6 @@ final class EditorViewModel {
             "mediaByType": mediaCounts,
             "offlineMedia": offlineMediaRefs.count,
             "unprocessableMedia": unprocessableMediaRefs.count,
-            "generationLogEntries": generationLog.entries.count,
             "agentSessions": agentService.sessions.count
         ]
     }
