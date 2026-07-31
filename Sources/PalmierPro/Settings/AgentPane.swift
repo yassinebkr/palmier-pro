@@ -6,23 +6,23 @@ struct AgentPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xxl) {
-            SettingsSection(title: "AI Chat") {
+            SettingsSection(title: L10n.string("AI Chat")) {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.xxl) {
                     APIKeySection(
-                        title: "Anthropic API Key",
-                        subtitle: "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.",
+                        title: L10n.string("Anthropic API Key"),
+                        subtitle: L10n.string("Use your own Anthropic key for AI chat. Stored in the macOS Keychain."),
                         consoleURL: URL(string: "https://console.anthropic.com/settings/keys")!,
-                        consoleLabel: "Get Anthropic API key",
+                        consoleLabel: L10n.string("Get Anthropic API key"),
                         placeholder: "sk-ant-…",
                         load: { await Task.detached(priority: .utility) { AnthropicKeychain.load() ?? "" }.value },
                         save: { key in await Task.detached(priority: .userInitiated) { AnthropicKeychain.save(key) }.value },
                         delete: { await Task.detached(priority: .userInitiated) { AnthropicKeychain.delete() }.value }
                     )
                     APIKeySection(
-                        title: "OpenAI API Key",
-                        subtitle: "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.",
+                        title: L10n.string("OpenAI API Key"),
+                        subtitle: L10n.string("Use your own OpenAI key for AI chat. Stored in the macOS Keychain."),
                         consoleURL: URL(string: "https://platform.openai.com/api-keys")!,
-                        consoleLabel: "Get OpenAI API key",
+                        consoleLabel: L10n.string("Get OpenAI API key"),
                         placeholder: "sk-…",
                         load: { await Task.detached(priority: .utility) { OpenAIKeychain.load() ?? "" }.value },
                         save: { key in await Task.detached(priority: .userInitiated) { OpenAIKeychain.save(key) }.value },
@@ -30,7 +30,7 @@ struct AgentPane: View {
                     )
                 }
             }
-            SettingsSection(title: "Integrations") {
+            SettingsSection(title: L10n.string("Integrations")) {
                 mcpSection
             }
         }
@@ -47,19 +47,19 @@ struct AgentPane: View {
 
     private var mcpHeader: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-            Text("MCP Server")
+            Text(L10n.string("MCP Server"))
                 .font(.system(size: AppTheme.FontSize.md, weight: AppTheme.FontWeight.medium))
                 .foregroundStyle(AppTheme.Text.primaryColor)
 
             HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.sm) {
-                Text("Lets external clients like Cursor, Claude Desktop, Claude Code, and Codex edit your timeline.")
+                Text(L10n.string("Lets external clients like Cursor, Claude Desktop, Claude Code, and Codex edit your timeline."))
                     .font(.system(size: AppTheme.FontSize.sm))
                     .foregroundStyle(AppTheme.Text.tertiaryColor)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button(action: openInstructions) {
                     HStack(spacing: AppTheme.Spacing.xxs) {
-                        Text("Setup instructions")
+                        Text(L10n.string("Setup instructions"))
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: AppTheme.FontSize.xs, weight: AppTheme.FontWeight.semibold))
                     }
@@ -82,14 +82,14 @@ struct AgentPane: View {
 
                 if appState.mcpService?.isRunning ?? false {
                     HStack(alignment: .firstTextBaseline, spacing: AppTheme.Spacing.xxs) {
-                        Text("Running on")
+                        Text(L10n.string("Running on"))
                             .foregroundStyle(AppTheme.Text.secondaryColor)
-                        Text("127.0.0.1:\(String(MCPService.port))")
+                        Text(verbatim: "127.0.0.1:\(String(MCPService.port))")
                             .font(.system(size: AppTheme.FontSize.sm, design: .monospaced))
                             .foregroundStyle(AppTheme.Text.primaryColor)
                     }
                 } else {
-                    Text("Stopped")
+                    Text(L10n.string("Stopped"))
                         .foregroundStyle(AppTheme.Text.tertiaryColor)
                 }
             }
@@ -98,7 +98,7 @@ struct AgentPane: View {
             Spacer()
 
             Toggle(
-                "",
+                String(),
                 isOn: Binding(
                     get: { (appState.mcpService?.isRunning ?? false) },
                     set: { appState.setMCPEnabled($0) }
@@ -107,7 +107,7 @@ struct AgentPane: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.mini)
-            .accessibilityLabel("MCP Server")
+            .accessibilityLabel(L10n.string("MCP Server"))
         }
         .padding(.top, AppTheme.Spacing.xs)
     }
@@ -211,7 +211,7 @@ private struct APIKeySection: View {
     private var trailingControl: some View {
         let trimmed = draft.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty {
-            Button("Save", action: saveKey)
+            Button(L10n.string("Save"), action: saveKey)
                 .buttonStyle(.capsule(.prominent, size: .regular))
                 .controlSize(.large)
         } else if hasKey {
@@ -223,7 +223,7 @@ private struct APIKeySection: View {
             }
             .buttonStyle(.capsule(.secondary, size: .regular))
             .controlSize(.large)
-            .help("Remove API key")
+            .help(L10n.string("Remove API key"))
         }
     }
 
