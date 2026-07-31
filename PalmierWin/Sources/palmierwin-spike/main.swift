@@ -71,6 +71,10 @@ struct VerticalSlice {
                         // timeline segment into an offscreen texture via the
                         // portable upstream interface (the same one macOS uses).
                         runFrameRendering(dev: dev)
+                        // Verify each effect kernel end-to-end: decode → apply
+                        // through WinFrameRenderer.applyEffects → readback →
+                        // pixel assertions. One PASS/FAIL line per kernel.
+                        runEffectKernels(dev: dev)
                         // Full timeline playback: decode→composite→blit→present
                         // per frame, end-to-end through the portable contract.
                         runPlayback(dev: dev, win: win, swap: swap)
@@ -402,6 +406,197 @@ struct VerticalSlice {
             print("Preview decode: \(error)")
             return nil
         }
+    }
+
+    /// Verifies the ported effect kernels end-to-end: decodes one frame of the
+    /// test clip, applies each effect through WinFrameRenderer.applyEffects
+    /// with non-default params, reads the result back, and asserts the pixels
+    /// moved in the expected direction. One PASS/FAIL line per kernel.
+    static func runEffectKernels(dev: VulkanDevice) {
+        let clipPath = "PalmierWin/test_media/testsrc.mp4"
+        guard FileManager.default.fileExists(atPath: clipPath) else {
+            print("EffectKernels: skipped (no \(clipPath))")
+            return
+        }
+        guard let sourceTexture = decodeAndUpload(dev: dev, clipPath: clipPath),
+              let before = sourceTexture.download() else {
+            print("EffectKernels: FAILED to decode/upload test frame")
+            return
+        }
+        guard let renderer = WinFrameRenderer(device: dev) else {
+            print("EffectKernels: WinFrameRenderer FAILED to create")
+            return
+        }
+        let width = Int(sourceTexture.width)
+
+        // Clarity: unsharp vs blurred copy + dehaze — local contrast (edge
+        // energy) must increase.
+        let clarity = Effect(id: "k-clarity", type: "detail.clarity", enabled: true, params: [
+            "clarity": EffectParam(value: 1.0), "dehaze": EffectParam(value: 0.5)
+        ])
+        if let after = applyEffectsOnce(renderer: renderer, dev: dev, effects: [clarity], source: sourceTexture) {
+            let e0 = edgeEnergy(before, width: width), e1 = edgeEnergy(after, width: width)
+            print("EffectKernels: clarity \(e1 > e0 * 1.02 ? "PASS" : "FAIL") (edge energy \(fmt(e0)) -> \(fmt(e1)))")
+        } else { print("EffectKernels: clarity FAIL (apply/readback failed)") }
+
+        // Glow: screen-blend of blurred highlights — only brightens.
+        let glow = Effect(id: "k-glow", type: "stylize.glow", enabled: true, params: [
+            "intensity": EffectParam(value: 1.0), "radius": EffectParam(value: 30),
+            "threshold": EffectParam(value: 0.5), "warmth": EffectParam(value: 0.3)
+        ])
+        if let after = applyEffectsOnce(renderer: renderer, dev: dev, effects: [glow], source: sourceTexture) {
+            let l0 = meanLuma(before), l1 = meanLuma(after)
+            print("EffectKernels: glow \(l1 > l0 ? "PASS" : "FAIL") (mean luma \(fmt(l0)) -> \(fmt(l1)))")
+        } else { print("EffectKernels: glow FAIL (apply/readback failed)") }
+
+        // Curves: red curve pinned to 0 kills the red channel; green/blue and
+        // the identity master curve leave the other channels untouched.
+        let curve = GradeCurve(red: [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 0)])
+        let curves = Effect(id: "k-curves", type: "color.curves", enabled: true, params: [
+            "curve": EffectParam(string: curve.encoded() ?? "")
+        ])
+        if let after = applyEffectsOnce(renderer: renderer, dev: dev, effects: [curves], source: sourceTexture) {
+            let m0 = channelMeans(before), m1 = channelMeans(after)
+            let ok = m1.r < 4 && abs(m1.g - m0.g) < 6 && abs(m1.b - m0.b) < 6
+            print("EffectKernels: gradeCurves \(ok ? "PASS" : "FAIL") (R \(fmt(m0.r)) -> \(fmt(m1.r)), G \(fmt(m0.g)) -> \(fmt(m1.g)), B \(fmt(m0.b)) -> \(fmt(m1.b)))")
+        } else { print("EffectKernels: gradeCurves FAIL (apply/readback failed)") }
+
+        // Hue curves: hueVsLum pinned at 0 shifts value down by 0.5 (sat-gated,
+        // so near-grays stay neutral) — luma must drop sharply.
+        let hc = HueCurves(hueVsLum: [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 0)])
+        let hueCurves = Effect(id: "k-huecurves", type: "color.hueCurves", enabled: true, params: [
+            "curves": EffectParam(string: hc.encoded() ?? "")
+        ])
+        if let after = applyEffectsOnce(renderer: renderer, dev: dev, effects: [hueCurves], source: sourceTexture) {
+            let l0 = meanLuma(before), l1 = meanLuma(after)
+            print("EffectKernels: hueCurves \(l1 < l0 - 1 ? "PASS" : "FAIL") (mean luma \(fmt(l0)) -> \(fmt(l1)))")
+        } else { print("EffectKernels: hueCurves FAIL (apply/readback failed)") }
+
+        // LUT: n=8 .cube inverting every channel — dark pixels turn bright.
+        guard writeInvertCube(path: "PalmierWin/test_media/spike_invert.cube", n: 8) else {
+            print("EffectKernels: lutTetra FAIL (couldn't write .cube)")
+            return
+        }
+        let lut = Effect(id: "k-lut", type: "color.lut", enabled: true, params: [
+            "path": EffectParam(string: "PalmierWin/test_media/spike_invert.cube"),
+            "intensity": EffectParam(value: 1.0)
+        ])
+        if let after = applyEffectsOnce(renderer: renderer, dev: dev, effects: [lut], source: sourceTexture) {
+            let m0 = channelMeans(before), m1 = channelMeans(after)
+            let dr = abs(m1.r - (255 - m0.r)), dg = abs(m1.g - (255 - m0.g)), db = abs(m1.b - (255 - m0.b))
+            let ok = dr < 10 && dg < 10 && db < 10
+            print("EffectKernels: lutTetra \(ok ? "PASS" : "FAIL") (R \(fmt(m0.r)) -> \(fmt(m1.r)) expect \(fmt(255 - m0.r)), G \(fmt(m0.g)) -> \(fmt(m1.g)) expect \(fmt(255 - m0.g)), B \(fmt(m0.b)) -> \(fmt(m1.b)) expect \(fmt(255 - m0.b)))")
+        } else { print("EffectKernels: lutTetra FAIL (apply/readback failed)") }
+    }
+
+    /// Records the effect chain into a one-shot command buffer, submits, waits,
+    /// and reads the result back as BGRA (mirrors WinExporter's effect path).
+    private static func applyEffectsOnce(renderer: WinFrameRenderer, dev: VulkanDevice, effects: [Effect], source: VulkanTexture) -> Data? {
+        guard let scratch = VulkanTexture(device: dev, width: source.width, height: source.height) else { return nil }
+        let d = dev.device
+        var cbInfo = VkCommandBufferAllocateInfo()
+        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        cbInfo.commandPool = dev.commandPool
+        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        cbInfo.commandBufferCount = 1
+        var cmd: VkCommandBuffer? = nil
+        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(d, $0, &cmd) }) == VK_SUCCESS,
+              let cmd else { return nil }
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(d, dev.commandPool, 1, $0) }
+            return nil
+        }
+        let result = renderer.applyEffects(
+            effects, frame: 0, clipStartFrame: 0,
+            source: source, scratch: scratch, commandBuffer: cmd
+        )
+        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(d, dev.commandPool, 1, $0) }
+            return nil
+        }
+        var fenceInfo = VkFenceCreateInfo()
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        var fence: VkFence? = nil
+        guard withUnsafePointer(to: &fenceInfo, { vkCreateFence(d, $0, nil, &fence) }) == VK_SUCCESS, let fence else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(d, dev.commandPool, 1, $0) }
+            return nil
+        }
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        var cmdHandle: VkCommandBuffer? = cmd
+        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ch in
+            submitInfo.pCommandBuffers = ch
+            return withUnsafePointer(to: &submitInfo) { si in
+                vkQueueSubmit(dev.graphicsQueue, 1, si, fence)
+            }
+        }
+        if submitResult == VK_SUCCESS {
+            var fenceHandle: VkFence? = fence
+            withUnsafePointer(to: &fenceHandle) { f in
+                _ = vkWaitForFences(d, 1, f, UInt32(VK_TRUE), UInt64.max)
+            }
+        }
+        vkDestroyFence(d, fence, nil)
+        var toFree: VkCommandBuffer? = cmd
+        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(d, dev.commandPool, 1, $0) }
+        return submitResult == VK_SUCCESS ? result.download() : nil
+    }
+
+    /// Writes a .cube file that inverts every channel (out = 1 - in), r fastest.
+    private static func writeInvertCube(path: String, n: Int) -> Bool {
+        var text = "TITLE \"spike invert\"\nLUT_3D_SIZE \(n)\n"
+        for b in 0..<n {
+            for g in 0..<n {
+                for r in 0..<n {
+                    let d = Double(n - 1)
+                    text += "\(1 - Double(r) / d) \(1 - Double(g) / d) \(1 - Double(b) / d)\n"
+                }
+            }
+        }
+        return (try? text.write(toFile: path, atomically: false, encoding: .utf8)) != nil
+    }
+
+    private static func fmt(_ v: Double) -> String { String(format: "%.2f", v) }
+
+    /// Per-channel means of a tightly-packed BGRA buffer.
+    private static func channelMeans(_ bgra: Data) -> (b: Double, g: Double, r: Double) {
+        var sb = 0, sg = 0, sr = 0
+        let n = bgra.count / 4
+        for i in 0..<n {
+            sb += Int(bgra[i * 4]); sg += Int(bgra[i * 4 + 1]); sr += Int(bgra[i * 4 + 2])
+        }
+        return (Double(sb) / Double(n), Double(sg) / Double(n), Double(sr) / Double(n))
+    }
+
+    private static func meanLuma(_ bgra: Data) -> Double {
+        var sum = 0.0
+        let n = bgra.count / 4
+        for i in 0..<n {
+            sum += 0.0722 * Double(bgra[i * 4]) + 0.7152 * Double(bgra[i * 4 + 1]) + 0.2126 * Double(bgra[i * 4 + 2])
+        }
+        return sum / Double(n)
+    }
+
+    /// Mean absolute horizontal luma step — a local-contrast proxy.
+    private static func edgeEnergy(_ bgra: Data, width: Int) -> Double {
+        var sum = 0.0
+        var count = 0
+        let n = bgra.count / 4
+        func luma(_ i: Int) -> Double {
+            0.0722 * Double(bgra[i * 4]) + 0.7152 * Double(bgra[i * 4 + 1]) + 0.2126 * Double(bgra[i * 4 + 2])
+        }
+        for i in 0..<n where i % width != width - 1 {
+            sum += abs(luma(i + 1) - luma(i))
+            count += 1
+        }
+        return count > 0 ? sum / Double(count) : 0
     }
 
     /// Exports the same 2-layer timeline the playback step plays, but to a

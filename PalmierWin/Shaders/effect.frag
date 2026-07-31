@@ -15,12 +15,21 @@
 //   5 = chromaKey
 //   6 = highlightsShadows
 //   7 = edgeRounding
+//   8 = clarity (src + aux=blurred)
+//   9 = glowBright
+//   10 = glowComposite (src + aux=blurred glow)
+//   11 = gradeCurves (aux=per-channel LUT, aux2=master LUT)
+//   12 = hueCurves (aux=hue LUT)
+//   13 = lutTetra (aux=3D-LUT 2D strip)
+//   14 = blur (separable gaussian, one direction per pass)
 layout(push_constant) uniform EffectBlock {
     uint effectType;
     float params[30];
 } u;
 
 layout(set = 0, binding = 0) uniform sampler2D src;
+layout(set = 0, binding = 1) uniform sampler2D aux;
+layout(set = 0, binding = 2) uniform sampler2D aux2;
 
 layout(location = 0) in vec2 fragUV;
 layout(location = 0) out vec4 outColor;
@@ -117,6 +126,152 @@ vec4 effectEdgeRounding(vec4 s) {
     return vec4(s.rgb, s.a * alpha);
 }
 
+// Metal/Clarity.metal — unsharp vs a blurred copy + dark-channel-prior dehaze.
+vec4 effectClarity(vec4 s) {
+    // params: [clarity, dehaze]; aux = blurred src
+    float clarity = u.params[0];
+    float dehaze = u.params[1];
+    vec3 b = texture(aux, fragUV).rgb;
+    vec3 rgb = s.rgb + (s.rgb - b) * clarity;
+    if (dehaze != 0.0) {
+        float dark = min(s.rgb.r, min(s.rgb.g, s.rgb.b));            // high = hazy
+        float w = dehaze * (0.5 + 0.5 * smoothstep(0.05, 0.5, dark));
+        rgb += (s.rgb - b) * (w * 0.6);                              // local contrast
+        rgb = mix(vec3(0.45), rgb, 1.0 + w * 0.45);                  // crush the veil
+        float yy = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+        rgb = mix(vec3(yy), rgb, 1.0 + w * 0.5);                     // re-saturate
+    }
+    return vec4(saturate3(rgb), s.a);
+}
+
+// Metal/Glow.metal — isolate + warm-tint highlights (host blurs afterwards).
+vec4 effectGlowBright(vec4 s) {
+    // params: [threshold, warmth]
+    float threshold = u.params[0];
+    float warmth = u.params[1];
+    float y = dot(s.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 hi = s.rgb * smoothstep(threshold, 1.0, y);
+    vec3 warm = hi * vec3(1.0, 0.7, 0.45);          // halation's red-orange cast
+    return vec4(mix(hi, warm, warmth), s.a);
+}
+
+// Metal/Glow.metal — screen-blend the blurred highlights over the source.
+vec4 effectGlowComposite(vec4 s) {
+    // params: [intensity]; aux = blurred glow
+    float intensity = u.params[0];
+    vec3 g = saturate3(texture(aux, fragUV).rgb * intensity);
+    return vec4(1.0 - (1.0 - s.rgb) * (1.0 - g), s.a);  // screen blend
+}
+
+// Metal/GradeCurves.metal — per-channel LUT (aux) + luma LUT (aux2).
+vec4 effectGradeCurves(vec4 s) {
+    vec3 rgb = saturate3(s.rgb);
+    float y = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float yp = texture(aux2, vec2(y, 0.5)).r;
+    // Luma-preserving rescale, gain capped so shadow-lift curves can't blow up
+    // dark saturated pixels (and their compression noise).
+    rgb = (y > 1e-4) ? rgb * min(yp / y, 8.0) : vec3(yp);
+    float r = texture(aux, vec2(rgb.r, 0.5)).r;
+    float g = texture(aux, vec2(rgb.g, 0.5)).g;
+    float b = texture(aux, vec2(rgb.b, 0.5)).b;
+    return vec4(r, g, b, s.a);
+}
+
+// Metal/HueCurves.metal helpers.
+vec3 rgb2hsv(vec3 c) {
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, saturate3(p - K.xxx), c.y);
+}
+
+// Metal/HueCurves.metal — aux = 256-wide LUT (R=Δhue, G=satScale, B=Δlum),
+// each encoded 0..1 over its ±max range (BGRA8 has no signed channels).
+vec4 effectHueCurves(vec4 s) {
+    const float maxHueShift = 1.0 / 12.0;  // ±30° at a full push
+    const float maxLumShift = 0.5;
+    vec3 hsv = rgb2hsv(saturate3(s.rgb));
+    vec4 L = texture(aux, vec2(hsv.x, 0.5));
+    float dHue = (L.r - 0.5) * 2.0 * maxHueShift;
+    float satScale = (L.g - 0.5) * 2.0;
+    float dLum = (L.b - 0.5) * 2.0 * maxLumShift;
+    float gate = smoothstep(0.04, 0.18, hsv.y);
+    float h2 = fract(hsv.x + dHue * gate);
+    float s2 = clamp(hsv.y * (1.0 + satScale * gate), 0.0, 1.0);
+    float v2 = clamp(hsv.z + dLum * gate, 0.0, 1.0);
+    return vec4(hsv2rgb(vec3(h2, s2, v2)), s.a);
+}
+
+// Metal/LUTTetra.metal — tetrahedral 3D-LUT. aux = 2D strip (width n, height
+// n²; node (r,g,b) at pixel (r, b·n+g), row 0 = top). No row flip: our upload
+// is top-row-first and v=0 samples the top row (unlike CoreImage's y-up).
+vec3 lutFetch(float n, vec3 idx) {
+    float row = idx.z * n + idx.y;
+    return texture(aux, vec2((idx.x + 0.5) / n, (row + 0.5) / (n * n))).rgb;
+}
+
+vec4 effectLutTetra(vec4 s) {
+    // params: [n, intensity]
+    float n = u.params[0];
+    float intensity = u.params[1];
+    vec3 rgb = saturate3(s.rgb);
+    vec3 p = rgb * (n - 1.0);
+    vec3 b0 = clamp(floor(p), 0.0, n - 2.0);
+    vec3 f = p - b0;
+
+    vec3 c000 = lutFetch(n, b0);
+    vec3 c111 = lutFetch(n, b0 + 1.0);
+    vec3 o;
+    if (f.r >= f.g) {
+        if (f.g >= f.b) {
+            o = (1.0 - f.r) * c000 + (f.r - f.g) * lutFetch(n, b0 + vec3(1, 0, 0))
+                + (f.g - f.b) * lutFetch(n, b0 + vec3(1, 1, 0)) + f.b * c111;
+        } else if (f.r >= f.b) {
+            o = (1.0 - f.r) * c000 + (f.r - f.b) * lutFetch(n, b0 + vec3(1, 0, 0))
+                + (f.b - f.g) * lutFetch(n, b0 + vec3(1, 0, 1)) + f.g * c111;
+        } else {
+            o = (1.0 - f.b) * c000 + (f.b - f.r) * lutFetch(n, b0 + vec3(0, 0, 1))
+                + (f.r - f.g) * lutFetch(n, b0 + vec3(1, 0, 1)) + f.g * c111;
+        }
+    } else {
+        if (f.b >= f.g) {
+            o = (1.0 - f.b) * c000 + (f.b - f.g) * lutFetch(n, b0 + vec3(0, 0, 1))
+                + (f.g - f.r) * lutFetch(n, b0 + vec3(0, 1, 1)) + f.r * c111;
+        } else if (f.b >= f.r) {
+            o = (1.0 - f.g) * c000 + (f.g - f.b) * lutFetch(n, b0 + vec3(0, 1, 0))
+                + (f.b - f.r) * lutFetch(n, b0 + vec3(0, 1, 1)) + f.r * c111;
+        } else {
+            o = (1.0 - f.g) * c000 + (f.g - f.r) * lutFetch(n, b0 + vec3(0, 1, 0))
+                + (f.r - f.b) * lutFetch(n, b0 + vec3(1, 1, 0)) + f.b * c111;
+        }
+    }
+    return vec4(mix(s.rgb, o, intensity), s.a);
+}
+
+// Separable gaussian, one direction per pass. 9 taps, binomial weights.
+vec4 effectBlur(vec4 s) {
+    // params: [dir.x, dir.y, radius (px), texelW, texelH]
+    vec2 dir = vec2(u.params[0], u.params[1]);
+    float radius = max(u.params[2], 0.0);
+    vec2 texel = vec2(u.params[3], u.params[4]);
+    float w[9] = float[9](1.0, 8.0, 28.0, 56.0, 70.0, 56.0, 28.0, 8.0, 1.0);
+    vec3 acc = vec3(0.0);
+    float wsum = 0.0;
+    for (int i = 0; i < 9; i++) {
+        vec2 off = dir * (float(i) - 4.0) * (radius / 4.0) * texel;
+        acc += texture(src, fragUV + off).rgb * w[i];
+        wsum += w[i];
+    }
+    return vec4(acc / wsum, s.a);
+}
+
 void main() {
     vec4 s = texture(src, fragUV);
     switch (u.effectType) {
@@ -127,6 +282,13 @@ void main() {
         case 5: outColor = effectChromaKey(s); break;
         case 6: outColor = effectHighlightsShadows(s); break;
         case 7: outColor = effectEdgeRounding(s); break;
+        case 8: outColor = effectClarity(s); break;
+        case 9: outColor = effectGlowBright(s); break;
+        case 10: outColor = effectGlowComposite(s); break;
+        case 11: outColor = effectGradeCurves(s); break;
+        case 12: outColor = effectHueCurves(s); break;
+        case 13: outColor = effectLutTetra(s); break;
+        case 14: outColor = effectBlur(s); break;
         default: outColor = s;  // passthrough
     }
 }
