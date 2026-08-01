@@ -47,6 +47,11 @@ enum AnthropicChatAdapter {
                 "type": "tool_result", "tool_use_id": toolCallID,
                 "content": content.map(resultBlockJSON), "is_error": isError,
             ]
+        case .thinking(let text, let signature):
+            guard !signature.isEmpty else { return nil }
+            return ["type": "thinking", "thinking": text, "signature": signature]
+        case .redactedThinking(let data):
+            return ["type": "redacted_thinking", "data": data]
         }
     }
 
@@ -87,6 +92,12 @@ enum AnthropicChatAdapter {
         switch event {
         case .textDelta(let s):
             return .textDelta(s)
+        case .thinkingDelta(let s):
+            return .thinkingDelta(s)
+        case .thinkingSignature(let s):
+            return .thinkingSignature(s)
+        case .redactedThinking(let data):
+            return .redactedThinking(data)
         case .toolUseComplete(let id, let name, let inputJSON):
             return .toolCallComplete(id: id, name: name, inputJSON: inputJSON)
         case .messageStop(let reason):

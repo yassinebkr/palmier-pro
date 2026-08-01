@@ -72,6 +72,9 @@ enum OpenAIChatAdapter {
                 ])
             case .toolResult(let toolCallID, let content, let isError):
                 toolResults.append(toolResultMessage(toolCallID: toolCallID, content: content, isError: isError))
+            case .thinking, .redactedThinking:
+                // Anthropic-only reasoning blocks; OpenAI has no equivalent.
+                break
             }
         }
 
