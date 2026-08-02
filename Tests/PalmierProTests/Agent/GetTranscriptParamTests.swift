@@ -20,6 +20,41 @@ struct GetTranscriptParamTests {
         #expect(result.isError == true)
     }
 
+    @Test func videoClipFilterResolvesToLinkedAudioPartner() throws {
+        let groupId = "linked"
+        var video = Fixtures.clip(id: "video", mediaRef: "media", mediaType: .video, start: 0, duration: 30)
+        var audio = Fixtures.clip(id: "audio", mediaRef: "media", mediaType: .audio, start: 0, duration: 30)
+        video.linkGroupId = groupId
+        audio.linkGroupId = groupId
+        let h = ToolHarness(timeline: Fixtures.timeline(tracks: [
+            Fixtures.videoTrack(clips: [video]),
+            Fixtures.audioTrack(clips: [audio]),
+        ]))
+
+        let resolved = try h.executor.resolveTranscriptClipFilter("video", h.editor)
+        #expect(resolved == "audio")
+    }
+
+    @Test func untranscribableClipWithoutLinkedAudioStillErrors() async {
+        let still = Fixtures.clip(id: "still", mediaRef: "media", mediaType: .image, start: 0, duration: 30)
+        let h = ToolHarness(timeline: Fixtures.timeline(tracks: [
+            Fixtures.videoTrack(clips: [still]),
+        ]))
+
+        let result = await h.runRaw("get_transcript", args: ["clipId": "still"])
+        #expect(result.isError)
+        #expect(ToolHarness.textOf(result).contains("no transcribable audio"))
+    }
+
+    @Test func toleratesZeroFilledFrameWindow() async {
+        let h = ToolHarness(timeline: Fixtures.timeline())
+        let result = await h.runRaw(
+            "get_transcript",
+            args: ["startFrame": 0, "endFrame": 0, "granularity": "segments"]
+        )
+        #expect(result.isError == false)
+    }
+
     @Test func segmentsGranularityDeclaresSegmentFormat() async throws {
         let h = ToolHarness(timeline: Fixtures.timeline())
         let json = try await h.runOK("get_transcript", args: ["granularity": "segments"]) as? [String: Any]

@@ -4,12 +4,18 @@ import Foundation
 
 enum AnthropicModel: String, CaseIterable, Sendable {
     case sonnet5 = "claude-sonnet-5"
-    case opus48 = "claude-opus-4-8"
+    case opus5 = "claude-opus-5"
+
+    /// Maps a persisted model id to the current catalog entry, migrating
+    /// retired models (Opus 4.8 was replaced by Opus 5).
+    static func persisted(_ rawValue: String) -> AnthropicModel? {
+        rawValue == "claude-opus-4-8" ? .opus5 : AnthropicModel(rawValue: rawValue)
+    }
 
     var displayName: String {
         switch self {
         case .sonnet5: "Sonnet 5"
-        case .opus48: "Opus 4.8"
+        case .opus5: "Opus 5"
         }
     }
 
@@ -20,7 +26,7 @@ enum AnthropicModel: String, CaseIterable, Sendable {
                 "output_config": ["effort": "low"],
                 "thinking": ["type": "adaptive", "display": "summarized"],
             ]
-        case .opus48:
+        case .opus5:
             ["thinking": ["type": "adaptive", "display": "summarized"]]
         }
     }

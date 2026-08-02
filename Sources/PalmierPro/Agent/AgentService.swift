@@ -73,10 +73,10 @@ final class AgentService {
         switch provider {
         case "anthropic":
             let key = apiKey(for: "anthropic")
-            if !key.isEmpty, let anthropic = AnthropicModel(rawValue: model.id) {
+            if !key.isEmpty, let anthropic = AnthropicModel.persisted(model.id) {
                 return AnthropicClient(apiKey: key, model: anthropic)
             }
-            if AccountService.shared.isSignedIn, let anthropic = AnthropicModel(rawValue: model.id) {
+            if AccountService.shared.isSignedIn, let anthropic = AnthropicModel.persisted(model.id) {
                 return PalmierClient(model: anthropic)
             }
             return nil
