@@ -114,7 +114,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
 
     /// Persisted UI track height in points. Typed as Double (CGFloat is Double
     /// on 64-bit); clamped to [32, 200] on decode to match the app's TrackSize.
-    public var displayHeight: Double = 50
+    public var displayHeight: Double = 44
 
     public init(
         id: String = UUID().uuidString,
@@ -123,7 +123,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
         hidden: Bool = false,
         syncLocked: Bool = true,
         clips: [Clip] = [],
-        displayHeight: Double = 50,
+        displayHeight: Double = 44,
         name: String? = nil
     ) {
         self.id = id
@@ -172,7 +172,7 @@ public extension Track {
             syncLocked: (try? c.decode(Bool.self, forKey: .syncLocked)) ?? true,
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
-                .map { min(max($0, 32), 200) } ?? 50,
+                .map { min(max($0, 32), 200) } ?? 44,
             name: try? c.decode(String.self, forKey: .name)
         )
     }
