@@ -158,6 +158,7 @@
 "Change to Match" = "Modifier pour correspondre";
 "Changes take effect after restarting Palmier Pro." = "Les modifications prennent effet après le redémarrage de Palmier Pro.";
 "Changing the ratio preserves the shorter edge." = "Le changement de format conserve le côté le plus court.";
+"Chat" = "Chat";
 "Chat history" = "Historique du chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Échangez avec votre agent. Il peut générer du contenu, monter des clips, organiser vos ressources et bien plus. Pour commencer, connectez-vous ou utilisez votre propre clé API Anthropic.";
 "Check for Updates…" = "Rechercher les mises à jour…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "Fermer tous les onglets";
 "Close Other Tabs" = "Fermer les autres onglets";
 "Close Tab" = "Fermer l’onglet";
+"Close gaps" = "Close gaps";
 "Cloud" = "Cloud";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "Le Cloud détecte automatiquement les langues, produit des transcriptions plus précises, identifie les locuteurs et utilise 25 crédits/h si la transcription n’est pas en cache.";
 "Codec" = "Codec";
@@ -344,6 +346,7 @@
 "Exporting…" = "Exportation…";
 "Export…" = "Exporter…";
 "Exposure" = "Exposition";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "Très grande";
 "Fade In" = "Fondu d’entrée";
 "Fade Out" = "Fondu de sortie";
@@ -405,6 +408,7 @@
 "Generation in progress" = "Génération en cours";
 "Generation panel" = "Panneau de génération";
 "Get Anthropic API key" = "Obtenir une clé API Anthropic";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "Recevez une notification à la fin d’une génération.";
 "Getting the search model ready." = "Préparation du modèle de recherche.";
 "Glow" = "Lueur";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "Indexation %lld/%lld";
 "Input" = "Entrée";
 "Inspector" = "Inspecteur";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "Installer";
 "Install in Claude Desktop" = "Installer dans Claude Desktop";
 "Install in Cursor" = "Installer dans Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "Ouvrez Compétences pour parcourir les guides de la communauté, créer les vôtres ou les ajouter à d’autres agents.";
 "Open Timeline" = "Ouvrir la timeline";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Ouvrez l’onglet Montage IA pour augmenter la résolution, modifier via une invite, créer une vidéo à partir d’une image, ou générer musique, effets sonores, nettoyage de la voix et doublage à partir du clip.";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Ouverture de Google";
 "Opening Google…" = "Ouverture de Google…";
 "Open…" = "Ouvrir…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "Sélectionner vers l’avant sur toutes les pistes";
 "Select Forward on Track" = "Sélectionner vers l’avant sur la piste";
 "Select Range" = "Sélectionner une plage";
-"Select a range" = "Sélectionner une plage";
 "Select a single clip to enable" = "Sélectionnez un seul clip pour activer";
 "Select media files or folders to import" = "Sélectionner les fichiers ou dossiers média à importer";
 "Selected" = "Sélectionné";
@@ -848,6 +853,7 @@
 "Stopped" = "Arrêté";
 "Storage" = "Stockage";
 "Streaming through your Anthropic API key (BYOK)" = "Diffusion via votre clé API Anthropic (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "Barré";
 "Student" = "Étudiant";
 "Style" = "Style";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "Les projets sélectionnés seront placés dans la Corbeille.";
 "The timeline settings changed. Close this sheet and try again." = "Les réglages de la timeline ont changé. Fermez cette feuille et réessayez.";
 "Theme" = "Thème";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "Voici la règle de la timeline. Maintenez Maj et faites glisser sur la règle pour sélectionner une plage à rendre. Vous pouvez choisir n’importe quel segment pour le monter avec l’IA ou générer une musique adaptée à cette plage.";
 "This is where all your footage and assets live." = "Tous vos rushes et toutes vos ressources se trouvent ici.";
 "This is your preview panel to play a selected media or the whole timeline." = "Voici le panneau d’aperçu, qui permet de lire le média sélectionné ou toute la timeline.";
 "This model cannot cap the output at 60 FPS." = "Ce modèle ne peut pas limiter la sortie à 60 FPS.";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "Utiliser comme première image ou référence";
 "Use for non-English or mixed-language audio." = "Utilisez cette option pour l’audio non anglophone ou multilingue.";
 "Use trimmed portion only" = "Utiliser uniquement la partie élaguée";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Utilisez votre propre clé API pour le chat IA. Elle est stockée dans le Trousseau macOS.";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Utilise les clips sélectionnés s’il y en a, sinon tout l’audio pouvant être sous-titré. Choisissez une piste pour limiter les sous-titres.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "Utilise toute la timeline par défaut. Marquez une plage sur la timeline pour ne mettre en musique que ce segment.";
 "Version" = "Version";

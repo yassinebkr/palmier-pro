@@ -158,6 +158,7 @@
 "Change to Match" = "更改以匹配";
 "Changes take effect after restarting Palmier Pro." = "更改將在重新啓動 Palmier Pro 後生效。";
 "Changing the ratio preserves the shorter edge." = "更改比例時會保留較短邊。";
+"Chat" = "Chat";
 "Chat history" = "對話歷史";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "與 Agent 對話。它可以產生內容、編輯片段、整理素材等。登入即可開始，也可以使用自己的 Anthropic API key。";
 "Check for Updates…" = "檢查更新…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "關閉所有標籤頁";
 "Close Other Tabs" = "關閉其他標籤頁";
 "Close Tab" = "關閉標籤頁";
+"Close gaps" = "Close gaps";
 "Cloud" = "雲端";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "雲端可自動偵測語言、產生更準確的轉錄並識別說話者。轉錄未快取時，每小時使用 25 積分。";
 "Codec" = "編解碼器";
@@ -344,6 +346,7 @@
 "Exporting…" = "正在匯出…";
 "Export…" = "匯出…";
 "Exposure" = "曝光";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "特大";
 "Fade In" = "淡入";
 "Fade Out" = "淡出";
@@ -405,6 +408,7 @@
 "Generation in progress" = "正在產生";
 "Generation panel" = "產生面板";
 "Get Anthropic API key" = "取得 Anthropic API key";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "在產生完成時接收通知。";
 "Getting the search model ready." = "正在準備搜尋模型。";
 "Glow" = "輝光";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "正在索引 %lld/%lld";
 "Input" = "輸入";
 "Inspector" = "檢查器";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "安裝";
 "Install in Claude Desktop" = "安裝到 Claude Desktop";
 "Install in Cursor" = "安裝到 Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "打開“技能”以瀏覽社群操作手冊、建立自己的技能，或將其加入其他 Agent。";
 "Open Timeline" = "打開時間軸";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "打開「AI 編輯」標籤頁即可放大解析度、用提示詞編輯、從影格建立影片，或從片段產生音樂、音效、清理人聲和配音。";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "正在打開 Google";
 "Opening Google…" = "正在打開 Google…";
 "Open…" = "打開…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "選擇所有軌道上的後續片段";
 "Select Forward on Track" = "選擇軌道上的後續片段";
 "Select Range" = "選擇範圍";
-"Select a range" = "選擇範圍";
 "Select a single clip to enable" = "選擇單個片段以啓用";
 "Select media files or folders to import" = "選擇要匯入的媒體檔案或資料夾";
 "Selected" = "已選擇";
@@ -848,6 +853,7 @@
 "Stopped" = "已停止";
 "Storage" = "儲存空間";
 "Streaming through your Anthropic API key (BYOK)" = "正在透過你的 Anthropic API key 流式傳輸 (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "刪除線";
 "Student" = "學生";
 "Style" = "樣式";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "所選專案將被移到垃圾桶。";
 "The timeline settings changed. Close this sheet and try again." = "時間軸設定已更改。請關閉此表單後重試。";
 "Theme" = "主題";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "這是時間軸標尺。按住 Shift 在標尺上拖移以選擇算繪範圍。你可以選擇任意區段進行 AI 編輯，或產生適合該範圍的音樂。";
 "This is where all your footage and assets live." = "你的所有素材和資源都位於此處。";
 "This is your preview panel to play a selected media or the whole timeline." = "這是預覽面板，用於播放所選媒體或整個時間軸。";
 "This model cannot cap the output at 60 FPS." = "此模型無法將輸出限制為 60 FPS。";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "用作首影格或參考";
 "Use for non-English or mixed-language audio." = "用於非英語或混合語言音訊。";
 "Use trimmed portion only" = "僅使用修剪部分";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "使用自己的 API key 進行 AI 對話。它儲存在 macOS 鑰匙圈中。";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "有選取片段時使用所選片段，否則使用所有可加入字幕的音訊。選擇軌道可限制字幕範圍。";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "預設使用整個時間軸。在時間軸上標記範圍可僅為該區段配樂。";
 "Version" = "版本";

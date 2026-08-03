@@ -158,6 +158,7 @@
 "Change to Match" = "मैच करने के लिए बदलें";
 "Changes take effect after restarting Palmier Pro." = "बदलाव Palmier Pro को रीस्टार्ट करने के बाद लागू होंगे।";
 "Changing the ratio preserves the shorter edge." = "रेशियो बदलने पर छोटी किनारी बनी रहती है।";
+"Chat" = "Chat";
 "Chat history" = "चैट इतिहास";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "अपने एजेंट से चैट करें। यह कंटेंट जेनरेट कर सकता है, क्लिप एडिट कर सकता है, एसेट व्यवस्थित कर सकता है और बहुत कुछ। शुरू करने के लिए साइन इन करें या अपनी Anthropic API कुंजी इस्तेमाल करें।";
 "Check for Updates…" = "अपडेट जाँचें…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "सभी टैब बंद करें";
 "Close Other Tabs" = "अन्य टैब बंद करें";
 "Close Tab" = "टैब बंद करें";
+"Close gaps" = "Close gaps";
 "Cloud" = "क्लाउड";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "क्लाउड अपने आप भाषाएँ पहचानता है, अधिक सटीक ट्रांसक्रिप्ट बनाता है, स्पीकर पहचान सकता है और ट्रांसक्रिप्ट कैश न होने पर 25 क्रेडिट/घंटा उपयोग करता है।";
 "Codec" = "कोडेक";
@@ -344,6 +346,7 @@
 "Exporting…" = "एक्सपोर्ट हो रहा है…";
 "Export…" = "एक्सपोर्ट करें…";
 "Exposure" = "एक्सपोज़र";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "बहुत बड़ा";
 "Fade In" = "फ़ेड इन";
 "Fade Out" = "फ़ेड आउट";
@@ -405,6 +408,7 @@
 "Generation in progress" = "जेनरेशन जारी है";
 "Generation panel" = "जेनरेशन पैनल";
 "Get Anthropic API key" = "Anthropic API कुंजी पाएँ";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "जेनरेशन पूर्ण होने पर सूचना पाएँ।";
 "Getting the search model ready." = "सर्च मॉडल तैयार हो रहा है।";
 "Glow" = "ग्लो";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "इंडेक्स हो रहा है %lld/%lld";
 "Input" = "इनपुट";
 "Inspector" = "इंस्पेक्टर";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "इंस्टॉल करें";
 "Install in Claude Desktop" = "Claude Desktop में इंस्टॉल करें";
 "Install in Cursor" = "Cursor में इंस्टॉल करें";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "कम्युनिटी प्लेबुक देखने, अपनी स्किल बनाने या दूसरे एजेंट में जोड़ने के लिए स्किल्स खोलें।";
 "Open Timeline" = "टाइमलाइन खोलें";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "AI Edit टैब खोलकर अपस्केल करें, प्रॉम्प्ट से एडिट करें, किसी फ़्रेम से वीडियो बनाएँ, या क्लिप से संगीत, SFX, क्लीनअप और डबिंग जेनरेट करें।";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Google खोला जा रहा है";
 "Opening Google…" = "Google खोला जा रहा है…";
 "Open…" = "खोलें…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "सभी ट्रैक पर आगे चुनें";
 "Select Forward on Track" = "ट्रैक पर आगे चुनें";
 "Select Range" = "रेंज चुनें";
-"Select a range" = "रेंज चुनें";
 "Select a single clip to enable" = "सक्षम करने के लिए एक क्लिप चुनें";
 "Select media files or folders to import" = "इम्पोर्ट करने के लिए मीडिया फ़ाइलें या फ़ोल्डर चुनें";
 "Selected" = "चयनित";
@@ -848,6 +853,7 @@
 "Stopped" = "रुका हुआ";
 "Storage" = "स्टोरेज";
 "Streaming through your Anthropic API key (BYOK)" = "आपकी Anthropic API कुंजी (BYOK) से स्ट्रीम हो रहा है";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "स्ट्राइकथ्रू";
 "Student" = "छात्र";
 "Style" = "स्टाइल";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "चयनित प्रोजेक्ट ट्रैश में भेज दिए जाएँगे।";
 "The timeline settings changed. Close this sheet and try again." = "टाइमलाइन सेटिंग्स बदल गई हैं। यह शीट बंद करके फिर कोशिश करें।";
 "Theme" = "थीम";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "यह टाइमलाइन रूलर है। रेंडर करने के लिए रेंज चुनने हेतु रूलर पर Shift+ड्रैग करें। उस रेंज के अनुकूल AI एडिट या संगीत जेनरेट करने के लिए कोई भी स्लॉट चुन सकते हैं।";
 "This is where all your footage and assets live." = "आपका सारा फ़ुटेज और सभी एसेट यहाँ रहते हैं।";
 "This is your preview panel to play a selected media or the whole timeline." = "यह चयनित मीडिया या पूरी टाइमलाइन चलाने का प्रीव्यू पैनल है।";
 "This model cannot cap the output at 60 FPS." = "यह मॉडल आउटपुट को 60 FPS पर सीमित नहीं कर सकता।";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "पहले फ़्रेम या रेफ़रेंस के रूप में उपयोग करें";
 "Use for non-English or mixed-language audio." = "गैर-अंग्रेज़ी या मिश्रित भाषा वाले ऑडियो के लिए उपयोग करें।";
 "Use trimmed portion only" = "केवल ट्रिम किया हुआ हिस्सा उपयोग करें";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "AI चैट के लिए अपनी API कुंजी उपयोग करें। यह macOS Keychain में स्टोर होती है।";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "उपलब्ध होने पर चयनित क्लिप्स, अन्यथा कैप्शन योग्य सभी ऑडियो का उपयोग करता है। कैप्शन सीमित करने के लिए ट्रैक चुनें।";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "डिफ़ॉल्ट रूप से पूरी टाइमलाइन उपयोग करता है। केवल किसी हिस्से को स्कोर करने के लिए टाइमलाइन पर रेंज मार्क करें।";
 "Version" = "वर्ज़न";

@@ -158,6 +158,7 @@
 "Change to Match" = "Изменить под клип";
 "Changes take effect after restarting Palmier Pro." = "Изменения вступят в силу после перезапуска Palmier Pro.";
 "Changing the ratio preserves the shorter edge." = "При изменении соотношения сохраняется более короткая сторона.";
+"Chat" = "Chat";
 "Chat history" = "История чата";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Общайтесь со своим агентом. Он может создавать контент, монтировать клипы, упорядочивать материалы и многое другое. Для начала войдите в систему или используйте свой API-ключ Anthropic.";
 "Check for Updates…" = "Проверить обновления…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "Закрыть все вкладки";
 "Close Other Tabs" = "Закрыть другие вкладки";
 "Close Tab" = "Закрыть вкладку";
+"Close gaps" = "Close gaps";
 "Cloud" = "Облако";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "Облако автоматически определяет языки, создаёт более точные расшифровки, распознаёт говорящих и использует 25 кредитов в час, если расшифровка не сохранена в кэше.";
 "Codec" = "Кодек";
@@ -344,6 +346,7 @@
 "Exporting…" = "Экспорт…";
 "Export…" = "Экспортировать…";
 "Exposure" = "Экспозиция";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "Очень большой";
 "Fade In" = "Появление";
 "Fade Out" = "Затухание";
@@ -405,6 +408,7 @@
 "Generation in progress" = "Идёт генерация";
 "Generation panel" = "Панель генерации";
 "Get Anthropic API key" = "Получить API-ключ Anthropic";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "Уведомлять о завершении генерации.";
 "Getting the search model ready." = "Подготавливаем модель поиска.";
 "Glow" = "Свечение";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "Индексация: %lld/%lld";
 "Input" = "Ввод";
 "Inspector" = "Инспектор";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "Установить";
 "Install in Claude Desktop" = "Установить в Claude Desktop";
 "Install in Cursor" = "Установить в Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "Откройте раздел «Навыки», чтобы просмотреть сценарии сообщества, создать собственные или добавить их другим агентам.";
 "Open Timeline" = "Открыть таймлайн";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Откройте вкладку «AI-правка», чтобы увеличить разрешение, изменить клип по запросу, создать видео из кадра или сгенерировать музыку, звуковые эффекты, очистку голоса и дубляж.";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Открывается Google";
 "Opening Google…" = "Открывается Google…";
 "Open…" = "Открыть…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "Выбрать всё справа на всех дорожках";
 "Select Forward on Track" = "Выбрать всё справа на дорожке";
 "Select Range" = "Выбрать диапазон";
-"Select a range" = "Выберите диапазон";
 "Select a single clip to enable" = "Выберите один клип, чтобы включить";
 "Select media files or folders to import" = "Выберите медиафайлы или папки для импорта";
 "Selected" = "Выбрано";
@@ -848,6 +853,7 @@
 "Stopped" = "Остановлено";
 "Storage" = "Хранилище";
 "Streaming through your Anthropic API key (BYOK)" = "Потоковая передача через ваш API-ключ Anthropic (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "Зачёркивание";
 "Student" = "Студент";
 "Style" = "Стиль";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "Выбранные проекты будут перемещены в Корзину.";
 "The timeline settings changed. Close this sheet and try again." = "Настройки таймлайна изменились. Закройте это окно и повторите попытку.";
 "Theme" = "Тема";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "Это линейка таймлайна. Перетаскивайте по ней с зажатой клавишей Shift, чтобы выбрать диапазон для рендеринга. Можно выбрать любой слот для AI-монтажа или создания музыки под этот диапазон.";
 "This is where all your footage and assets live." = "Здесь хранятся все ваши материалы и ресурсы.";
 "This is your preview panel to play a selected media or the whole timeline." = "Это панель предпросмотра для воспроизведения выбранного медиафайла или всего таймлайна.";
 "This model cannot cap the output at 60 FPS." = "Эта модель не может ограничить результат частотой 60 FPS.";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "Использовать как первый кадр или референс";
 "Use for non-English or mixed-language audio." = "Используйте для аудио не на английском языке или с несколькими языками.";
 "Use trimmed portion only" = "Использовать только обрезанный фрагмент";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Используйте собственный API-ключ для AI-чата. Он хранится в Связке ключей macOS.";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Использует выбранные клипы, если они есть, иначе — всё аудио, для которого можно создать субтитры. Выберите дорожку, чтобы ограничить субтитры.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "По умолчанию используется весь таймлайн. Отметьте диапазон на таймлайне, чтобы создать музыку только для этого фрагмента.";
 "Version" = "Версия";

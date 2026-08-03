@@ -158,6 +158,7 @@
 "Change to Match" = "Cambiar para que coincidan";
 "Changes take effect after restarting Palmier Pro." = "Los cambios se aplicarán después de reiniciar Palmier Pro.";
 "Changing the ratio preserves the shorter edge." = "Al cambiar la relación, se conserva el borde más corto.";
+"Chat" = "Chat";
 "Chat history" = "Historial del chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Chatea con tu agente. Puede generar contenido, editar clips, organizar tus recursos y mucho más. Para empezar, inicia sesión o usa tu propia clave de API de Anthropic.";
 "Check for Updates…" = "Buscar actualizaciones…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "Cerrar todas las pestañas";
 "Close Other Tabs" = "Cerrar las demás pestañas";
 "Close Tab" = "Cerrar pestaña";
+"Close gaps" = "Close gaps";
 "Cloud" = "Nube";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "Cloud detecta idiomas automáticamente, produce transcripciones más precisas, puede identificar hablantes y usa 25 créditos/h cuando una transcripción no está en caché.";
 "Codec" = "Códec";
@@ -344,6 +346,7 @@
 "Exporting…" = "Exportando…";
 "Export…" = "Exportar…";
 "Exposure" = "Exposición";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "Extragrande";
 "Fade In" = "Fundido de entrada";
 "Fade Out" = "Fundido de salida";
@@ -405,6 +408,7 @@
 "Generation in progress" = "Generación en curso";
 "Generation panel" = "Panel de generación";
 "Get Anthropic API key" = "Obtener clave de API de Anthropic";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "Recibe una notificación cuando finalice una generación.";
 "Getting the search model ready." = "Preparando el modelo de búsqueda.";
 "Glow" = "Resplandor";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "Indexando %lld/%lld";
 "Input" = "Entrada";
 "Inspector" = "Inspector";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "Instalar";
 "Install in Claude Desktop" = "Instalar en Claude Desktop";
 "Install in Cursor" = "Instalar en Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "Abre Habilidades para explorar guías de la comunidad, crear las tuyas o añadirlas a otros agentes.";
 "Open Timeline" = "Abrir línea de tiempo";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Abre la pestaña Edición con IA para aumentar la resolución, editar con un prompt, crear vídeo a partir de un fotograma, o generar música, efectos de sonido, limpieza de voz y doblaje desde el clip.";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Abriendo Google";
 "Opening Google…" = "Abriendo Google…";
 "Open…" = "Abrir…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "Seleccionar hacia delante en todas las pistas";
 "Select Forward on Track" = "Seleccionar hacia delante en la pista";
 "Select Range" = "Seleccionar intervalo";
-"Select a range" = "Selecciona un intervalo";
 "Select a single clip to enable" = "Selecciona un solo clip para activar";
 "Select media files or folders to import" = "Selecciona archivos o carpetas multimedia para importar";
 "Selected" = "Seleccionado";
@@ -848,6 +853,7 @@
 "Stopped" = "Detenido";
 "Storage" = "Almacenamiento";
 "Streaming through your Anthropic API key (BYOK)" = "Transmitiendo mediante tu clave de API de Anthropic (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "Tachado";
 "Student" = "Estudiante";
 "Style" = "Estilo";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "Los proyectos seleccionados se trasladarán a la Papelera.";
 "The timeline settings changed. Close this sheet and try again." = "Los ajustes de la línea de tiempo han cambiado. Cierra esta hoja y vuelve a intentarlo.";
 "Theme" = "Tema";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "Esta es la regla de la línea de tiempo. Pulsa Mayúsculas y arrastra sobre la regla para seleccionar un intervalo que renderizar. Puedes elegir cualquier tramo para editarlo con IA o generar música que encaje en ese intervalo.";
 "This is where all your footage and assets live." = "Aquí se encuentran todo tu material y tus recursos.";
 "This is your preview panel to play a selected media or the whole timeline." = "Este es el panel de previsualización, donde puedes reproducir el contenido seleccionado o toda la línea de tiempo.";
 "This model cannot cap the output at 60 FPS." = "Este modelo no puede limitar la salida a 60 FPS.";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "Usar como primer fotograma o referencia";
 "Use for non-English or mixed-language audio." = "Úsalo para audio en otros idiomas o con varios idiomas.";
 "Use trimmed portion only" = "Usar solo la parte recortada";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Usa tu propia clave de API para el chat con IA. Se guarda en el llavero de macOS.";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Usa los clips seleccionados cuando los hay; de lo contrario, usa todo el audio que se pueda subtitular. Elige una pista para limitar los subtítulos.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "Usa toda la línea de tiempo de forma predeterminada. Marca un intervalo para musicalizar solo ese tramo.";
 "Version" = "Versión";

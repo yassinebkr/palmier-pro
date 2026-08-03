@@ -158,6 +158,7 @@
 "Change to Match" = "設定を一致させる";
 "Changes take effect after restarting Palmier Pro." = "変更はPalmier Proの再起動後に反映されます。";
 "Changing the ratio preserves the shorter edge." = "比率を変更しても短い辺の長さは維持されます。";
+"Chat" = "Chat";
 "Chat history" = "チャット履歴";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "エージェントとチャットできます。コンテンツの生成、クリップの編集、アセットの整理などが可能です。まずサインインするか、ご自身のAnthropic APIキーを使用してください。";
 "Check for Updates…" = "アップデートを確認…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "すべてのタブを閉じる";
 "Close Other Tabs" = "ほかのタブを閉じる";
 "Close Tab" = "タブを閉じる";
+"Close gaps" = "Close gaps";
 "Cloud" = "クラウド";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "Cloudは言語を自動検出し、より正確な文字起こしと話者の識別が可能です。文字起こしがキャッシュされていない場合は1時間あたり25クレジットを使用します。";
 "Codec" = "コーデック";
@@ -344,6 +346,7 @@
 "Exporting…" = "書き出し中…";
 "Export…" = "書き出す…";
 "Exposure" = "露出";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "特大";
 "Fade In" = "フェードイン";
 "Fade Out" = "フェードアウト";
@@ -405,6 +408,7 @@
 "Generation in progress" = "生成中";
 "Generation panel" = "生成パネル";
 "Get Anthropic API key" = "Anthropic APIキーを取得";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "生成の完了時に通知を受け取ります。";
 "Getting the search model ready." = "検索モデルを準備しています。";
 "Glow" = "グロー";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "インデックス作成中 %lld/%lld";
 "Input" = "入力";
 "Inspector" = "インスペクタ";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "インストール";
 "Install in Claude Desktop" = "Claude Desktopにインストール";
 "Install in Cursor" = "Cursorにインストール";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "スキルを開いてコミュニティのプレイブックを参照したり、独自のスキルを作成したり、ほかのエージェントに追加したりできます。";
 "Open Timeline" = "タイムラインを開く";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "「AI編集」タブを開いて、アップスケール、プロンプト編集、フレームからのビデオ作成、またはクリップからの音楽・SFX・クリーンアップ・吹き替え生成を行えます。";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Googleを開いています";
 "Opening Google…" = "Googleを開いています…";
 "Open…" = "開く…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "すべてのトラックで前方を選択";
 "Select Forward on Track" = "トラック上の前方を選択";
 "Select Range" = "範囲を選択";
-"Select a range" = "範囲を選択";
 "Select a single clip to enable" = "有効にするにはクリップを1つ選択してください";
 "Select media files or folders to import" = "読み込むメディアファイルまたはフォルダを選択";
 "Selected" = "選択中";
@@ -848,6 +853,7 @@
 "Stopped" = "停止済み";
 "Storage" = "ストレージ";
 "Streaming through your Anthropic API key (BYOK)" = "Anthropic APIキー（BYOK）でストリーミング中";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "取り消し線";
 "Student" = "学生";
 "Style" = "スタイル";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "選択したプロジェクトはゴミ箱に移動されます。";
 "The timeline settings changed. Close this sheet and try again." = "タイムライン設定が変更されました。このシートを閉じてもう一度お試しください。";
 "Theme" = "テーマ";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "これはタイムラインルーラーです。ルーラー上でShiftキーを押しながらドラッグすると、レンダリングする範囲を選択できます。任意のスロットを選び、その範囲に合うAI編集や音楽生成を行えます。";
 "This is where all your footage and assets live." = "すべての映像素材とアセットはここに表示されます。";
 "This is your preview panel to play a selected media or the whole timeline." = "これは選択したメディアまたはタイムライン全体を再生するプレビューパネルです。";
 "This model cannot cap the output at 60 FPS." = "このモデルでは出力を60 FPSに制限できません。";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "最初のフレームまたは参照として使用";
 "Use for non-English or mixed-language audio." = "英語以外、または複数言語のオーディオに使用します。";
 "Use trimmed portion only" = "トリムした部分のみを使用";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "AIチャットにご自身のAPIキーを使用します。キーはmacOSキーチェーンに保存されます。";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "選択中のクリップがある場合はそのクリップを使用し、それ以外の場合はキャプションを追加できるすべてのオーディオを使用します。キャプションを特定のトラックに限定するにはトラックを選択してください。";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "デフォルトではタイムライン全体を使用します。その区間だけに音楽を付けるには、タイムライン上で範囲をマークしてください。";
 "Version" = "バージョン";

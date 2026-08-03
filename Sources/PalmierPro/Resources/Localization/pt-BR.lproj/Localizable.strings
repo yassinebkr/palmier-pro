@@ -158,6 +158,7 @@
 "Change to Match" = "Alterar para corresponder";
 "Changes take effect after restarting Palmier Pro." = "As alterações entram em vigor após reiniciar o Palmier Pro.";
 "Changing the ratio preserves the shorter edge." = "Alterar a proporção preserva a borda mais curta.";
+"Chat" = "Chat";
 "Chat history" = "Histórico do chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Converse com seu agente. Ele pode gerar conteúdo, editar clipes, organizar recursos e muito mais. Para começar, inicie uma sessão ou use sua própria chave de API da Anthropic.";
 "Check for Updates…" = "Buscar atualizações…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "Fechar todas as abas";
 "Close Other Tabs" = "Fechar outras abas";
 "Close Tab" = "Fechar aba";
+"Close gaps" = "Close gaps";
 "Cloud" = "Nuvem";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "A Nuvem detecta idiomas automaticamente, produz transcrições mais precisas, pode identificar falantes e usa 25 créditos/hora quando uma transcrição não está em cache.";
 "Codec" = "Codec";
@@ -344,6 +346,7 @@
 "Exporting…" = "Exportando…";
 "Export…" = "Exportar…";
 "Exposure" = "Exposição";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "Extragrande";
 "Fade In" = "Fade-in";
 "Fade Out" = "Fade-out";
@@ -405,6 +408,7 @@
 "Generation in progress" = "Geração em andamento";
 "Generation panel" = "Painel de geração";
 "Get Anthropic API key" = "Obter chave de API da Anthropic";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "Receba uma notificação quando uma geração terminar.";
 "Getting the search model ready." = "Preparando o modelo de busca.";
 "Glow" = "Brilho";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "Indexando %lld/%lld";
 "Input" = "Entrada";
 "Inspector" = "Inspetor";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "Instalar";
 "Install in Claude Desktop" = "Instalar no Claude Desktop";
 "Install in Cursor" = "Instalar no Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "Abra Habilidades para explorar guias da comunidade, criar os seus ou adicioná-los a outros agentes.";
 "Open Timeline" = "Abrir linha do tempo";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Abra a aba Edição com AI para aumentar a resolução, editar com um prompt, criar vídeo a partir de um quadro, ou gerar música, efeitos sonoros, limpeza de voz e dublagem a partir do clipe.";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Abrindo o Google";
 "Opening Google…" = "Abrindo o Google…";
 "Open…" = "Abrir…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "Selecionar adiante em todas as faixas";
 "Select Forward on Track" = "Selecionar adiante na faixa";
 "Select Range" = "Selecionar intervalo";
-"Select a range" = "Selecionar um intervalo";
 "Select a single clip to enable" = "Selecione um único clipe para ativar";
 "Select media files or folders to import" = "Selecione arquivos de mídia ou pastas para importar";
 "Selected" = "Selecionado";
@@ -848,6 +853,7 @@
 "Stopped" = "Parado";
 "Storage" = "Armazenamento";
 "Streaming through your Anthropic API key (BYOK)" = "Transmitindo pela sua chave de API da Anthropic (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "Tachado";
 "Student" = "Estudante";
 "Style" = "Estilo";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "Os projetos selecionados serão movidos para o Lixo.";
 "The timeline settings changed. Close this sheet and try again." = "Os ajustes da linha do tempo foram alterados. Feche esta janela e tente novamente.";
 "Theme" = "Tema";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "Esta é a régua da linha do tempo. Pressione Shift e arraste na régua para selecionar um intervalo a ser renderizado. Você pode escolher qualquer espaço para editar com AI ou gerar música adequada ao intervalo.";
 "This is where all your footage and assets live." = "Aqui ficam todas as suas filmagens e recursos.";
 "This is your preview panel to play a selected media or the whole timeline." = "Este é o painel de prévia para reproduzir uma mídia selecionada ou toda a linha do tempo.";
 "This model cannot cap the output at 60 FPS." = "Este modelo não pode limitar a saída a 60 FPS.";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "Usar como primeiro quadro ou referência";
 "Use for non-English or mixed-language audio." = "Use para áudio em outros idiomas ou com vários idiomas.";
 "Use trimmed portion only" = "Usar somente a parte cortada";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Use sua própria chave de API para o chat com AI. Ela é armazenada no Acesso às Chaves do macOS.";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Usa os clipes selecionados quando disponíveis ou todo o áudio que aceita legendas. Escolha uma faixa para limitar as legendas.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "Usa toda a linha do tempo por padrão. Marque um intervalo na linha do tempo para criar a trilha sonora apenas desse trecho.";
 "Version" = "Versão";

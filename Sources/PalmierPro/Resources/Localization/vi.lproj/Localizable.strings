@@ -158,6 +158,7 @@
 "Change to Match" = "Đổi cho khớp";
 "Changes take effect after restarting Palmier Pro." = "Thay đổi có hiệu lực sau khi khởi động lại Palmier Pro.";
 "Changing the ratio preserves the shorter edge." = "Thay đổi tỷ lệ sẽ giữ nguyên cạnh ngắn hơn.";
+"Chat" = "Chat";
 "Chat history" = "Lịch sử chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Chat với agent của bạn. Agent có thể tạo nội dung, chỉnh sửa clip, sắp xếp tài nguyên và nhiều việc khác. Hãy đăng nhập hoặc dùng khóa API Anthropic của riêng bạn để bắt đầu.";
 "Check for Updates…" = "Kiểm tra bản cập nhật…";
@@ -195,6 +196,7 @@
 "Close All Tabs" = "Đóng tất cả tab";
 "Close Other Tabs" = "Đóng các tab khác";
 "Close Tab" = "Đóng tab";
+"Close gaps" = "Close gaps";
 "Cloud" = "Đám mây";
 "Cloud auto-detects languages, produces more accurate transcripts, can identify speakers, and uses 25 credits/hr when a transcript is not cached." = "Đám mây tự động phát hiện ngôn ngữ, tạo bản chép lời chính xác hơn, có thể nhận diện người nói và dùng 25 tín dụng/giờ khi bản chép lời chưa được lưu vào bộ nhớ đệm.";
 "Codec" = "Codec";
@@ -344,6 +346,7 @@
 "Exporting…" = "Đang xuất…";
 "Export…" = "Xuất…";
 "Exposure" = "Độ phơi sáng";
+"Extends a caption to close gaps up to this duration." = "Extends a caption to close gaps up to this duration.";
 "Extra Large" = "Rất lớn";
 "Fade In" = "Tăng dần";
 "Fade Out" = "Giảm dần";
@@ -405,6 +408,7 @@
 "Generation in progress" = "Đang tạo";
 "Generation panel" = "Bảng tạo nội dung";
 "Get Anthropic API key" = "Lấy khóa API Anthropic";
+"Get OpenAI API key" = "Get OpenAI API key";
 "Get a notification when a generation finishes." = "Nhận thông báo khi hoàn tất tạo nội dung.";
 "Getting the search model ready." = "Đang chuẩn bị mô hình tìm kiếm.";
 "Glow" = "Phát sáng";
@@ -442,6 +446,7 @@
 "Indexing %lld/%lld" = "Đang lập chỉ mục %lld/%lld";
 "Input" = "Đầu vào";
 "Inspector" = "Trình kiểm tra";
+"Inspector Panel" = "Inspector Panel";
 "Install" = "Cài đặt";
 "Install in Claude Desktop" = "Cài đặt trong Claude Desktop";
 "Install in Cursor" = "Cài đặt trong Cursor";
@@ -617,6 +622,7 @@
 "Open Skills to browse community playbooks, create your own, or add them to other agents." = "Mở Kỹ năng để duyệt cẩm nang cộng đồng, tự tạo kỹ năng hoặc thêm kỹ năng vào agent khác.";
 "Open Timeline" = "Mở timeline";
 "Open the AI Edit tab to upscale, prompt-edit, create video from a frame, or generate music, SFX, cleanup, and dubbing from the clip." = "Mở tab Chỉnh sửa bằng AI để nâng độ phân giải, chỉnh sửa bằng prompt, tạo video từ một khung hình, hoặc tạo nhạc, SFX, làm sạch âm thanh và lồng tiếng từ clip.";
+"OpenAI API Key" = "OpenAI API Key";
 "Opening Google" = "Đang mở Google";
 "Opening Google…" = "Đang mở Google…";
 "Open…" = "Mở…";
@@ -764,7 +770,6 @@
 "Select Forward on All Tracks" = "Chọn về phía trước trên tất cả track";
 "Select Forward on Track" = "Chọn về phía trước trên track";
 "Select Range" = "Chọn vùng";
-"Select a range" = "Chọn một vùng";
 "Select a single clip to enable" = "Chọn một clip để bật";
 "Select media files or folders to import" = "Chọn tệp hoặc thư mục phương tiện để nhập";
 "Selected" = "Đã chọn";
@@ -848,6 +853,7 @@
 "Stopped" = "Đã dừng";
 "Storage" = "Dung lượng lưu trữ";
 "Streaming through your Anthropic API key (BYOK)" = "Đang truyền qua khóa API Anthropic của bạn (BYOK)";
+"Streaming through your OpenAI API key (BYOK)" = "Streaming through your OpenAI API key (BYOK)";
 "Strikethrough" = "Gạch ngang";
 "Student" = "Sinh viên";
 "Style" = "Kiểu";
@@ -883,7 +889,6 @@
 "The selected projects will be moved to the Trash." = "Các dự án đã chọn sẽ được chuyển vào Thùng rác.";
 "The timeline settings changed. Close this sheet and try again." = "Cài đặt timeline đã thay đổi. Đóng bảng này và thử lại.";
 "Theme" = "Chủ đề";
-"This is the timeline ruler. Shift+drag on the ruler to select a range to render. You can pick any slot to AI edit or generate music that fits that range." = "Đây là thước timeline. Giữ Shift và kéo trên thước để chọn vùng cần kết xuất. Bạn có thể chọn bất kỳ khoảng nào để chỉnh sửa bằng AI hoặc tạo nhạc phù hợp với vùng đó.";
 "This is where all your footage and assets live." = "Đây là nơi chứa toàn bộ cảnh quay và tài nguyên của bạn.";
 "This is your preview panel to play a selected media or the whole timeline." = "Đây là bảng xem trước để phát phương tiện đã chọn hoặc toàn bộ timeline.";
 "This model cannot cap the output at 60 FPS." = "Mô hình này không thể giới hạn đầu ra ở 60 FPS.";
@@ -949,7 +954,8 @@
 "Use as first frame or reference" = "Dùng làm khung hình đầu hoặc tham chiếu";
 "Use for non-English or mixed-language audio." = "Dùng cho âm thanh không phải tiếng Anh hoặc có nhiều ngôn ngữ.";
 "Use trimmed portion only" = "Chỉ dùng phần đã cắt";
-"Use your own API key for AI chat. Stored in the macOS Keychain." = "Dùng khóa API của riêng bạn cho chat AI. Khóa được lưu trong Chuỗi khóa macOS.";
+"Use your own Anthropic key for AI chat. Stored in the macOS Keychain." = "Use your own Anthropic key for AI chat. Stored in the macOS Keychain.";
+"Use your own OpenAI key for AI chat. Stored in the macOS Keychain." = "Use your own OpenAI key for AI chat. Stored in the macOS Keychain.";
 "Uses selected clips when available, otherwise all captionable audio. Choose a track to limit captions." = "Dùng các clip đã chọn nếu có, nếu không sẽ dùng toàn bộ âm thanh có thể tạo phụ đề. Chọn một track để giới hạn phụ đề.";
 "Uses the whole timeline by default. Mark a range on the timeline to score only that span." = "Mặc định dùng toàn bộ timeline. Đánh dấu một vùng trên timeline để chỉ tạo nhạc nền cho đoạn đó.";
 "Version" = "Phiên bản";
