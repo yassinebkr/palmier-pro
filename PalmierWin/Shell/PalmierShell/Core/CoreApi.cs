@@ -306,6 +306,7 @@ public static partial class CoreApi {
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial IntPtr palmier_export_start(IntPtr project, string path);
     [LibraryImport(Dll)] public static partial int palmier_export_status(IntPtr export);
+    [LibraryImport(Dll)] public static partial int palmier_export_cancel(IntPtr export);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_export_error(IntPtr export, byte[] buf, int bufSize);
     [LibraryImport(Dll)] public static partial void palmier_export_destroy(IntPtr export);

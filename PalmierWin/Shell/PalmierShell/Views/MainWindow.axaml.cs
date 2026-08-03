@@ -56,15 +56,34 @@ public partial class MainWindow : Window {
         autosave = new DispatcherTimer { Interval = TimeSpan.FromSeconds(45) };
         autosave.Tick += (_, _) => viewModel.SaveRecovery();
         autosave.Start();
+
+        // The queue is dialog-independent, so its pump lives here for the
+        // app's lifetime; Tick is a no-op while the queue is idle.
+        exportPump = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        exportPump.Tick += (_, _) => viewModel.Exports.Tick();
+        exportPump.Start();
     }
 
     readonly DispatcherTimer autosave;
+    readonly DispatcherTimer exportPump;
     bool closeConfirmed;
+    bool exportNoticeShowing;
 
     /// Never drop unsaved work on close: cancel, ask, then close for real.
     async void OnClosing(object? sender, WindowClosingEventArgs e) {
         SaveLayout();
-        if (closeConfirmed || !viewModel.ProjectDirty) return;
+        if (closeConfirmed) return;
+        if (viewModel.Exports.HasActiveWork) {
+            e.Cancel = true;
+            if (exportNoticeShowing) return;
+            exportNoticeShowing = true;
+            await MessageDialog.AskAsync(this, "Exports in progress",
+                "An export is still queued or running. Wait for it to finish, or cancel it from the Export panel.",
+                "OK");
+            exportNoticeShowing = false;
+            return;
+        }
+        if (!viewModel.ProjectDirty) return;
         e.Cancel = true;
         if (!await ConfirmDiscardAsync()) return;
         closeConfirmed = true;

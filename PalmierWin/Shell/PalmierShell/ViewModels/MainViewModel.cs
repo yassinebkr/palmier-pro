@@ -16,6 +16,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     public UndoStack Undo { get; }
     public InspectorViewModel Inspector { get; }
     public AgentViewModel Agent { get; }
+    public ExportQueue Exports { get; }
 
     EngineSession? engine;
     IntPtr audio;
@@ -36,6 +37,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Inspector = new InspectorViewModel(Project, Timeline, Media, Undo);
         agentHandle = CoreApi.palmier_agent_create(Project);
         Agent = new AgentViewModel(agentHandle, Timeline, Media, Undo);
+        // The project is resolved lazily so a queued job always encodes the
+        // current project, even across New/Open while it waits.
+        Exports = new ExportQueue(new CoreExportRunner(), () => Project);
         // Clip selection and library selection are mutually exclusive.
         Timeline.PropertyChanged += (_, e) => {
             if (e.PropertyName != nameof(TimelineViewModel.SelectedClipId)) return;
