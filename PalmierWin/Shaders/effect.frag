@@ -22,6 +22,7 @@
 //   12 = hueCurves (aux=hue LUT)
 //   13 = lutTetra (aux=3D-LUT 2D strip)
 //   14 = blur (separable gaussian, one direction per pass)
+//   15 = invert
 layout(push_constant) uniform EffectBlock {
     uint effectType;
     float params[30];
@@ -101,7 +102,7 @@ vec4 effectChromaKey(vec4 s) {
     float avgC = (s.r + s.g + s.b) / 3.0;
     float spillAmount = (maxC - avgC) * spill;
     vec3 desaturated = mix(s.rgb, vec3(avgC), spillAmount);
-    return vec4(desaturated, s.a * mask);
+    return vec4(desaturated, s.a * (1.0 - mask));
 }
 
 vec4 effectHighlightsShadows(vec4 s) {
@@ -255,6 +256,11 @@ vec4 effectLutTetra(vec4 s) {
     return vec4(mix(s.rgb, o, intensity), s.a);
 }
 
+// macOS "stylize.invert" — CIColorMatrix negating RGB (bias 1), alpha kept.
+vec4 effectInvert(vec4 s) {
+    return vec4(1.0 - s.rgb, s.a);
+}
+
 // Separable gaussian, one direction per pass. 9 taps, binomial weights.
 vec4 effectBlur(vec4 s) {
     // params: [dir.x, dir.y, radius (px), texelW, texelH]
@@ -289,6 +295,7 @@ void main() {
         case 12: outColor = effectHueCurves(s); break;
         case 13: outColor = effectLutTetra(s); break;
         case 14: outColor = effectBlur(s); break;
+        case 15: outColor = effectInvert(s); break;
         default: outColor = s;  // passthrough
     }
 }

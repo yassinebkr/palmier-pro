@@ -491,6 +491,8 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
             ])
         case "color.blacksWhites":
             return EffectPlan(type: .levels, params: [param("blacks", 0), param("whites", 0)])
+        case "stylize.invert":
+            return EffectPlan(type: .invert, params: [])
         case "stylize.grain":
             return EffectPlan(type: .grain, params: [param("amount", 0.5), param("size", 1.0), Float(frame)])
         case "key.chroma":
@@ -699,9 +701,9 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
     }
 
     /// Renders a text clip into a canvas-sized texture via WinTextRenderer.
-    /// MVP: single-line, white glyphs; TextStyle color/tracking/layout come
-    /// later. The text fills the clip's placement region (handled by
-    /// LayerPlacement like any other layer).
+    /// Single-line; honours the style's size, color, and alignment (tracking,
+    /// shadow, border come later). The text fills the clip's placement region
+    /// (handled by LayerPlacement like any other layer).
     private func resolveTextTexture(for layer: LayerPlan, frame: Int, renderSize: Size2D) -> VulkanTexture? {
         guard let tr = textRenderer else { return nil }
         let content = layer.clip.textContent ?? ""
@@ -709,8 +711,12 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         // Font size scales with canvas height (matches macOS's reference-canvas scaling).
         let canvasW = Int(renderSize.width)
         let canvasH = Int(renderSize.height)
-        let fontSize = Float(renderSize.height) * Float(layer.clip.textStyle?.fontSize ?? 96) / 1080.0
-        guard let bgra = tr.render(content, fontSize: fontSize, canvasWidth: canvasW, canvasHeight: canvasH) else { return nil }
+        let style = layer.clip.textStyle
+        let fontSize = Float(renderSize.height) * Float(style?.fontSize ?? 96) / 1080.0
+        guard let bgra = tr.render(content, fontSize: fontSize,
+                                   color: style?.color ?? TextStyle.RGBA(),
+                                   alignment: style?.alignment ?? .center,
+                                   canvasWidth: canvasW, canvasHeight: canvasH) else { return nil }
         guard let tex = VulkanTexture(device: device, width: UInt32(canvasW), height: UInt32(canvasH)) else { return nil }
         guard tex.upload(bgra: bgra) else { return nil }
         return tex

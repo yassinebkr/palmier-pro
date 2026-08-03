@@ -192,6 +192,11 @@ public static partial class CoreApi {
     public static partial int palmier_timeline_add_text_clip(IntPtr project, string text, int startFrame, int durationFrames, byte[] idBuf, int idBufSize);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_clip_set_text(IntPtr project, string clipId, string text);
+    /// Patches a text clip's style; `styleJson` is a flat object with optional
+    /// "fontSize" (positive number), "color" (hex), "alignment"
+    /// ("left"/"center"/"right"). Malformed patches are refused wholesale.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int palmier_clip_set_text_style(IntPtr project, string clipId, string styleJson);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_clip_add_keyframe(IntPtr project, string clipId, string property, int timelineFrame, double v1, double v2);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]

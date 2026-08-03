@@ -859,6 +859,46 @@ public func palmierClipSetText(_ handle: UnsafeMutableRawPointer?, _ clipId: Uns
     }
 }
 
+/// Patches a text clip's style from a flat JSON object. Known keys:
+/// "fontSize" (positive number), "color" ("#RGB"/"#RRGGBB"/"#RRGGBBAA"),
+/// "alignment" ("left"/"center"/"right"). Unknown keys or malformed values
+/// refuse the whole patch. Returns 1 on success, 0 for non-text clips.
+@_cdecl("palmier_clip_set_text_style")
+public func palmierClipSetTextStyle(_ handle: UnsafeMutableRawPointer?, _ clipId: UnsafePointer<CChar>?,
+                                    _ styleJson: UnsafePointer<CChar>?) -> Int32 {
+    guard let styleJson,
+          let data = String(cString: styleJson).data(using: .utf8),
+          let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 0 }
+    var fontSize: Double?
+    var color: TextStyle.RGBA?
+    var alignment: TextStyle.Alignment?
+    for (key, value) in raw {
+        switch key {
+        case "fontSize":
+            guard let number = value as? NSNumber, String(cString: number.objCType) != "c",
+                  number.doubleValue.isFinite, number.doubleValue > 0 else { return 0 }
+            fontSize = number.doubleValue
+        case "color":
+            guard let hex = value as? String, let parsed = TextStyle.RGBA(hex: hex) else { return 0 }
+            color = parsed
+        case "alignment":
+            guard let name = value as? String, let parsed = TextStyle.Alignment(rawValue: name) else { return 0 }
+            alignment = parsed
+        default:
+            return 0
+        }
+    }
+    return mutateClip(handle, clipId) { clip in
+        guard clip.mediaType == .text else { return false }
+        var style = clip.textStyle ?? TextStyle()
+        if let fontSize { style.fontSize = fontSize }
+        if let color { style.color = color }
+        if let alignment { style.alignment = alignment }
+        clip.textStyle = style
+        return true
+    }
+}
+
 /// Adds (or replaces) a keyframe at a timeline frame inside the clip. The
 /// property selects the track and value encoding — "opacity" (v1: 0…1),
 /// "rotation" (v1: degrees), "volume" (v1: dB), "position" (v1/v2: top-left

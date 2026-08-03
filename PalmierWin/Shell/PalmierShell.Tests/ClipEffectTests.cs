@@ -77,6 +77,74 @@ public class ClipEffectTests {
         }
     }
 
+    /// Frame 10 sits in the red band; invert turns it cyan, so every channel
+    /// mean must land on 255 minus the unmodified mean.
+    [Fact]
+    public void InvertInvertsTheCompositedPixels() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string id = CoreApi.AddClip(project, TestMediaPath("colorbands24.mp4"), 60)!;
+            var before = ChannelMeans(Capture(project, 10));
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id,
+                "stylize.invert", """{"amount":1}"""));
+            var after = ChannelMeans(Capture(project, 10));
+            Assert.True(Math.Abs(after.R - (255 - before.R)) < 8, $"R: {before.R} -> {after.R}");
+            Assert.True(Math.Abs(after.G - (255 - before.G)) < 8, $"G: {before.G} -> {after.G}");
+            Assert.True(Math.Abs(after.B - (255 - before.B)) < 8, $"B: {before.B} -> {after.B}");
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    /// Zeroing the red gain on the red band kills that channel and leaves the
+    /// other two alone.
+    [Fact]
+    public void WheelsGainReachesTheCompositedPixels() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string id = CoreApi.AddClip(project, TestMediaPath("colorbands24.mp4"), 60)!;
+            var before = ChannelMeans(Capture(project, 10));
+            Assert.True(before.R > 150, $"fixture: red band mean R was {before.R}");
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id,
+                "color.wheels", """{"gain.r":0}"""));
+            var after = ChannelMeans(Capture(project, 10));
+            Assert.True(after.R < 30, $"gain.r=0 left R at {after.R}");
+            Assert.True(Math.Abs(after.G - before.G) < 10, $"G moved: {before.G} -> {after.G}");
+            Assert.True(Math.Abs(after.B - before.B) < 10, $"B moved: {before.B} -> {after.B}");
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    /// Keying the red band's colour makes those pixels transparent. Effects
+    /// run on the composited frame (per-layer keying comes with per-layer
+    /// effects), so the key shows in the readback's alpha, not the RGB.
+    [Fact]
+    public void ChromaKeyCutsTheKeyedColour() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string id = CoreApi.AddClip(project, TestMediaPath("colorbands24.mp4"), 60)!;
+            var before = ChannelMeans(Capture(project, 10));
+            Assert.True(before.R > 150 && before.A > 200,
+                $"fixture: red band mean was R {before.R} A {before.A}");
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id,
+                "key.chroma", """{"keyColor.r":1,"keyColor.g":0,"keyColor.b":0,"threshold":0.4,"spill":0.5}"""));
+            var after = ChannelMeans(Capture(project, 10));
+            Assert.True(after.A < 40, $"keyed red still reads back opaque (A {after.A})");
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    static (double B, double G, double R, double A) ChannelMeans(byte[] bgra) {
+        long b = 0, g = 0, r = 0, a = 0;
+        for (int i = 0; i + 3 < bgra.Length; i += 4) {
+            b += bgra[i]; g += bgra[i + 1]; r += bgra[i + 2]; a += bgra[i + 3];
+        }
+        double n = bgra.Length / 4.0;
+        return (b / n, g / n, r / n, a / n);
+    }
+
     [Fact]
     public void RemovingAKeyframeDropsItAndAnEmptiedTrackDisappears() {
         IntPtr project = CoreApi.palmier_project_create();
