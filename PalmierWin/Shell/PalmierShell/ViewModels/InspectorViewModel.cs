@@ -40,6 +40,9 @@ public sealed partial class InspectorViewModel : ObservableObject {
     [ObservableProperty] double fadeOutSeconds;
     [ObservableProperty] bool isTextClip;
     [ObservableProperty] string textContent = "";
+    [ObservableProperty] double textFontSize = 96;
+    [ObservableProperty] string textColorHex = "#FFFFFF";
+    [ObservableProperty] string textAlignment = "center";
 
     // Adjust: the engine's grading effects, one field per parameter. Zero (or
     // an empty LUT path) means "effect off" — committing defaults removes the
@@ -54,6 +57,22 @@ public sealed partial class InspectorViewModel : ObservableObject {
     [ObservableProperty] double vignetteAmount;
     [ObservableProperty] double grainAmount;
     [ObservableProperty] double glowIntensity;
+    [ObservableProperty] bool invertEnabled;
+    [ObservableProperty] double liftR;
+    [ObservableProperty] double liftG;
+    [ObservableProperty] double liftB;
+    [ObservableProperty] double gainR = 1;
+    [ObservableProperty] double gainG = 1;
+    [ObservableProperty] double gainB = 1;
+    [ObservableProperty] double gammaR = 1;
+    [ObservableProperty] double gammaG = 1;
+    [ObservableProperty] double gammaB = 1;
+    [ObservableProperty] bool chromaKeyEnabled;
+    [ObservableProperty] double chromaKeyR;
+    [ObservableProperty] double chromaKeyG = 1;
+    [ObservableProperty] double chromaKeyB;
+    [ObservableProperty] double chromaThreshold = 0.4;
+    [ObservableProperty] double chromaSpill = 0.5;
     [ObservableProperty] string lutPath = "";
     [ObservableProperty] double lutIntensity = 1;
 
@@ -121,6 +140,9 @@ public sealed partial class InspectorViewModel : ObservableObject {
             IsTextClip = clip.MediaType == "text";
             TextContent = clip.TextContent ?? "";
             if (IsTextClip) ClipName = "Text";
+            TextFontSize = clip.TextStyle?.FontSize ?? 96;
+            TextColorHex = HexOf(clip.TextStyle?.Color);
+            TextAlignment = clip.TextStyle?.Alignment ?? "center";
 
             IsVideoClip = clip.MediaType == "video";
             Blacks = clip.EffectNumber("color.blacksWhites", "blacks", 0);
@@ -132,6 +154,22 @@ public sealed partial class InspectorViewModel : ObservableObject {
             VignetteAmount = clip.EffectNumber("stylize.vignette", "amount", 0);
             GrainAmount = clip.EffectNumber("stylize.grain", "amount", 0);
             GlowIntensity = clip.EffectNumber("stylize.glow", "intensity", 0);
+            InvertEnabled = clip.EffectOf("stylize.invert") is not null;
+            LiftR = clip.EffectNumber("color.wheels", "lift.r", 0);
+            LiftG = clip.EffectNumber("color.wheels", "lift.g", 0);
+            LiftB = clip.EffectNumber("color.wheels", "lift.b", 0);
+            GainR = clip.EffectNumber("color.wheels", "gain.r", 1);
+            GainG = clip.EffectNumber("color.wheels", "gain.g", 1);
+            GainB = clip.EffectNumber("color.wheels", "gain.b", 1);
+            GammaR = clip.EffectNumber("color.wheels", "gamma.r", 1);
+            GammaG = clip.EffectNumber("color.wheels", "gamma.g", 1);
+            GammaB = clip.EffectNumber("color.wheels", "gamma.b", 1);
+            ChromaKeyEnabled = clip.EffectOf("key.chroma") is not null;
+            ChromaKeyR = clip.EffectNumber("key.chroma", "keyColor.r", 0);
+            ChromaKeyG = clip.EffectNumber("key.chroma", "keyColor.g", 1);
+            ChromaKeyB = clip.EffectNumber("key.chroma", "keyColor.b", 0);
+            ChromaThreshold = clip.EffectNumber("key.chroma", "threshold", 0.4);
+            ChromaSpill = clip.EffectNumber("key.chroma", "spill", 0.5);
             LutPath = clip.EffectOf("color.lut")?.Text("path") ?? "";
             LutIntensity = clip.EffectNumber("color.lut", "intensity", 1);
         } finally {
@@ -205,6 +243,33 @@ public sealed partial class InspectorViewModel : ObservableObject {
     partial void OnTextContentChanged(string value) => Commit("Edit Text", id =>
         CoreApi.palmier_clip_set_text(project, id, value) == 1);
 
+    static string HexOf(TextColorState? color) => color is null
+        ? "#FFFFFF"
+        : $"#{(int)Math.Round(color.R * 255):X2}{(int)Math.Round(color.G * 255):X2}{(int)Math.Round(color.B * 255):X2}";
+
+    static bool IsValidHexColor(string s) {
+        s = s.TrimStart('#');
+        return s.Length is 3 or 6 or 8 && s.All(Uri.IsHexDigit);
+    }
+
+    // Invalid halves of an in-progress edit (a hex triplet mid-typing) are
+    // ignored, not refused — a refusal would snap the field back under the
+    // user's cursor. The ABI validates again on commit.
+    void CommitTextStyle() {
+        if (refreshing || !IsTextClip) return;
+        string alignment = TextAlignment.Trim().ToLowerInvariant();
+        if (TextFontSize <= 0 || !IsValidHexColor(TextColorHex)
+            || alignment is not ("left" or "center" or "right")) return;
+        string hex = TextColorHex.StartsWith('#') ? TextColorHex : "#" + TextColorHex;
+        string json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object> {
+            ["fontSize"] = TextFontSize, ["color"] = hex, ["alignment"] = alignment });
+        Commit("Text Style", id => CoreApi.palmier_clip_set_text_style(project, id, json) == 1);
+    }
+
+    partial void OnTextFontSizeChanged(double v) => CommitTextStyle();
+    partial void OnTextColorHexChanged(string v) => CommitTextStyle();
+    partial void OnTextAlignmentChanged(string v) => CommitTextStyle();
+
     /// Records a keyframe at the playhead for one property, from the field's
     /// current value. `property` is the core's own key, so the diamond next to
     /// a field and the renderer agree on what is animated.
@@ -272,6 +337,41 @@ public sealed partial class InspectorViewModel : ObservableObject {
 
     partial void OnGlowIntensityChanged(double v) => CommitEffect("Glow", "stylize.glow",
         v == 0 ? null : new() { ["intensity"] = v, ["radius"] = 20.0, ["threshold"] = 0.6 });
+
+    // "amount" is a placeholder — the ABI removes effects with empty params,
+    // and invert has no real parameters.
+    partial void OnInvertEnabledChanged(bool v) => CommitEffect("Invert", "stylize.invert",
+        v ? new() { ["amount"] = 1.0 } : null);
+
+    partial void OnLiftRChanged(double v) => CommitWheels();
+    partial void OnLiftGChanged(double v) => CommitWheels();
+    partial void OnLiftBChanged(double v) => CommitWheels();
+    partial void OnGainRChanged(double v) => CommitWheels();
+    partial void OnGainGChanged(double v) => CommitWheels();
+    partial void OnGainBChanged(double v) => CommitWheels();
+    partial void OnGammaRChanged(double v) => CommitWheels();
+    partial void OnGammaGChanged(double v) => CommitWheels();
+    partial void OnGammaBChanged(double v) => CommitWheels();
+    void CommitWheels() => CommitEffect("Color Wheels", "color.wheels",
+        LiftR == 0 && LiftG == 0 && LiftB == 0
+            && GainR == 1 && GainG == 1 && GainB == 1
+            && GammaR == 1 && GammaG == 1 && GammaB == 1 ? null
+            : new() {
+                ["lift.r"] = LiftR, ["lift.g"] = LiftG, ["lift.b"] = LiftB,
+                ["gain.r"] = GainR, ["gain.g"] = GainG, ["gain.b"] = GainB,
+                ["gamma.r"] = GammaR, ["gamma.g"] = GammaG, ["gamma.b"] = GammaB });
+
+    partial void OnChromaKeyEnabledChanged(bool v) => CommitChromaKey();
+    partial void OnChromaKeyRChanged(double v) => CommitChromaKey();
+    partial void OnChromaKeyGChanged(double v) => CommitChromaKey();
+    partial void OnChromaKeyBChanged(double v) => CommitChromaKey();
+    partial void OnChromaThresholdChanged(double v) => CommitChromaKey();
+    partial void OnChromaSpillChanged(double v) => CommitChromaKey();
+    void CommitChromaKey() => CommitEffect("Chroma Key", "key.chroma",
+        !ChromaKeyEnabled ? null
+            : new() {
+                ["keyColor.r"] = ChromaKeyR, ["keyColor.g"] = ChromaKeyG, ["keyColor.b"] = ChromaKeyB,
+                ["threshold"] = ChromaThreshold, ["spill"] = ChromaSpill });
 
     partial void OnLutPathChanged(string v) => CommitLut();
     partial void OnLutIntensityChanged(double v) => CommitLut();

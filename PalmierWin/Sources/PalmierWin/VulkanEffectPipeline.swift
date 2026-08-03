@@ -30,6 +30,7 @@ public final class VulkanEffectPipeline: @unchecked Sendable {
         case hueCurves = 12
         case lutTetra = 13
         case blur = 14
+        case invert = 15
     }
 
     public init?(device: VulkanDevice, renderPass: VkRenderPass) {

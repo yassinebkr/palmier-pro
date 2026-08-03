@@ -4,10 +4,10 @@ import Foundation
 
 /// Renders text to a BGRA bitmap using stb_truetype (flat-C, no COM/DirectWrite).
 /// The Windows port's counterpart to macOS's CoreText-based TextFrameRenderer.
-/// MVP: single-line, single-font (Arial Bold from C:\\Windows\\Fonts), basic
-/// style (size, color, bold via font choice). Multi-line wrapping, tracking,
-/// shadows, and per-word animation come later — the portable TextStyle carries
-/// the data.
+/// Single-line, single-font (Arial Bold from C:\Windows\Fonts); honours the
+/// style's size, color, and horizontal alignment. Multi-line wrapping,
+/// tracking, shadows, and per-word animation come later — the portable
+/// TextStyle carries the data.
 public final class WinTextRenderer {
     public enum TextError: Error, Sendable {
         case fontLoadFailed(String)
@@ -34,9 +34,11 @@ public final class WinTextRenderer {
 
     /// Renders `text` at `fontSize` pixels into a `canvasWidth × canvasHeight`
     /// BGRA bitmap (tightly-packed, width*height*4 bytes). Returns nil on error.
-    /// The text is centered horizontally and vertically. MVP — full TextStyle
-    /// layout (alignment, wrapping, tracking, shadow, border) comes later.
-    public func render(_ text: String, fontSize: Float, canvasWidth: Int, canvasHeight: Int) -> Data? {
+    /// The text is centered vertically; `alignment` places it horizontally.
+    /// MVP — wrapping, tracking, shadow, and border layout come later.
+    public func render(_ text: String, fontSize: Float, color: TextStyle.RGBA,
+                       alignment: TextStyle.Alignment,
+                       canvasWidth: Int, canvasHeight: Int) -> Data? {
         guard canvasWidth > 0, canvasHeight > 0, !text.isEmpty else { return nil }
         let scale = stbtt_ScaleForPixelHeight(&fontInfo, fontSize)
 
@@ -45,7 +47,7 @@ public final class WinTextRenderer {
         stbtt_GetFontVMetrics(&fontInfo, &ascent, &descent, &lineGap)
         let scaledAscent = Float(ascent) * scale
 
-        // Measure the line width to center it horizontally.
+        // Measure the line width to place it horizontally.
         var advanceWidth: Float = 0
         for scalar in text.unicodeScalars {
             let glyph = stbtt_FindGlyphIndex(&fontInfo, Int32(scalar.value))
@@ -53,11 +55,22 @@ public final class WinTextRenderer {
             stbtt_GetGlyphHMetrics(&fontInfo, glyph, &ax, &lsb)
             advanceWidth += Float(ax) * scale
         }
-        let startX = max(0, (Float(canvasWidth) - advanceWidth) * 0.5)
+        let startX: Float
+        switch alignment {
+        case .left: startX = 0
+        case .center: startX = (Float(canvasWidth) - advanceWidth) * 0.5
+        case .right: startX = Float(canvasWidth) - advanceWidth
+        }
+        let penStart = max(0, startX)
         let baselineY = Float(canvasHeight) * 0.5 - fontSize * 0.5 + scaledAscent
 
+        let blue = UInt8(min(1, max(0, color.b)) * 255)
+        let green = UInt8(min(1, max(0, color.g)) * 255)
+        let red = UInt8(min(1, max(0, color.r)) * 255)
+        let alpha = min(1, max(0, color.a))
+
         var bitmap = Data(count: canvasWidth * canvasHeight * 4)
-        var penX = startX
+        var penX = penStart
         for scalar in text.unicodeScalars {
             let glyph = stbtt_FindGlyphIndex(&fontInfo, Int32(scalar.value))
             var x0: Int32 = 0, y0: Int32 = 0, x1: Int32 = 0, y1: Int32 = 0
@@ -83,10 +96,10 @@ public final class WinTextRenderer {
                         let a = glyphBitmap[gy * gw + gx]
                         guard a > 0 else { continue }
                         let idx = (dy * canvasWidth + dx) * 4
-                        bitmap[idx] = 255      // B
-                        bitmap[idx + 1] = 255  // G
-                        bitmap[idx + 2] = 255  // R
-                        bitmap[idx + 3] = a    // A (glyph coverage)
+                        bitmap[idx] = blue
+                        bitmap[idx + 1] = green
+                        bitmap[idx + 2] = red
+                        bitmap[idx + 3] = UInt8(Float(a) * Float(alpha))  // glyph coverage × style alpha
                     }
                 }
             }

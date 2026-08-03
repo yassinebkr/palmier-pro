@@ -6,8 +6,10 @@ import PalmierWin
 // Export ABI: renders the whole timeline offscreen through the same
 // WinFrameRenderer path as playback and encodes it to H.264/MP4. Runs on a
 // background thread with its own headless Vulkan device; the shell polls
-// progress. v1 has no cancellation — exports of typical timeline lengths
-// finish in seconds to minutes.
+// progress. Cancellation is cooperative, checked once per frame: a cancelled
+// export stops mid-run and its partial output file is deleted (an MP4 cut
+// before the trailer is unplayable, so a truncated file would only pretend
+// to be a finished export).
 
 /// Retained export state behind the opaque handle.
 final class ExportContext: @unchecked Sendable {
@@ -15,6 +17,8 @@ final class ExportContext: @unchecked Sendable {
     var framesDone = 0
     var totalFrames = 1
     var finished = false
+    var cancelRequested = false
+    var cancelled = false
     var errorMessage: String?
 
     func update(done: Int, total: Int) {
@@ -24,17 +28,41 @@ final class ExportContext: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Returns false when the export already finished — a late cancel must not
+    /// turn a completed job into a cancelled one.
+    func requestCancel() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if finished { return false }
+        cancelRequested = true
+        return true
+    }
+
+    var isCancelRequested: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelRequested
+    }
+
     func finish(error: String?) {
         lock.lock()
         finished = true
         errorMessage = error
         lock.unlock()
     }
+
+    func finishCancelled() {
+        lock.lock()
+        finished = true
+        cancelled = true
+        lock.unlock()
+    }
 }
 
 /// Starts exporting `project`'s timeline to `path` (H.264/MP4 at the
-/// timeline's resolution and fps). Returns an export handle to poll, or NULL
-/// when the timeline is empty or the encoder/device can't be created.
+/// project's render size and the timeline's fps). Returns an export handle to
+/// poll, or NULL when the timeline is empty or the encoder/device can't be
+/// created.
 @_cdecl("palmier_export_start")
 public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
                                _ path: UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? {
@@ -46,9 +74,10 @@ public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
 
     let ctx = ExportContext()
     ctx.totalFrames = timeline.totalFrames
+    let renderSize = project.renderSize
 
     let thread = Thread {
-        runExport(ctx, timeline: timeline, outputPath: outputPath)
+        runExport(ctx, timeline: timeline, renderSize: renderSize, outputPath: outputPath)
     }
     thread.name = "palmier-export"
     thread.start()
@@ -56,7 +85,7 @@ public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
 }
 
 /// Progress: 0–100 while running, 101 when finished successfully, -1 on
-/// failure (read the message via palmier_export_error).
+/// failure (read the message via palmier_export_error), -2 when cancelled.
 @_cdecl("palmier_export_status")
 public func palmierExportStatus(_ handle: UnsafeMutableRawPointer?) -> Int32 {
     guard let handle else { return -1 }
@@ -64,9 +93,19 @@ public func palmierExportStatus(_ handle: UnsafeMutableRawPointer?) -> Int32 {
     ctx.lock.lock()
     defer { ctx.lock.unlock() }
     if ctx.finished {
+        if ctx.cancelled { return -2 }
         return ctx.errorMessage == nil ? 101 : -1
     }
     return Int32(min(100, ctx.framesDone * 100 / ctx.totalFrames))
+}
+
+/// Requests cooperative cancellation of a running export. Returns 1 when the
+/// request was accepted, 0 when the export had already finished.
+@_cdecl("palmier_export_cancel")
+public func palmierExportCancel(_ handle: UnsafeMutableRawPointer?) -> Int32 {
+    guard let handle else { return 0 }
+    let ctx = Unmanaged<ExportContext>.fromOpaque(handle).takeUnretainedValue()
+    return ctx.requestCancel() ? 1 : 0
 }
 
 /// Writes the failure message (NUL-terminated UTF-8) into buf. Returns 1
@@ -96,7 +135,8 @@ public func palmierExportDestroy(_ handle: UnsafeMutableRawPointer?) {
     Unmanaged<ExportContext>.fromOpaque(handle).release()
 }
 
-private func runExport(_ ctx: ExportContext, timeline: Timeline, outputPath: String) {
+private func runExport(_ ctx: ExportContext, timeline: Timeline,
+                       renderSize: (width: Int, height: Int), outputPath: String) {
     // Headless Vulkan: offscreen rendering needs no surface extensions.
     guard let instance = Vulkan.createInstance(appName: "palmier-export", extensions: []) else {
         ctx.finish(error: "Could not create the GPU instance for export.")
@@ -105,18 +145,19 @@ private func runExport(_ ctx: ExportContext, timeline: Timeline, outputPath: Str
     // The device, exporter, and every pool they own must be released before
     // the instance goes away — an inner scope guarantees that ordering, which
     // a `defer` here would not.
-    render(ctx, instance: instance, timeline: timeline, outputPath: outputPath)
+    render(ctx, instance: instance, timeline: timeline, renderSize: renderSize, outputPath: outputPath)
     Vulkan.destroyInstance(instance)
 }
 
 private func render(_ ctx: ExportContext, instance: VkInstance,
-                    timeline: Timeline, outputPath: String) {
+                    timeline: Timeline, renderSize: (width: Int, height: Int),
+                    outputPath: String) {
     guard let device = VulkanDevice.create(instance: instance) else {
         ctx.finish(error: "Could not create the GPU device for export.")
         return
     }
 
-    let renderSize = Size2D(width: Double(timeline.width), height: Double(timeline.height))
+    let size = Size2D(width: Double(renderSize.width), height: Double(renderSize.height))
     var natCache: [String: Size2D] = [:]
     let (trackSlots, mediaPaths, _) = buildVideoSlots(timeline: timeline, natCache: &natCache)
     guard !trackSlots.isEmpty else {
@@ -124,9 +165,10 @@ private func render(_ ctx: ExportContext, instance: VkInstance,
         return
     }
 
-    let config = FFmpegEncoder.Config(width: timeline.width, height: timeline.height, fps: timeline.fps)
+    let config = FFmpegEncoder.Config(width: renderSize.width, height: renderSize.height,
+                                      fps: timeline.fps)
     guard let exporter = WinExporter(
-        device: device, timeline: timeline, renderSize: renderSize,
+        device: device, timeline: timeline, renderSize: size,
         trackSlots: trackSlots, mediaPaths: mediaPaths,
         outputPath: outputPath, encoderConfig: config
     ) else {
@@ -134,12 +176,18 @@ private func render(_ ctx: ExportContext, instance: VkInstance,
         return
     }
     exporter.onFrame = { done, total in ctx.update(done: done, total: total) }
+    exporter.shouldCancel = { ctx.isCancelRequested }
 
     do {
         let frames = try exporter.export()
         vkDeviceWaitIdle(device.device)
         ctx.update(done: frames, total: max(1, frames))
         ctx.finish(error: nil)
+    } catch is CancellationError {
+        // Close releases the file handle so the partial output can be deleted.
+        try? exporter.encoder.close()
+        try? FileManager.default.removeItem(atPath: outputPath)
+        ctx.finishCancelled()
     } catch {
         ctx.finish(error: "Export failed: \(error.localizedDescription)")
     }

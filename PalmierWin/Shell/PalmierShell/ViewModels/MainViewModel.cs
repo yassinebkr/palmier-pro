@@ -16,6 +16,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     public UndoStack Undo { get; }
     public InspectorViewModel Inspector { get; }
     public AgentViewModel Agent { get; }
+    public ExportQueue Exports { get; }
 
     EngineSession? engine;
     IntPtr audio;
@@ -36,6 +37,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Inspector = new InspectorViewModel(Project, Timeline, Media, Undo);
         agentHandle = CoreApi.palmier_agent_create(Project);
         Agent = new AgentViewModel(agentHandle, Timeline, Media, Undo);
+        // The project is resolved lazily so a queued job always encodes the
+        // current project, even across New/Open while it waits.
+        Exports = new ExportQueue(new CoreExportRunner(), () => Project);
         // Clip selection and library selection are mutually exclusive.
         Timeline.PropertyChanged += (_, e) => {
             if (e.PropertyName != nameof(TimelineViewModel.SelectedClipId)) return;
@@ -128,6 +132,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
                 () => CoreApi.RippleDelete(Project, ids) > 0);
             Timeline.Reload();
         };
+        Timeline.RemoveSilenceRequested += clipId => _ = RemoveSilenceAsync(clipId);
         Timeline.CloseGapRequested += (trackId, start, end) => {
             Undo.Execute("Ripple Delete Gap",
                 () => CoreApi.palmier_timeline_close_gap(Project, trackId, start, end) == 1);
@@ -245,6 +250,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
             Folders = Media.Folders.ToList(),
         };
 
+    // MARK: Project render size
+
+    [ObservableProperty] int projectRenderWidth = 1920;
+    [ObservableProperty] int projectRenderHeight = 1080;
+
+    /// Aspect-fit ratio the preview canvas (AspectFitPanel) letterboxes to.
+    public double ProjectAspectRatio => (double)ProjectRenderWidth / ProjectRenderHeight;
+
+    /// The transport badge: the reduced ratio, like upstream's "16:9".
+    public string ProjectAspectBadge => AspectLabel(ProjectRenderWidth, ProjectRenderHeight);
+
+    public string ProjectDimensions => $"{ProjectRenderWidth} × {ProjectRenderHeight}";
+
+    partial void OnProjectRenderWidthChanged(int value) => NotifyRenderSizeChanged();
+    partial void OnProjectRenderHeightChanged(int value) => NotifyRenderSizeChanged();
+
+    void NotifyRenderSizeChanged() {
+        OnPropertyChanged(nameof(ProjectAspectRatio));
+        OnPropertyChanged(nameof(ProjectAspectBadge));
+        OnPropertyChanged(nameof(ProjectDimensions));
+    }
+
+    public static string AspectLabel(int width, int height) {
+        int g = GreatestCommonDivisor(width, height);
+        return $"{width / g}:{height / g}";
+    }
+
+    static int GreatestCommonDivisor(int a, int b) {
+        (a, b) = (Math.Abs(a), Math.Abs(b));
+        while (b != 0) (a, b) = (b, a % b);
+        return Math.Max(1, a);
+    }
+
+    /// Pulls the core's render size into the bound properties (after New/Open).
+    public void RefreshRenderSize() {
+        if (CoreApi.palmier_project_render_size(Project, out int w, out int h) != 1) return;
+        ProjectRenderWidth = w;
+        ProjectRenderHeight = h;
+    }
+
+    /// Applies a render size. The core validates (even, 16…7680); false means
+    /// rejected. Project state, so no undo entry — but the project is dirty.
+    public bool SetProjectRenderSize(int width, int height) {
+        if (width == ProjectRenderWidth && height == ProjectRenderHeight) return true;
+        if (CoreApi.palmier_project_set_render_size(Project, width, height) != 1) return false;
+        RefreshRenderSize();
+        ProjectDirty = true;
+        return true;
+    }
+
     public async Task SaveProjectAsync(string path) {
         var document = BuildDocument();
         await Task.Run(() => {
@@ -272,6 +327,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.Reload();
         Timeline.Scrub(0);
         Undo.Clear();
+        RefreshRenderSize();
         ProjectPath = path;
         ProjectDirty = false;
         return missing;
@@ -282,6 +338,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         // An empty timelines array is rejected by the core, so build a fresh
         // one the same way a new project does.
         await Media.RestoreLibraryAsync([], []);
+        CoreApi.palmier_project_set_render_size(Project, 1920, 1080);
         while (CoreApi.palmier_project_timeline_count(Project) > 1)
             CoreApi.palmier_project_remove_timeline(Project, 1);
         foreach (var clip in Timeline.State?.Tracks.SelectMany(t => t.Clips).ToList() ?? [])
@@ -291,6 +348,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.Reload();
         Timeline.Scrub(0);
         Undo.Clear();
+        RefreshRenderSize();
         ProjectPath = null;
         ProjectDirty = false;
     }
@@ -560,6 +618,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
 
     /// The window modal dialogs hang off. Set by the shell window.
     public Func<Avalonia.Controls.Window?>? DialogOwner { get; set; }
+
+    /// Opens the silence-removal dialog for a clip. The dialog detects in the
+    /// background and calls back into ApplySilenceRemoval.
+    async Task RemoveSilenceAsync(string clipId) {
+        if (DialogOwner?.Invoke() is not { } owner) return;
+        if (Timeline.State?.FindClip(clipId) is not { } clip) return;
+        await new Views.SilenceDialog(this, clipId, clip.MediaRef).ShowDialog(owner);
+    }
+
+    /// Cuts the detected silent spans out of the clip's time range across all
+    /// tracks — one ripple-delete intent, so one snapshot and one undo entry.
+    public void ApplySilenceRemoval(string clipId, IReadOnlyList<SilentRange> ranges) {
+        if (Timeline.State?.FindClip(clipId) is not { } clip) return;
+        var spans = SilenceRemoval.TimelineRanges(clip, ranges, Timeline.State.Fps);
+        if (spans.Count == 0) return;
+        Undo.Execute("Remove Silence", () => SilenceRemoval.Apply(Project, spans) > 0);
+        Timeline.Reload();
+    }
 
     /// Asks for a new track name and commits it as one undo step. A cancelled
     /// or unchanged prompt leaves no entry behind.

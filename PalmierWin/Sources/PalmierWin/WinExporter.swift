@@ -67,13 +67,19 @@ public final class WinExporter {
     /// exporting thread after each frame.
     public var onFrame: ((Int, Int) -> Void)?
 
+    /// Cooperative cancellation hook, checked once per frame before encoding.
+    public var shouldCancel: (() -> Bool)?
+
     /// Exports every timeline frame to the encoder, then drains + closes the
     /// encoder (writing the trailer). Returns the number of frames encoded.
+    /// Throws `CancellationError` when `shouldCancel` fires mid-run; the
+    /// encoder is left unclosed and the caller owns the partial output.
     @discardableResult
     public func export() throws -> Int {
         var encoded = 0
         for frame in 0..<totalFrames {
             try Task.checkCancellation()
+            if shouldCancel?() == true { throw CancellationError() }
             drawAndEncodeFrame(frame: frame)
             encoded += 1
             onFrame?(encoded, totalFrames)

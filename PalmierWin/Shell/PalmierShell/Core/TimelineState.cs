@@ -24,6 +24,12 @@ public sealed record EffectState(string Type, Dictionary<string, EffectParamStat
         Params?.TryGetValue(key, out var p) == true ? p.String : null;
 }
 
+/// The style of a text clip, mirroring the Codable keys of PalmierCore's
+/// TextStyle that the shell exposes (fontSize, color, alignment).
+public sealed record TextColorState(double R, double G, double B, double A);
+
+public sealed record TextStyleState(double FontSize, TextColorState? Color, string? Alignment);
+
 public sealed record ClipState(
     string Id, string MediaRef, string MediaType,
     int StartFrame, int DurationFrames, int TrimStartFrame,
@@ -32,7 +38,8 @@ public sealed record ClipState(
     TransformState Transform, string? LinkGroupId, string? TextContent,
     KeyframeTrackState? OpacityTrack, KeyframeTrackState? PositionTrack,
     KeyframeTrackState? ScaleTrack, KeyframeTrackState? RotationTrack,
-    KeyframeTrackState? VolumeTrack, List<EffectState>? Effects = null) {
+    KeyframeTrackState? VolumeTrack, List<EffectState>? Effects = null,
+    TextStyleState? TextStyle = null) {
 
     /// The clip's value for one effect parameter, falling back when the
     /// effect or the key is absent — the shape the Adjust fields read.

@@ -18,6 +18,36 @@ final class ProjectContext {
     private var revision: Int = 0
     private var capture: CaptureSession?
 
+    /// The canvas the preview, capture, and export composite at. Project
+    /// state, not timeline state: changing it is not an undoable edit.
+    private var renderWidth = 1920
+    private var renderHeight = 1080
+
+    static func isValidRenderSize(width: Int, height: Int) -> Bool {
+        // H.264 wants even dimensions; the bounds keep textures allocatable.
+        width % 2 == 0 && height % 2 == 0
+            && width >= 16 && width <= 7680 && height >= 16 && height <= 7680
+    }
+
+    var renderSize: (width: Int, height: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (renderWidth, renderHeight)
+    }
+
+    /// Returns false for an invalid size. A valid set bumps the generation so
+    /// the playback presenter rebuilds at the new canvas on the next frame.
+    func setRenderSize(width: Int, height: Int) -> Bool {
+        guard ProjectContext.isValidRenderSize(width: width, height: height) else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        guard width != renderWidth || height != renderHeight else { return true }
+        renderWidth = width
+        renderHeight = height
+        revision += 1
+        return true
+    }
+
     /// The project's persistent capture session, rebuilt when the render size
     /// changes. Kept alive so repeated captures pay decode steps, not Vulkan
     /// and decoder setup.
@@ -162,16 +192,26 @@ final class ProjectContext {
     func projectSnapshot() -> ProjectSnapshot {
         lock.lock()
         defer { lock.unlock() }
-        return ProjectSnapshot(timelines: timelines, activeIndex: active)
+        return ProjectSnapshot(timelines: timelines, activeIndex: active,
+                               renderWidth: renderWidth, renderHeight: renderHeight)
     }
 
     /// Replaces every timeline. The preview override is dropped: it points at
-    /// media the restored project may not contain.
+    /// media the restored project may not contain. A missing or invalid render
+    /// size (projects saved before sizes existed) falls back to 1920×1080.
     func restore(_ snapshot: ProjectSnapshot) {
         lock.lock()
         defer { lock.unlock() }
         timelines = snapshot.timelines
         active = min(max(0, snapshot.activeIndex), timelines.count - 1)
+        if let width = snapshot.renderWidth, let height = snapshot.renderHeight,
+           ProjectContext.isValidRenderSize(width: width, height: height) {
+            renderWidth = width
+            renderHeight = height
+        } else {
+            renderWidth = 1920
+            renderHeight = 1080
+        }
         previewSource = nil
         revision += 1
     }
@@ -181,6 +221,8 @@ final class ProjectContext {
 struct ProjectSnapshot: Codable {
     var timelines: [Timeline]
     var activeIndex: Int
+    var renderWidth: Int?
+    var renderHeight: Int?
 }
 
 /// Creates an empty project (one video + one audio track). Never NULL.
@@ -267,6 +309,31 @@ public func palmierProjectRenameTimeline(_ handle: UnsafeMutableRawPointer?,
                                          _ name: UnsafePointer<CChar>?) -> Int32 {
     guard let ctx = projectContext(handle), let name else { return 0 }
     return ctx.renameTimeline(Int(index), to: String(cString: name)) ? 1 : 0
+}
+
+/// Sets the project's render size — the canvas the preview, frame capture,
+/// and export composite at (clips keep their transforms; the canvas changes,
+/// so sources letterbox/pillarbox into it). A project setting, not a timeline
+/// edit: it pushes no undo entry. Dimensions must be even and within
+/// 16…7680. Returns 1 on success, 0 on an invalid handle or size.
+@_cdecl("palmier_project_set_render_size")
+public func palmierProjectSetRenderSize(_ handle: UnsafeMutableRawPointer?,
+                                        _ width: Int32, _ height: Int32) -> Int32 {
+    guard let ctx = projectContext(handle) else { return 0 }
+    return ctx.setRenderSize(width: Int(width), height: Int(height)) ? 1 : 0
+}
+
+/// Writes the project's current render size into outWidth/outHeight.
+/// Returns 1 on success, 0 on an invalid handle.
+@_cdecl("palmier_project_render_size")
+public func palmierProjectRenderSize(_ handle: UnsafeMutableRawPointer?,
+                                     _ outWidth: UnsafeMutablePointer<Int32>?,
+                                     _ outHeight: UnsafeMutablePointer<Int32>?) -> Int32 {
+    guard let ctx = projectContext(handle) else { return 0 }
+    let size = ctx.renderSize
+    outWidth?.pointee = Int32(size.width)
+    outHeight?.pointee = Int32(size.height)
+    return 1
 }
 
 /// Serializes the whole project — every timeline plus which one is active —
@@ -788,6 +855,46 @@ public func palmierClipSetText(_ handle: UnsafeMutableRawPointer?, _ clipId: Uns
     return mutateClip(handle, clipId) { clip in
         guard clip.mediaType == .text else { return false }
         clip.textContent = content
+        return true
+    }
+}
+
+/// Patches a text clip's style from a flat JSON object. Known keys:
+/// "fontSize" (positive number), "color" ("#RGB"/"#RRGGBB"/"#RRGGBBAA"),
+/// "alignment" ("left"/"center"/"right"). Unknown keys or malformed values
+/// refuse the whole patch. Returns 1 on success, 0 for non-text clips.
+@_cdecl("palmier_clip_set_text_style")
+public func palmierClipSetTextStyle(_ handle: UnsafeMutableRawPointer?, _ clipId: UnsafePointer<CChar>?,
+                                    _ styleJson: UnsafePointer<CChar>?) -> Int32 {
+    guard let styleJson,
+          let data = String(cString: styleJson).data(using: .utf8),
+          let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 0 }
+    var fontSize: Double?
+    var color: TextStyle.RGBA?
+    var alignment: TextStyle.Alignment?
+    for (key, value) in raw {
+        switch key {
+        case "fontSize":
+            guard let number = value as? NSNumber, String(cString: number.objCType) != "c",
+                  number.doubleValue.isFinite, number.doubleValue > 0 else { return 0 }
+            fontSize = number.doubleValue
+        case "color":
+            guard let hex = value as? String, let parsed = TextStyle.RGBA(hex: hex) else { return 0 }
+            color = parsed
+        case "alignment":
+            guard let name = value as? String, let parsed = TextStyle.Alignment(rawValue: name) else { return 0 }
+            alignment = parsed
+        default:
+            return 0
+        }
+    }
+    return mutateClip(handle, clipId) { clip in
+        guard clip.mediaType == .text else { return false }
+        var style = clip.textStyle ?? TextStyle()
+        if let fontSize { style.fontSize = fontSize }
+        if let color { style.color = color }
+        if let alignment { style.alignment = alignment }
+        clip.textStyle = style
         return true
     }
 }

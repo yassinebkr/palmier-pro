@@ -119,6 +119,16 @@
         <StackPanel IsVisible="{Binding IsTextClip}">
           <TextBlock Classes="section" Text="TEXT"/>
           <TextBox Classes="value" Text="{Binding TextContent}" AcceptsReturn="False"/>
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" Margin="0,4,0,0">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Size"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding TextFontSize}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding TextColorHex}"
+                     Watermark="#RRGGBB"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Align"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding TextAlignment}"
+                     Watermark="left / center / right"/>
+          </Grid>
         </StackPanel>
 
         <TextBlock Classes="section" Text="TRANSFORM"/>
@@ -191,13 +201,51 @@
           </Grid>
 
           <TextBlock Classes="section" Text="EFFECTS"/>
-          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2">
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Vignette"/>
             <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VignetteAmount}"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Grain"/>
             <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GrainAmount}"/>
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Glow"/>
             <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GlowIntensity}"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Invert"/>
+            <CheckBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Center"
+                      IsChecked="{Binding InvertEnabled, Mode=TwoWay}"/>
+          </Grid>
+
+          <TextBlock Classes="section" Text="COLOR WHEELS"/>
+          <Grid ColumnDefinitions="82,*,*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" ColumnSpacing="4">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Lift"
+                       ToolTip.Tip="R G B, -1 to 1"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding LiftR}"/>
+            <TextBox Grid.Row="0" Grid.Column="2" Classes="value" Text="{Binding LiftG}"/>
+            <TextBox Grid.Row="0" Grid.Column="3" Classes="value" Text="{Binding LiftB}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Gain"
+                       ToolTip.Tip="R G B, 1 = neutral"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GainR}"/>
+            <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding GainG}"/>
+            <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding GainB}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Gamma"
+                       ToolTip.Tip="R G B, 1 = neutral"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GammaR}"/>
+            <TextBox Grid.Row="2" Grid.Column="2" Classes="value" Text="{Binding GammaG}"/>
+            <TextBox Grid.Row="2" Grid.Column="3" Classes="value" Text="{Binding GammaB}"/>
+          </Grid>
+
+          <TextBlock Classes="section" Text="CHROMA KEY"/>
+          <Grid ColumnDefinitions="82,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2" ColumnSpacing="4">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Key"/>
+            <CheckBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Content="Enable"
+                      FontSize="11" IsChecked="{Binding ChromaKeyEnabled, Mode=TwoWay}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"
+                       ToolTip.Tip="R G B, 0 to 1"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding ChromaKeyR}"/>
+            <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding ChromaKeyG}"/>
+            <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding ChromaKeyB}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Threshold"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ChromaThreshold}"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Spill"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ChromaSpill}"/>
           </Grid>
 
           <TextBlock Classes="section" Text="LUT"/>

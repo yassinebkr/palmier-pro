@@ -47,6 +47,8 @@
                 <Separator/>
                 <MenuItem Header="Save" Click="OnSaveProject" InputGesture="Ctrl+S"/>
                 <MenuItem Header="Save As…" Click="OnSaveProjectAs"/>
+                <Separator/>
+                <MenuItem Header="Project Settings…" Click="OnProjectSettings"/>
               </MenuFlyout>
             </Button.Flyout>
           </Button>
@@ -184,7 +186,8 @@
           </Button>
         </Grid>
       </Border>
-      <views:AspectFitPanel Grid.Row="1" Background="Black">
+      <views:AspectFitPanel Grid.Row="1" Background="Black"
+                            AspectRatio="{Binding ProjectAspectRatio}">
         <views:PreviewHost x:Name="Preview"/>
       </views:AspectFitPanel>
       <!-- Scrub bar for whatever the viewer shows: timeline or source clip -->
@@ -245,9 +248,9 @@
                 <Setter Property="Foreground" Value="{StaticResource ThemeTextMutedBrush}"/>
               </Style>
             </StackPanel.Styles>
-            <TextBlock Text="16:9"/>
+            <TextBlock Text="{Binding ProjectAspectBadge}"/>
             <TextBlock Text="30"/>
-            <TextBlock Text="FHD"/>
+            <TextBlock Text="{Binding ProjectDimensions}"/>
             <TextBlock Text="Fit" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
           </StackPanel>
         </Grid>

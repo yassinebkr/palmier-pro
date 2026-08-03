@@ -38,3 +38,15 @@ $inputs = ($bands | ForEach-Object { "-f", "lavfi", "-i", $_ })
     -c:v libx264 -pix_fmt yuv420p -r 24 $out24
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $out24"
+
+# Silence-detection fixture: 1s 440 Hz tone, 2s silence, 1s tone, so the
+# detector should report one span covering roughly 1s–3s of source time.
+$outSilence = Join-Path $outDir "silence.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=4:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=1" `
+    -f lavfi -i "anullsrc=r=44100:cl=mono:d=2" `
+    -f lavfi -i "sine=frequency=440:duration=1" `
+    -filter_complex "[1:a][2:a][3:a]concat=n=3:v=0:a=1[a]" -map 0:v -map "[a]" `
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outSilence
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outSilence"

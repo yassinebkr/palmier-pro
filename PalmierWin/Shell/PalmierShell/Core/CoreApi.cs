@@ -36,6 +36,12 @@ public static partial class CoreApi {
     public static partial int palmier_project_set_preview_source(IntPtr project, string path);
     [LibraryImport(Dll)] public static partial void palmier_project_clear_preview_source(IntPtr project);
 
+    /// The project's render size — the canvas preview, capture, and export
+    /// composite at. Even dimensions, 16…7680; the setter returns 0 otherwise.
+    /// A project setting, not an undoable timeline edit.
+    [LibraryImport(Dll)] public static partial int palmier_project_set_render_size(IntPtr project, int width, int height);
+    [LibraryImport(Dll)] public static partial int palmier_project_render_size(IntPtr project, out int width, out int height);
+
     public static string TimelineName(IntPtr project, int index) {
         var buf = new byte[256];
         return palmier_project_timeline_name(project, index, buf, buf.Length) == 1
@@ -186,6 +192,11 @@ public static partial class CoreApi {
     public static partial int palmier_timeline_add_text_clip(IntPtr project, string text, int startFrame, int durationFrames, byte[] idBuf, int idBufSize);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_clip_set_text(IntPtr project, string clipId, string text);
+    /// Patches a text clip's style; `styleJson` is a flat object with optional
+    /// "fontSize" (positive number), "color" (hex), "alignment"
+    /// ("left"/"center"/"right"). Malformed patches are refused wholesale.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int palmier_clip_set_text_style(IntPtr project, string clipId, string styleJson);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_clip_add_keyframe(IntPtr project, string clipId, string property, int timelineFrame, double v1, double v2);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
@@ -213,6 +224,31 @@ public static partial class CoreApi {
         if (palmier_timeline_split_clip(project, clipId, frame, idBuf, idBuf.Length) != 1) return null;
         int len = Array.IndexOf(idBuf, (byte)0) is >= 0 and var n ? n : idBuf.Length;
         return Encoding.UTF8.GetString(idBuf, 0, len);
+    }
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    private static unsafe partial int palmier_detect_silence(string path, double thresholdDb,
+                                                             int minSilenceMs, int paddingMs,
+                                                             byte* buf, int bufSize);
+
+    /// Silent spans of `path` in source-media milliseconds, or null when the
+    /// file has no decodable audio. Blocking full decode — call off the UI
+    /// thread.
+    public static unsafe List<SilentRange>? DetectSilence(string path, double thresholdDb,
+                                                          int minSilenceMs, int paddingMs) {
+        int size = 1024;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var buf = new byte[size];
+            fixed (byte* p = buf) {
+                int written = palmier_detect_silence(path, thresholdDb, minSilenceMs, paddingMs,
+                                                     p, size);
+                if (written == 0) return null;
+                if (written > 0)
+                    return SilenceRemoval.ParseRanges(Encoding.UTF8.GetString(buf, 0, written));
+                size = -written;
+            }
+        }
+        return null;
     }
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
@@ -281,9 +317,14 @@ public static partial class CoreApi {
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial IntPtr palmier_export_start(IntPtr project, string path);
     [LibraryImport(Dll)] public static partial int palmier_export_status(IntPtr export);
+    [LibraryImport(Dll)] public static partial int palmier_export_cancel(IntPtr export);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_export_error(IntPtr export, byte[] buf, int bufSize);
     [LibraryImport(Dll)] public static partial void palmier_export_destroy(IntPtr export);
+
+    /// Writes the active timeline as FCPXML (UTF-8 path). 1 on success, 0 on failure.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int palmier_export_fcpxml(IntPtr project, string path);
 
     public static string GetExportError(IntPtr export) {
         var buf = new byte[512];
