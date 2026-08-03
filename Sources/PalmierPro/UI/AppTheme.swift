@@ -403,6 +403,12 @@ enum AppTheme {
         static let updateOverlayWidth: CGFloat = 640
     }
 
+    enum Onboarding {
+        static let cardWidth: CGFloat = 520
+        static let cardHeight: CGFloat = 420
+        static let welcomeHeroHeight: CGFloat = 240
+    }
+
     enum Settings {
         static let sidebarWidth: CGFloat = 220
         static let contentMaxWidth: CGFloat = 640
@@ -420,11 +426,10 @@ enum AppTheme {
 
     enum EditorPanel {
         static let defaultWidth: CGFloat = 340
-        static let minimumWidth: CGFloat = 240
+        static let minimumWidth: CGFloat = 300
         static let labelColumnWidth: CGFloat = 88
         static let rowMinHeight: CGFloat = 22
         static let groupHeaderHeight: CGFloat = 28
-        static let tabBarHeight: CGFloat = 34
         static let fieldMinHeight: CGFloat = 22
         static let numericFieldWidth: CGFloat = 56
         static let compactNumericFieldWidth: CGFloat = 36
@@ -439,6 +444,7 @@ enum AppTheme {
             width: 960 + GenerationPanel.minimumWidthAdjustment,
             height: 600
         )
+        static let projectTitlebarLeadingWidth: CGFloat = 132
         static let projectTitlebarTrailingWidth: CGFloat = 280
         static let settingsDefault = NSSize(width: 1200, height: 800)
         static let settingsMin = NSSize(width: 860, height: 640)

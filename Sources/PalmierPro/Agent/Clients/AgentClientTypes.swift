@@ -4,23 +4,34 @@ import Foundation
 
 enum AnthropicModel: String, CaseIterable, Sendable {
     case sonnet5 = "claude-sonnet-5"
-    case opus48 = "claude-opus-4-8"
-    case haiku45 = "claude-haiku-4-5-20251001"
+    case opus5 = "claude-opus-5"
+
+    /// Maps a persisted model id to the current catalog entry, migrating
+    /// retired models (Opus 4.8 was replaced by Opus 5).
+    static func persisted(_ rawValue: String) -> AnthropicModel? {
+        rawValue == "claude-opus-4-8" ? .opus5 : AnthropicModel(rawValue: rawValue)
+    }
 
     var displayName: String {
         switch self {
         case .sonnet5: "Sonnet 5"
-        case .opus48: "Opus 4.8"
-        case .haiku45: "Haiku 4.5"
+        case .opus5: "Opus 5"
         }
     }
 
     var requestExtras: [String: Any] {
         switch self {
-        case .sonnet5: ["output_config": ["effort": "low"]]
-        default: [:]
+        case .sonnet5:
+            [
+                "output_config": ["effort": "low"],
+                "thinking": ["type": "adaptive", "display": "summarized"],
+            ]
+        case .opus5:
+            ["thinking": ["type": "adaptive", "display": "summarized"]]
         }
     }
+
+    var maxOutputTokens: Int { 128_000 }
 }
 
 enum AnthropicStopReason: String, Sendable {
@@ -63,6 +74,9 @@ extension AgentRequestContext {
 }
 
 enum AnthropicStreamEvent: Sendable {
+    case thinkingDelta(String)
+    case thinkingSignature(String)
+    case redactedThinking(String)
     case textDelta(String)
     case toolUseComplete(id: String, name: String, inputJSON: String)
     case messageStop(stopReason: AnthropicStopReason)
@@ -139,10 +153,15 @@ enum AnthropicSSE {
             case "content_block_start":
                 if let index = event["index"] as? Int,
                    let block = event["content_block"] as? [String: Any],
-                   block["type"] as? String == "tool_use",
-                   let id = block["id"] as? String,
-                   let name = block["name"] as? String {
-                    pendingTools[index] = (id, name, "")
+                   let blockType = block["type"] as? String {
+                    if blockType == "tool_use",
+                       let id = block["id"] as? String,
+                       let name = block["name"] as? String {
+                        pendingTools[index] = (id, name, "")
+                    } else if blockType == "redacted_thinking",
+                              let data = block["data"] as? String {
+                        yield(.redactedThinking(data))
+                    }
                 }
 
             case "content_block_delta":
@@ -151,6 +170,14 @@ enum AnthropicSSE {
                       let deltaType = delta["type"] as? String else { break }
                 if deltaType == "text_delta", let text = delta["text"] as? String, !text.isEmpty {
                     yield(.textDelta(text))
+                } else if deltaType == "thinking_delta",
+                          let thinking = delta["thinking"] as? String,
+                          !thinking.isEmpty {
+                    yield(.thinkingDelta(thinking))
+                } else if deltaType == "signature_delta",
+                          let signature = delta["signature"] as? String,
+                          !signature.isEmpty {
+                    yield(.thinkingSignature(signature))
                 } else if deltaType == "input_json_delta",
                           let partial = delta["partial_json"] as? String,
                           var acc = pendingTools[index] {

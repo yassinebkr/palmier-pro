@@ -8,12 +8,16 @@ import Foundation
 // and every adapter is a translation, not a passthrough.
 
 /// One content block within a chat message. The neutral union of text,
-/// inline images, assistant tool calls, and tool results returned by the user.
+/// inline images, assistant tool calls, tool results returned by the user,
+/// and provider reasoning blocks (kept opaque so they can be echoed back
+/// for providers that require reasoning continuity across tool turns).
 public enum ChatContentBlock: Sendable, Equatable {
     case text(String)
     case image(mediaType: String, base64: String)
     case toolCall(id: String, name: String, inputJSON: String)
     case toolResult(toolCallID: String, content: [ToolResultBlock], isError: Bool)
+    case thinking(text: String, signature: String)
+    case redactedThinking(data: String)
 }
 
 /// One block within a tool result. Tools may return text and/or images
@@ -115,6 +119,9 @@ public enum ChatStopReason: Sendable, Equatable {
 /// shapes into these.
 public enum ChatStreamEvent: Sendable {
     case textDelta(String)
+    case thinkingDelta(String)
+    case thinkingSignature(String)
+    case redactedThinking(String)
     case toolCallComplete(id: String, name: String, inputJSON: String)
     case stop(reason: ChatStopReason)
 }

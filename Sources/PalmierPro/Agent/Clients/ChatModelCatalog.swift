@@ -26,7 +26,7 @@ enum ChatModelCatalog {
 
     static let anthropicModels: [ChatModel] = [
         ChatModel(provider: "anthropic", id: "claude-sonnet-5", displayName: "Sonnet 5"),
-        ChatModel(provider: "anthropic", id: "claude-opus-4-8", displayName: "Opus 4.8"),
+        ChatModel(provider: "anthropic", id: "claude-opus-5", displayName: "Opus 5"),
         ChatModel(provider: "anthropic", id: "claude-haiku-4-5-20251001", displayName: "Haiku 4.5"),
     ]
 
@@ -47,9 +47,11 @@ enum ChatModelCatalog {
     static let defaultModel: ChatModel = anthropicModels[0]
 
     /// Resolve a stored `(provider, id)` pair back to a catalog entry,
-    /// defaulting to Sonnet 5.
+    /// defaulting to Sonnet 5. Retired Anthropic ids migrate through
+    /// `AnthropicModel.persisted` (Opus 4.8 selections become Opus 5).
     static func resolve(provider: String, id: String) -> ChatModel {
-        models(for: provider).first { $0.id == id }
+        let id = provider == "anthropic" ? (AnthropicModel.persisted(id)?.rawValue ?? id) : id
+        return models(for: provider).first { $0.id == id }
             ?? models(for: provider).first
             ?? defaultModel
     }

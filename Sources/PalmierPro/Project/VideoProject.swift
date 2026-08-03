@@ -406,6 +406,11 @@ class VideoProject: NSDocument {
             if let oldURL, let newURL = newValue,
                oldURL.standardizedFileURL != newURL.standardizedFileURL {
                 MainActor.assumeIsolated {
+                    Telemetry.beginOperation("project_url_rebase", data: [
+                        "media_count": editorViewModel.mediaAssets.count,
+                        "registry_count": ProjectRegistry.shared.entries.count,
+                    ])
+                    defer { Telemetry.endOperation("project_url_rebase") }
                     ProjectRegistry.shared.updateURL(from: oldURL, to: newURL)
                     editorViewModel.rebaseProjectURL(from: oldURL, to: newURL)
                 }
@@ -452,6 +457,7 @@ class VideoProject: NSDocument {
         let editorView = EditorView()
             .environment(editorViewModel)
             .focusEffectDisabled()
+            .background(.ultraThickMaterial)
             .sheet(isPresented: Bindable(editorViewModel).showExportDialog) { [editorViewModel] in
                 ExportView()
                     .environment(editorViewModel)
@@ -464,17 +470,19 @@ class VideoProject: NSDocument {
                 TourOverlay()
                     .environment(editorViewModel)
             }
-        let hostingController = NSHostingController(rootView: editorView.tint(AppTheme.Accent.primary))
+        let hostingController = NSHostingController(rootView: editorView.appLocalization().tint(AppTheme.Accent.primary))
         hostingController.sizingOptions = .minSize
 
         let window = NSWindow(contentViewController: hostingController)
         window.minSize = AppTheme.Window.projectMin
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = AppTheme.Background.surface
+        window.backgroundColor = AppTheme.Background.base.withAlphaComponent(CGFloat(AppTheme.Opacity.medium))
+        window.isOpaque = false
+        window.styleMask.insert(.fullSizeContentView)
         window.fillVisibleScreen()
 
-        window.addTitlebarSwiftUI(TitleBarLeadingView().environment(editorViewModel), side: .leading, width: AppTheme.IconSize.lg + AppTheme.Spacing.sm)
+        window.addTitlebarSwiftUI(TitleBarLeadingView().environment(editorViewModel), side: .leading, width: AppTheme.Window.projectTitlebarLeadingWidth)
         window.addTitlebarSwiftUI(TitleBarTrailingView().environment(editorViewModel), side: .trailing, width: AppTheme.Window.projectTitlebarTrailingWidth)
 
         let controller = EditorWindowController(editorViewModel: editorViewModel, window: window)
@@ -697,7 +705,7 @@ extension NSWindow {
     }
 
     func addTitlebarSwiftUI<V: View>(_ view: V, side: NSLayoutConstraint.Attribute, width: CGFloat) {
-        let host = NSHostingController(rootView: view.tint(AppTheme.Accent.primary))
+        let host = NSHostingController(rootView: view.appLocalization().tint(AppTheme.Accent.primary))
         host.view.translatesAutoresizingMaskIntoConstraints = false
 
         let wrapper = CornerAdaptiveView()

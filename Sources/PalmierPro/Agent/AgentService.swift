@@ -73,10 +73,10 @@ final class AgentService {
         switch provider {
         case "anthropic":
             let key = apiKey(for: "anthropic")
-            if !key.isEmpty, let anthropic = AnthropicModel(rawValue: model.id) {
+            if !key.isEmpty, let anthropic = AnthropicModel.persisted(model.id) {
                 return AnthropicClient(apiKey: key, model: anthropic)
             }
-            if AccountService.shared.isSignedIn, let anthropic = AnthropicModel(rawValue: model.id) {
+            if AccountService.shared.isSignedIn, let anthropic = AnthropicModel.persisted(model.id) {
                 return PalmierClient(model: anthropic)
             }
             return nil
@@ -454,6 +454,12 @@ final class AgentService {
                 for try await event in stream {
                     try Task.checkCancellation()
                     switch event {
+                    case .thinkingDelta(let chunk):
+                        appendThinkingDelta(chunk, toAssistant: assistantID)
+                    case .thinkingSignature(let signature):
+                        appendThinkingSignature(signature, toAssistant: assistantID)
+                    case .redactedThinking(let data):
+                        appendRedactedThinking(data, toAssistant: assistantID)
                     case .textDelta(let chunk):
                         appendTextDelta(chunk, toAssistant: assistantID)
                     case .toolCallComplete(let id, let name, let inputJSON):
@@ -463,10 +469,13 @@ final class AgentService {
                     }
                 }
 
+                dropEmptyAssistantTurn(id: assistantID)
                 if stopReason == .toolUse {
-                    await runPendingToolUses(assistantID: assistantID)
+                    await runPendingToolUses(assistantID: assistantID, conversationID: conversationID)
+                    if Task.isCancelled { break loop }
                     continue loop
                 }
+                if Task.isCancelled { break loop }
                 break loop
             } catch is CancellationError {
                 dropEmptyAssistantTurn(id: assistantID)
@@ -487,10 +496,40 @@ final class AgentService {
         messages.firstIndex { $0.id == id && $0.role == .assistant }
     }
 
-    private func dropEmptyAssistantTurn(id: UUID) {
-        guard let index = assistantMessageIndex(id: id),
-              messages[index].blocks.isEmpty else { return }
+    func dropEmptyAssistantTurn(id: UUID) {
+        guard let index = assistantMessageIndex(id: id) else { return }
+        messages[index].blocks.removeAll { Self.chatBlock(from: $0) == nil }
+        guard messages[index].blocks.isEmpty else { return }
         messages.remove(at: index)
+    }
+
+    private func appendThinkingDelta(_ chunk: String, toAssistant id: UUID) {
+        guard let index = assistantMessageIndex(id: id) else { return }
+        if case .thinking(let existing, let signature)? = messages[index].blocks.last {
+            messages[index].blocks[messages[index].blocks.count - 1] = .thinking(
+                text: existing + chunk,
+                signature: signature
+            )
+        } else {
+            messages[index].blocks.append(.thinking(text: chunk, signature: ""))
+        }
+    }
+
+    private func appendThinkingSignature(_ chunk: String, toAssistant id: UUID) {
+        guard let index = assistantMessageIndex(id: id) else { return }
+        if case .thinking(let text, let existing)? = messages[index].blocks.last {
+            messages[index].blocks[messages[index].blocks.count - 1] = .thinking(
+                text: text,
+                signature: existing + chunk
+            )
+        } else {
+            messages[index].blocks.append(.thinking(text: "", signature: chunk))
+        }
+    }
+
+    private func appendRedactedThinking(_ data: String, toAssistant id: UUID) {
+        guard let index = assistantMessageIndex(id: id) else { return }
+        messages[index].blocks.append(.redactedThinking(data: data))
     }
 
     private func appendTextDelta(_ chunk: String, toAssistant id: UUID) {
@@ -507,7 +546,7 @@ final class AgentService {
         messages[index].blocks.append(.toolUse(id: toolUseID, name: name, inputJSON: inputJSON))
     }
 
-    private func runPendingToolUses(assistantID: UUID) async {
+    private func runPendingToolUses(assistantID: UUID, conversationID: UUID) async {
         guard let assistantIndex = assistantMessageIndex(id: assistantID) else { return }
         guard let executor = toolExecutor else {
             messages.append(AgentMessage(role: .user, blocks: [.text("Tool executor unavailable.")]))
@@ -526,7 +565,11 @@ final class AgentService {
                 resultBlocks.append(.toolResult(toolUseId: use.id, content: [.text("Cancelled")], isError: true))
                 continue
             }
-            let result = await executor.execute(name: use.name, args: Self.parseJSONObject(use.input))
+            let result = await executor.execute(
+                name: use.name,
+                args: Self.parseJSONObject(use.input),
+                sessionID: conversationID.uuidString
+            )
             resultBlocks.append(.toolResult(toolUseId: use.id, content: result.content, isError: result.isError))
         }
         if !resultBlocks.isEmpty {
@@ -659,9 +702,15 @@ final class AgentService {
     }
 
     /// Maps an app `AgentContentBlock` to a provider-neutral `ChatContentBlock`,
-    /// or nil when the block carries nothing to send (empty text).
+    /// or nil when the block carries nothing to send (empty text, or a thinking
+    /// block whose signature never arrived before cancellation).
     private static func chatBlock(from block: AgentContentBlock) -> ChatContentBlock? {
         switch block {
+        case .thinking(let text, let signature):
+            guard !signature.isEmpty else { return nil }
+            return .thinking(text: text, signature: signature)
+        case .redactedThinking(let data):
+            return .redactedThinking(data: data)
         case .text(let s):
             guard !s.isEmpty else { return nil }
             return .text(s)
@@ -713,18 +762,27 @@ struct AgentMessage: Identifiable, Codable {
 }
 
 enum AgentContentBlock: Codable {
+    case thinking(text: String, signature: String)
+    case redactedThinking(data: String)
     case text(String)
     case toolUse(id: String, name: String, inputJSON: String)
     case toolResult(toolUseId: String, content: [ToolResult.Block], isError: Bool)
 
-    private enum Kind: String, Codable { case text, toolUse, toolResult }
+    private enum Kind: String, Codable { case thinking, redactedThinking, text, toolUse, toolResult }
     private enum CodingKeys: String, CodingKey {
-        case kind, text, id, name, input, toolUseId, content, isError
+        case kind, text, signature, data, id, name, input, toolUseId, content, isError
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(Kind.self, forKey: .kind) {
+        case .thinking:
+            self = .thinking(
+                text: try c.decode(String.self, forKey: .text),
+                signature: try c.decode(String.self, forKey: .signature)
+            )
+        case .redactedThinking:
+            self = .redactedThinking(data: try c.decode(String.self, forKey: .data))
         case .text:
             self = .text(try c.decode(String.self, forKey: .text))
         case .toolUse:
@@ -745,6 +803,13 @@ enum AgentContentBlock: Codable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
+        case .thinking(let text, let signature):
+            try c.encode(Kind.thinking, forKey: .kind)
+            try c.encode(text, forKey: .text)
+            try c.encode(signature, forKey: .signature)
+        case .redactedThinking(let data):
+            try c.encode(Kind.redactedThinking, forKey: .kind)
+            try c.encode(data, forKey: .data)
         case .text(let s):
             try c.encode(Kind.text, forKey: .kind)
             try c.encode(s, forKey: .text)

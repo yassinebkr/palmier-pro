@@ -9,7 +9,7 @@ struct ChatModelCatalogTests {
     @Test func anthropicModelsIncludeSonnetOpusHaiku() {
         let ids = ChatModelCatalog.anthropicModels.map(\.id)
         #expect(ids.contains("claude-sonnet-5"))
-        #expect(ids.contains("claude-opus-4-8"))
+        #expect(ids.contains("claude-opus-5"))
         #expect(ids.contains("claude-haiku-4-5-20251001"))
         #expect(ChatModelCatalog.anthropicModels.allSatisfy { $0.provider == "anthropic" })
     }
@@ -26,9 +26,14 @@ struct ChatModelCatalogTests {
     }
 
     @Test func resolveKnownIdReturnsMatchingModel() {
+        let model = ChatModelCatalog.resolve(provider: "anthropic", id: "claude-opus-5")
+        #expect(model.id == "claude-opus-5")
+        #expect(model.displayName == "Opus 5")
+    }
+
+    @Test func resolveMigratesRetiredOpus48Selection() {
         let model = ChatModelCatalog.resolve(provider: "anthropic", id: "claude-opus-4-8")
-        #expect(model.id == "claude-opus-4-8")
-        #expect(model.displayName == "Opus 4.8")
+        #expect(model.id == "claude-opus-5")
     }
 
     @Test func resolveUnknownIdFallsBackToProviderDefault() {

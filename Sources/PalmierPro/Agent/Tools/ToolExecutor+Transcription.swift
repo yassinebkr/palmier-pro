@@ -205,19 +205,15 @@ extension ToolExecutor {
         let remaining = account.remainingCredits
         guard remaining > 0 else { throw ToolError("Add credits to use Cloud transcription.") }
         if cost > remaining {
-            throw ToolError("\(CostEstimator.format(cost)) needed. Only \(remaining.formatted()) remaining.")
+            throw ToolError("\(CostEstimator.stableDescription(cost)) needed. Only \(remaining) remaining.")
         }
     }
 
     func getTranscript(_ editor: EditorViewModel, _ args: [String: Any]) async throws -> ToolResult {
         try validateUnknownKeys(args, allowed: Self.getTranscriptAllowedKeys, path: "get_transcript")
         let clipFilter = args.string("clipId")
-        let windowStart = args.int("startFrame")
-        let windowEnd = args.int("endFrame")
-        if let start = windowStart, let end = windowEnd, start >= end {
-            throw ToolError("startFrame (\(start)) must be less than endFrame (\(end))")
-        }
-        try validateTranscriptClipFilter(clipFilter, editor)
+        let window = try Self.frameWindow(args)
+        let resolvedClipFilter = try resolveTranscriptClipFilter(clipFilter, editor)
 
         let granularity = args.string("granularity") ?? "words"
         guard granularity == "words" || granularity == "segments" else {
@@ -232,9 +228,9 @@ extension ToolExecutor {
 
         let out = transcript.responsePayload(
             fps: editor.timeline.fps,
-            clipId: clipFilter,
-            startFrame: windowStart,
-            endFrame: windowEnd,
+            clipId: resolvedClipFilter,
+            startFrame: window?.lowerBound,
+            endFrame: window?.upperBound,
             maxWords: Self.transcriptWordLimit,
             segments: granularity == "segments"
         )
@@ -251,14 +247,22 @@ extension ToolExecutor {
         return TimelineTranscript(context: context, words: words, skipped: skipped)
     }
 
-    private func validateTranscriptClipFilter(_ clipId: String?, _ editor: EditorViewModel) throws {
-        guard let clipId else { return }
+    /// Resolves the clip filter to a transcribable clip. When the requested
+    /// clip carries no transcribable samples (e.g. video), follows its linked
+    /// audio partner so transcripts and captions use the intended source.
+    func resolveTranscriptClipFilter(_ clipId: String?, _ editor: EditorViewModel) throws -> String? {
+        guard let clipId else { return nil }
         guard editor.findClip(id: clipId) != nil else {
             throw ToolError("Clip \(clipId) not found.")
         }
-        guard editor.captionTargets(ids: []).contains(where: { $0.id == clipId }) else {
-            throw ToolError("Clip \(clipId) has no transcribable audio. If it's a video with linked audio, scope to the linked audio clip instead.")
+        let targets = editor.captionTargets(ids: [])
+        if targets.contains(where: { $0.id == clipId }) { return clipId }
+        if let linked = editor.linkedPartnerIds(of: clipId).first(where: { id in
+            targets.contains(where: { $0.id == id })
+        }) {
+            return linked
         }
+        throw ToolError("Clip \(clipId) has no transcribable audio.")
     }
 
     private func timelineWords(_ editor: EditorViewModel, context: TranscriptionToolContext) async throws -> (words: [TimelineWord], skipped: [[String: Any]]) {

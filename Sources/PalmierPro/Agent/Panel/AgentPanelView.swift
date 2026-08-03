@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct AgentPanelView: View {
@@ -5,39 +6,46 @@ struct AgentPanelView: View {
 
     private static let starterPrompts: [AgentStarterPrompt] = [
         AgentStarterPrompt(
-            title: "Generate an AI video",
-            systemImage: "sparkles",
-            prompt: "Generate an AI video of "
+            id: "keep_best_takes",
+            title: L10n.string("Keep the best takes"),
+            systemImage: "scissors",
+            prompt: "Tighten this edit. Keep the strongest takes, cut filler words and long silences, and leave a clean continuous cut."
         ),
         AgentStarterPrompt(
-            title: "Generate B-roll",
+            id: "sync_multicam",
+            title: L10n.string("Sync my multicam"),
+            systemImage: "rectangle.on.rectangle.angled",
+            prompt: "Set up my multicam. Group the matching camera angles with their audio, verify sync, and leave it ready to switch."
+        ),
+        AgentStarterPrompt(
+            id: "generate_broll",
+            title: L10n.string("Generate B-roll"),
             systemImage: "film",
-            prompt: "Generate B-roll for my timeline. Inspect the current edit, identify sections that would benefit from cutaways, generate suitable B-roll, and place it where it supports the story."
+            prompt: "Generate B-roll that fits this edit. Find moments that need cutaways, create matching shots, and place them where they support the story."
         ),
         AgentStarterPrompt(
-            title: "Create a letterbox opening",
-            systemImage: "camera.aperture",
-            prompt: "Create a cinematic opening for my timeline. Use the first visual clip, animate a subtle letterbox matte with top and bottom crop keyframes, starting from crop to uncrop,and keep the motion restrained and polished."
-        ),
-        AgentStarterPrompt(
-            title: "Add captions to my timeline",
-            systemImage: "captions.bubble",
-            prompt: "Add captions to my timeline. Transcribe spoken audio in timeline clips, build readable caption phrases on word boundaries, and place them as text clips aligned to the edit."
-        ),
-        AgentStarterPrompt(
-            title: "Create a voiceover",
-            systemImage: "waveform",
-            prompt: "Create a voiceover for my timeline. Draft concise narration for the current edit, generate the voiceover, and add it to an audio track aligned with the timeline."
-        ),
-        AgentStarterPrompt(
-            title: "Generate music and sync to my timeline",
+            id: "score_timeline",
+            title: L10n.string("Score my timeline"),
             systemImage: "music.note",
-            prompt: "Score my timeline with music. Inspect the edit's mood and pacing, generate music for the full timeline, and place it on an audio track aligned to the edit."
+            prompt: "Generate music for this timeline. Match the mood and length, then place it on an audio track synced to the edit."
         ),
         AgentStarterPrompt(
-            title: "Organize my media into structured folders",
-            systemImage: "folder",
-            prompt: "Organize my media into structured folders. Review all assets, create clearly named folders by role, scene, or type, move assets into them, and rename generic files when useful. Don't delete anything or change the timeline."
+            id: "cut_to_beat",
+            title: L10n.string("Cut to the beat"),
+            systemImage: "metronome",
+            prompt: "Assemble my clips to the beat of a song. Detect the beats and cut or place clips so the edit hits the rhythm."
+        ),
+        AgentStarterPrompt(
+            id: "add_captions",
+            title: L10n.string("Add captions"),
+            systemImage: "captions.bubble",
+            prompt: "Add captions to this timeline. Transcribe the dialogue, phrase it for readability, and place text clips locked to the speech."
+        ),
+        AgentStarterPrompt(
+            id: "make_vertical_shorts",
+            title: L10n.string("Make vertical shorts"),
+            systemImage: "rectangle.portrait",
+            prompt: "Find the strongest moments in this video and turn each into a short-form vertical clip. Create multiple 9:16 timelines, reframe for vertical, and keep every clip tight and self-contained."
         ),
     ]
 
@@ -57,7 +65,6 @@ struct AgentPanelView: View {
             }
             footer
         }
-        .background(AppTheme.Background.surfaceColor)
     }
 
     private var floatingTabBar: some View {
@@ -89,13 +96,10 @@ struct AgentPanelView: View {
             .padding(.horizontal, AppTheme.Spacing.sm)
             .frame(maxWidth: .infinity)
             .frame(height: Layout.panelHeaderHeight)
-            .glassEffect(.regular, in: Rectangle())
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(AppTheme.Border.subtleColor)
-                    .frame(height: AppTheme.BorderWidth.hairline)
-            }
+            .glassEffect(.regular, in: .rect(cornerRadius: AppTheme.Radius.lg))
         }
+        .padding(.horizontal, AppTheme.Spacing.mdLg)
+        .padding(.top, AppTheme.Spacing.sm)
     }
 
     private var newTabButton: some View {
@@ -107,7 +111,7 @@ struct AgentPanelView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("New chat")
+        .help(L10n.string("New chat"))
     }
 
     @State private var showHistory = false
@@ -122,7 +126,7 @@ struct AgentPanelView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("Chat history")
+        .help(L10n.string("Chat history"))
         .popover(isPresented: $showHistory, arrowEdge: .top) {
             ChatHistoryList(
                 sessions: service.sessions.sorted { $0.updatedAt > $1.updatedAt },
@@ -191,10 +195,12 @@ struct AgentPanelView: View {
     @ViewBuilder
     private var byokIndicator: some View {
         if service.effectiveProvider.requiresAPIKey {
-            Text("using API key")
+            Text(L10n.string("using API key"))
                 .font(.system(size: AppTheme.FontSize.xs).italic())
                 .foregroundStyle(AppTheme.Text.tertiaryColor)
-                .help("Streaming through your \(service.effectiveProvider.displayName) API key (BYOK)")
+                .help(service.effectiveProvider.id == "openai"
+                    ? L10n.string("Streaming through your OpenAI API key (BYOK)")
+                    : L10n.string("Streaming through your Anthropic API key (BYOK)"))
         }
     }
 
@@ -241,10 +247,11 @@ struct AgentPanelView: View {
                         .padding(.top, AppTheme.Spacing.sm)
                 }
                 .padding(.horizontal, AppTheme.Spacing.lgXl)
-                .padding(.top, Layout.panelHeaderHeight + AppTheme.Spacing.sm)
+                .padding(.top, Layout.panelHeaderHeight + AppTheme.Spacing.mdLg)
                 .padding(.bottom, AppTheme.Spacing.smMd)
                 .frame(maxWidth: Layout.chatColumnMax)
                 .frame(maxWidth: .infinity)
+                .background(AgentOverlayScrollerStyle())
             }
             .scrollIndicators(.never)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
@@ -279,7 +286,7 @@ struct AgentPanelView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("Scroll to latest")
+        .help(L10n.string("Scroll to latest"))
     }
 
     @ViewBuilder
@@ -311,11 +318,11 @@ struct AgentPanelView: View {
         guard let error else { return nil }
         switch error {
         case .unauthenticated:
-            return ErrorCTA(title: "Sign in") {
+            return ErrorCTA(title: L10n.string("Sign in")) {
                 SettingsWindowController.shared.show(tab: .account)
             }
         case .insufficientCredits:
-            return ErrorCTA(title: "View plans") {
+            return ErrorCTA(title: L10n.string("View plans")) {
                 SettingsWindowController.shared.show(tab: .account)
             }
         case .upstream:
@@ -327,13 +334,16 @@ struct AgentPanelView: View {
     private var emptyState: some View {
         if service.canStream {
             VStack(spacing: AppTheme.Spacing.smMd) {
-                Text("Ask anything, or start with:")
+                Text(L10n.string("Ask anything, or start with:"))
                     .font(.system(size: AppTheme.FontSize.smMd, weight: AppTheme.FontWeight.medium))
                     .foregroundStyle(AppTheme.Text.secondaryColor)
                     .multilineTextAlignment(.center)
                 VStack(spacing: AppTheme.Spacing.xs) {
                     ForEach(Self.starterPrompts) { starterPrompt in
                         AgentStarterPromptButton(starterPrompt: starterPrompt) {
+                            Analytics.capture(.agentStarterPromptClicked, properties: [
+                                "starter_prompt": starterPrompt.id,
+                            ])
                             populatePrompt(starterPrompt.prompt)
                         }
                     }
@@ -357,13 +367,13 @@ struct AgentPanelView: View {
             .buttonStyle(.capsule(.prominent, size: .regular))
 
             if !account.isSignedIn {
-                Text("First-time sign-ups only")
+                Text(L10n.string("First-time sign-ups only"))
                     .font(.system(size: AppTheme.FontSize.sm))
                     .foregroundStyle(AppTheme.Text.mutedColor)
             }
 
             Button(action: { SettingsWindowController.shared.show(tab: .agent) }) {
-                Text("or use your own Anthropic key")
+                Text(L10n.string("or use your own Anthropic key"))
                     .underline()
                     .foregroundStyle(AppTheme.Text.secondaryColor)
                     .padding(.horizontal, AppTheme.Spacing.sm)
@@ -375,10 +385,10 @@ struct AgentPanelView: View {
         }
     }
 
-    private func missingKeyPrimaryLabel(account: AccountService) -> LocalizedStringKey {
-        if !account.isSignedIn { return "Log in for 250 free credits" }
-        if !account.isPaid { return "Subscribe" }
-        return "Open Settings"
+    private func missingKeyPrimaryLabel(account: AccountService) -> String {
+        if !account.isSignedIn { return L10n.string("Log in for 250 free credits") }
+        if !account.isPaid { return L10n.string("Subscribe") }
+        return L10n.string("Open Settings")
     }
 
     private func missingKeyPrimaryIcon(account: AccountService) -> String {
@@ -445,8 +455,37 @@ struct AgentPanelView: View {
     }
 }
 
+private struct AgentOverlayScrollerStyle: NSViewRepresentable {
+    func makeNSView(context: Context) -> AgentOverlayScrollerProbe {
+        AgentOverlayScrollerProbe()
+    }
+
+    func updateNSView(_ nsView: AgentOverlayScrollerProbe, context: Context) {
+        nsView.apply()
+    }
+}
+
+private final class AgentOverlayScrollerProbe: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    func apply() {
+        var ancestor = superview
+        while let current = ancestor {
+            if let scrollView = current as? NSScrollView {
+                scrollView.scrollerStyle = .overlay
+                scrollView.autohidesScrollers = true
+                return
+            }
+            ancestor = current.superview
+        }
+    }
+}
+
 private struct AgentStarterPrompt: Identifiable {
-    let id = UUID()
+    let id: String
     let title: String
     let systemImage: String
     let prompt: String
@@ -472,19 +511,12 @@ private struct AgentStarterPromptButton: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hoverHighlight(cornerRadius: AppTheme.Radius.sm)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
-                    .fill(AppTheme.Background.raisedColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
-                    .strokeBorder(AppTheme.Border.subtleColor, lineWidth: AppTheme.BorderWidth.hairline)
-            )
+            .hoverHighlight(cornerRadius: AppTheme.Radius.lg)
+            .glassEffect(.regular, in: .rect(cornerRadius: AppTheme.Radius.lg))
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("Fill prompt")
+        .help(L10n.string("Fill prompt"))
     }
 }
 
