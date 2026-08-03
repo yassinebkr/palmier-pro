@@ -39,6 +39,14 @@ let package = Package(
                 publicHeadersPath: ".", cSettings: [
                     .headerSearchPath("."),
                 ]),
+        // miniaudio as a regular C target (stb pattern): ma_impl.c defines
+        // MINIAUDIO_IMPLEMENTATION, CMiniaudio.h declares the API for Swift.
+        .target(name: "CMiniaudio", path: "CMiniaudio",
+                exclude: ["miniaudio.h"],
+                sources: ["ma_impl.c"],
+                publicHeadersPath: ".", cSettings: [
+                    .headerSearchPath("."),
+                ]),
         // Dear ImGui flat-C wrapper. C++ target — compiles the wrapper + ImGui
         // core + Vulkan/Win32 backends. Exposes extern "C" functions for Swift.
         .target(name: "CImGui", path: "CImGui",
@@ -75,14 +83,14 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags([
                     (vkLib as NSString).appendingPathComponent("vulkan-1.lib"),
-                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale",
+                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale", "-lswresample",
                     "-L", ffLib,
                 ]),
             ]
         ),
         .target(
             name: "PalmierWin",
-            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "CImGui", "PalmierCore"],
+            dependencies: ["CMediaFoundation", "CVulkan", "CFFmpeg", "CSTBTrueType", "CImGui", "CMiniaudio", "PalmierCore"],
             path: "Sources/PalmierWin",
             swiftSettings: [
                 .unsafeFlags(["-I", vkInc, "-I", ffInc]),
@@ -99,7 +107,7 @@ let package = Package(
                 // than -l + -L: lld-link's -l search has been flaky for these.
                 .unsafeFlags([
                     (vkLib as NSString).appendingPathComponent("vulkan-1.lib"),
-                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale",
+                    "-lavformat", "-lavcodec", "-lavutil", "-lswscale", "-lswresample",
                     "-L", ffLib,
                 ]),
             ]

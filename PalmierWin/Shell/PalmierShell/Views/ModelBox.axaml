@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PalmierShell.Views.ModelBox">
+  <Button x:Name="Trigger" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+          FontSize="11" Padding="8,4">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock x:Name="Current" Grid.Column="0" TextTrimming="CharacterEllipsis"
+                 VerticalAlignment="Center"/>
+      <Path Grid.Column="1" Margin="6,0,0,0" Data="M 0,0 L 4,4 L 8,0"
+            Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.3"
+            StrokeLineCap="Round" VerticalAlignment="Center"/>
+    </Grid>
+    <Button.Flyout>
+      <Flyout Placement="Bottom">
+        <Grid RowDefinitions="Auto,*,Auto" Width="290">
+          <TextBox x:Name="Search" Grid.Row="0" FontSize="11" Margin="0,0,0,4"
+                   Watermark="Search, or paste a model id" KeyDown="OnSearchKeyDown"
+                   TextChanged="OnSearchChanged"/>
+          <ListBox x:Name="List" Grid.Row="1" MaxHeight="260" FontSize="11"
+                   Background="Transparent" BorderThickness="0"
+                   SelectionChanged="OnItemChosen"/>
+          <TextBlock x:Name="Hint" Grid.Row="2" FontSize="10" Margin="2,4,0,0"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+        </Grid>
+      </Flyout>
+    </Button.Flyout>
+  </Button>
+</UserControl>

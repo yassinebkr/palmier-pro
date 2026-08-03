@@ -20,15 +20,10 @@ public final class WinExporter {
     public let renderSize: Size2D
     private let instructions: [RenderInstruction]
     private let totalFrames: Int
-    private var caches: [TrackID: TrackCache] = [:]
+    private var caches: [TrackID: DecodedFrameCache] = [:]
     private let mediaPaths: [TrackID: String]
-
-    private final class TrackCache {
-        let decoder: FFmpegDecoder
-        var lastFrame: Int = -1
-        var texture: VulkanTexture?
-        init(decoder: FFmpegDecoder) { self.decoder = decoder }
-    }
+    /// Timeline frame rate; source frame indices are expressed in it.
+    private let fps: Int
 
     /// Builds the exporter for a planned timeline. The encoder writes to `path`.
     public init?(
@@ -64,8 +59,13 @@ public final class WinExporter {
             resolveTimeline: { _ in nil }
         )
         self.totalFrames = timeline.totalFrames
+        self.fps = max(1, timeline.fps)
         self.mediaPaths = mediaPaths
     }
+
+    /// Per-frame progress hook: (framesEncoded, totalFrames). Called on the
+    /// exporting thread after each frame.
+    public var onFrame: ((Int, Int) -> Void)?
 
     /// Exports every timeline frame to the encoder, then drains + closes the
     /// encoder (writing the trailer). Returns the number of frames encoded.
@@ -76,6 +76,7 @@ public final class WinExporter {
             try Task.checkCancellation()
             drawAndEncodeFrame(frame: frame)
             encoded += 1
+            onFrame?(encoded, totalFrames)
         }
         try encoder.close()
         return encoded
@@ -111,15 +112,14 @@ public final class WinExporter {
 
         // Apply effects (ping-pong between offscreen and scratch). The MVP
         // applies the union of enabled effects from all clips to the composited
-        // frame; per-layer effects come later. Effect passes record into a
-        // one-shot command buffer (the render's protocol method already
-        // submitted + waited on its own).
+        // frame; per-layer effects come later.
         var finalTexture = offscreen
         let allEffects = instruction.layers.flatMap { $0.clip.effects ?? [] }
         if !allEffects.isEmpty {
             let firstLayerStart = instruction.layers.first?.clip.startFrame ?? 0
-            finalTexture = recordAndApplyEffects(
-                allEffects, frame: frame, clipStartFrame: firstLayerStart
+            finalTexture = renderer.applyEffectsOneShot(
+                allEffects, frame: frame, clipStartFrame: firstLayerStart,
+                source: offscreen, scratch: scratch
             ) ?? offscreen
         }
 
@@ -129,119 +129,29 @@ public final class WinExporter {
         }
     }
 
-    /// Allocates a one-shot command buffer, records the effect chain via
-    /// WinFrameRenderer.applyEffects, submits, and waits. Returns the texture
-    /// holding the final result (offscreen or scratch depending on pass count).
-    private func recordAndApplyEffects(_ effects: [Effect], frame: Int, clipStartFrame: Int) -> VulkanTexture? {
-        let dev = device.device
-        var cbInfo = VkCommandBufferAllocateInfo()
-        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-        cbInfo.commandPool = device.commandPool
-        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
-        cbInfo.commandBufferCount = 1
-        var cmd: VkCommandBuffer? = nil
-        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
-              let cmd else { return nil }
-        var beginInfo = VkCommandBufferBeginInfo()
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
-        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
-            var toFree: VkCommandBuffer? = cmd
-            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-            return nil
-        }
-        let result = renderer.applyEffects(
-            effects, frame: frame, clipStartFrame: clipStartFrame,
-            source: offscreen, scratch: scratch, commandBuffer: cmd
-        )
-        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
-            var toFree: VkCommandBuffer? = cmd
-            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-            return nil
-        }
-
-        var fenceInfo = VkFenceCreateInfo()
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
-        var fence: VkFence? = nil
-        guard withUnsafePointer(to: &fenceInfo, { vkCreateFence(dev, $0, nil, &fence) }) == VK_SUCCESS, let fence else {
-            var toFree: VkCommandBuffer? = cmd
-            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-            return nil
-        }
-        var submitInfo = VkSubmitInfo()
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
-        submitInfo.commandBufferCount = 1
-        var cmdHandle: VkCommandBuffer? = cmd
-        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ch in
-            submitInfo.pCommandBuffers = ch
-            return withUnsafePointer(to: &submitInfo) { si in
-                vkQueueSubmit(device.graphicsQueue, 1, si, fence)
-            }
-        }
-        if submitResult == VK_SUCCESS {
-            var fenceHandle: VkFence? = fence
-            withUnsafePointer(to: &fenceHandle) { f in
-                _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
-            }
-        }
-        vkDestroyFence(dev, fence, nil)
-        var toFree: VkCommandBuffer? = cmd
-        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-        return result
-    }
-
     private func segment(for frame: Int) -> RenderInstruction? {
-        for instr in instructions where frame >= instr.frameRange.start && frame < instr.frameRange.end {
-            return instr
-        }
-        return instructions.last
+        TimelineLookup.segment(instructions, frame: frame)
     }
 
     private func sourceFrameIndex(for layer: LayerPlan, timelineFrame: Int) -> Int {
-        let local = timelineFrame - layer.clip.startFrame
-        let scaled = Double(local) * layer.clip.speed
-        return max(0, Int(scaled.rounded()))
+        TimelineLookup.sourceFrame(for: layer, timelineFrame: timelineFrame)
     }
 
-    /// Decode cache (mirrors WinPlayback). Returns the decoded texture for
-    /// `trackID` at `frame`, decoding forward or seeking as needed.
+    /// The decoded texture for `trackID` at `frame`. Shares DecodedFrameCache
+    /// with playback: this used to be a copy of the same twenty lines, and the
+    /// copy still took whatever keyframe a seek landed on and called it the
+    /// requested frame — so every clip after the first exported from the wrong
+    /// place, and passed its own colour bars off as the second clip's picture.
     private func texture(for trackID: TrackID, frame: Int, natSize: Size2D) -> VulkanTexture? {
-        let cache: TrackCache
+        let cache: DecodedFrameCache
         if let existing = caches[trackID] {
             cache = existing
         } else {
             guard let path = mediaPaths[trackID],
-                  let decoder = try? FFmpegDecoder(path: path) else {
-                return nil
-            }
-            cache = TrackCache(decoder: decoder)
+                  let made = DecodedFrameCache(path: path, device: device, fps: fps) else { return nil }
+            cache = made
             caches[trackID] = cache
         }
-        if frame == cache.lastFrame, let tex = cache.texture { return tex }
-
-        if frame < cache.lastFrame || frame > cache.lastFrame + 1 {
-            try? cache.decoder.seek(timestamp: Int64(frame))
-            cache.lastFrame = frame - 1
-        }
-        while cache.lastFrame < frame {
-            cache.lastFrame += 1
-            if cache.lastFrame == frame {
-                if let bgra = try? cache.decoder.nextBGRAFrame() {
-                    let w = cache.decoder.info.width
-                    let h = cache.decoder.info.height
-                    if cache.texture == nil {
-                        cache.texture = VulkanTexture(device: device, width: UInt32(w), height: UInt32(h))
-                    }
-                    if cache.texture?.width == UInt32(w), cache.texture?.height == UInt32(h) {
-                        _ = cache.texture?.upload(bgra: bgra)
-                    }
-                } else {
-                    return cache.texture  // EOF — hold last frame
-                }
-            } else {
-                _ = try? cache.decoder.nextBGRAFrame()
-            }
-        }
-        return cache.texture
+        return cache.texture(at: frame)
     }
 }

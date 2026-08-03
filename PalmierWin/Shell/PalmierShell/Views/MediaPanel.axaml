@@ -1,0 +1,213 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+             xmlns:views="clr-namespace:PalmierShell.Views"
+             xmlns:gen="clr-namespace:PalmierShell.Core.Generation"
+             x:Class="PalmierShell.Views.MediaPanel"
+             x:DataType="vm:MediaPanelViewModel">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.mediaItem:pointerover">
+      <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,Auto,*">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,8,8,4">
+      <Button Content="+ Import" Command="{Binding ImportCommand}"/>
+      <Button Content="Generate" Command="{Binding Generate.ToggleOpenCommand}"/>
+      <!-- Plus first, then the folder: the same reading order as "+ Import". -->
+      <Button Command="{Binding CreateFolderCommand}" Padding="7,4"
+              ToolTip.Tip="New folder">
+        <Path Data="M 2,2 V 8 M -1,5 H 5 M 8,2 L 12,2 L 13.5,4 L 20,4 L 20,11 L 8,11 Z"
+              Stroke="{StaticResource ThemeTextSecondaryBrush}" StrokeThickness="1.3"
+              StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center"/>
+      </Button>
+      <Button Command="{Binding OpenInViewerCommand}" CommandParameter="{Binding SelectedItem}"
+              IsEnabled="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}"
+              Padding="7,4" ToolTip.Tip="Open the selected item in the viewer">
+        <Path Data="M 0,1 H 14 V 10 H 0 Z M 5.5,3.5 L 9.5,5.5 L 5.5,7.5 Z"
+              Stroke="{StaticResource ThemeTextSecondaryBrush}" StrokeThickness="1.2"
+              StrokeJoin="Round" VerticalAlignment="Center"/>
+      </Button>
+    </StackPanel>
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="8,4">
+      <TextBox Grid.Column="0" Watermark="Search" Text="{Binding SearchText, Mode=TwoWay}"/>
+      <!-- One toggle instead of twin buttons: the icon shows the view you
+           would switch to, so it never reads as a second sort control. -->
+      <Button Grid.Column="1" Classes="icon" Margin="6,0,0,0" Padding="5,4"
+              Command="{Binding ToggleViewCommand}" ToolTip.Tip="Switch grid / list view">
+        <Panel>
+          <Path Data="M 0,1 H 10 M 0,5 H 10 M 0,9 H 10" IsVisible="{Binding !ListView}"
+                Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.2" StrokeLineCap="Round"
+                VerticalAlignment="Center"/>
+          <Path Data="M 0,0 H 4 V 4 H 0 Z M 6,0 H 10 V 4 H 6 Z M 0,6 H 4 V 10 H 0 Z M 6,6 H 10 V 10 H 6 Z"
+                IsVisible="{Binding ListView}"
+                Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1"
+                VerticalAlignment="Center"/>
+        </Panel>
+      </Button>
+      <!-- Sorting wears the sort glyph: one arrow up, one arrow down. -->
+      <Button Grid.Column="2" Classes="icon" Margin="2,0,0,0" Padding="5,4"
+              ToolTip.Tip="Sort and thumbnail size">
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuItem Header="Sort by Date Added" Command="{Binding SortByCommand}" CommandParameter="Added"/>
+            <MenuItem Header="Sort by Name" Command="{Binding SortByCommand}" CommandParameter="Name"/>
+            <MenuItem Header="Sort by Duration" Command="{Binding SortByCommand}" CommandParameter="Duration"/>
+            <MenuItem Header="Sort by Type" Command="{Binding SortByCommand}" CommandParameter="Type"/>
+            <Separator/>
+            <MenuItem Header="Small Thumbnails" Command="{Binding SetThumbSizeCommand}" CommandParameter="Small"/>
+            <MenuItem Header="Medium Thumbnails" Command="{Binding SetThumbSizeCommand}" CommandParameter="Medium"/>
+            <MenuItem Header="Large Thumbnails" Command="{Binding SetThumbSizeCommand}" CommandParameter="Large"/>
+          </MenuFlyout>
+        </Button.Flyout>
+        <Path Data="M 3,9.5 V 0.5 M 0.5,3 L 3,0.5 L 5.5,3 M 8,0.5 V 9.5 M 5.5,7 L 8,9.5 L 10.5,7"
+              Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.2" StrokeLineCap="Round"
+              StrokeJoin="Round" VerticalAlignment="Center"/>
+      </Button>
+    </Grid>
+    <ScrollViewer Grid.Row="2" Margin="4,4,4,8">
+      <StackPanel>
+      <!-- Generations in flight: placeholder tiles until the file lands -->
+      <ItemsControl ItemsSource="{Binding Generate.Jobs}" Margin="4,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:GenerationJobViewModel">
+            <Border Margin="0,2" Padding="8,6" CornerRadius="4"
+                    Background="{StaticResource ThemeRaisedBrush}"
+                    BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="1">
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Prompt}" FontSize="11"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding StatusText}" FontSize="10"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="&#x00D7;" FontSize="11"
+                        Background="Transparent" Padding="6,0" VerticalAlignment="Center"
+                        Command="{Binding CancelCommand}" IsVisible="{Binding !Failed}"
+                        ToolTip.Tip="Cancel"/>
+                <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="&#x00D7;" FontSize="11"
+                        Background="Transparent" Padding="6,0" VerticalAlignment="Center"
+                        IsVisible="{Binding Failed}" Click="OnDismissJob" ToolTip.Tip="Dismiss"/>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <ItemsControl ItemsSource="{Binding FolderGroups}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:MediaFolderGroup">
+            <StackPanel>
+              <Grid ColumnDefinitions="*,Auto" Margin="6,8,6,2"
+                    Background="Transparent" Tapped="OnFolderHeaderTapped">
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Rename" Click="OnRenameFolder"/>
+                    <MenuItem Header="Delete" Click="OnDeleteFolder"/>
+                  </ContextMenu>
+                </Grid.ContextMenu>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                  <Panel Width="8" Height="8" VerticalAlignment="Center">
+                    <Path Data="M 0,0 L 5,4 L 0,8 Z" Fill="{StaticResource ThemeTextMutedBrush}"
+                          Stretch="Uniform" IsVisible="{Binding !IsExpanded}"/>
+                    <Path Data="M 0,0 L 8,0 L 4,5 Z" Fill="{StaticResource ThemeTextMutedBrush}"
+                          Stretch="Uniform" IsVisible="{Binding IsExpanded}"/>
+                  </Panel>
+                  <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center"
+                             Foreground="{StaticResource ThemeTextTertiaryBrush}"
+                             IsVisible="{Binding !IsRenaming}"/>
+                  <TextBox Text="{Binding EditName, Mode=TwoWay}" FontSize="11" MinWidth="90"
+                           Padding="4,1" IsVisible="{Binding IsRenaming}"
+                           KeyDown="OnRenameKeyDown" LostFocus="OnRenameLostFocus"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding CountText}" FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              </Grid>
+              <!-- List view: compact rows, the details a grid tile hides. -->
+              <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsExpanded"/>
+                    <Binding Path="$parent[UserControl].((vm:MediaPanelViewModel)DataContext).ListView"/>
+                  </MultiBinding>
+                </ItemsControl.IsVisible>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MediaItemViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="6,1" Height="26"
+                          Background="Transparent"
+                          DoubleTapped="OnItemDoubleTapped"
+                          PointerPressed="OnItemPointerPressed"
+                          PointerReleased="OnItemPointerReleased"
+                          ContextRequested="OnItemContextRequested">
+                      <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="40" Height="22"
+                             Stretch="UniformToFill"/>
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11" Margin="8,0"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                 Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+                      <TextBlock Grid.Column="2" Text="{Binding ResolutionText}" FontSize="10" Margin="6,0"
+                                 VerticalAlignment="Center"
+                                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                      <TextBlock Grid.Column="3" Text="{Binding DurationText}" FontSize="10"
+                                 VerticalAlignment="Center"
+                                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsExpanded"/>
+                    <Binding Path="!$parent[UserControl].((vm:MediaPanelViewModel)DataContext).ListView"/>
+                  </MultiBinding>
+                </ItemsControl.IsVisible>
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MediaItemViewModel">
+            <StackPanel Classes="mediaItem" Margin="4" Spacing="2"
+                        Width="{Binding $parent[UserControl].((vm:MediaPanelViewModel)DataContext).TileWidth}"
+                        Background="Transparent"
+                        DoubleTapped="OnItemDoubleTapped"
+                        PointerPressed="OnItemPointerPressed"
+                        PointerMoved="OnItemPointerMoved"
+                        PointerReleased="OnItemPointerReleased"
+                        PointerExited="OnItemPointerExited"
+                        ContextRequested="OnItemContextRequested">
+              <Panel Width="{Binding $parent[UserControl].((vm:MediaPanelViewModel)DataContext).ThumbWidth}"
+                     Height="{Binding $parent[UserControl].((vm:MediaPanelViewModel)DataContext).ThumbHeight}">
+                <Border Background="{StaticResource ThemeRaisedBrush}" CornerRadius="4"/>
+                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Background="#B0000000" CornerRadius="3" Padding="4,1" Margin="2">
+                  <TextBlock Text="{Binding DurationText}" FontSize="10"
+                             Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+                </Border>
+                <!-- Hover-scrub position bar -->
+                <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="2"
+                        Background="{StaticResource ThemeTimecodeBrush}"
+                        IsVisible="{Binding Hovering}">
+                  <Border.Width>
+                    <MultiBinding Converter="{x:Static views:MediaPanel.HoverBarWidth}">
+                      <Binding Path="HoverFraction"/>
+                      <Binding Path="$parent[UserControl].((vm:MediaPanelViewModel)DataContext).ThumbWidth"/>
+                    </MultiBinding>
+                  </Border.Width>
+                </Border>
+              </Panel>
+              <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis"
+                         Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+            </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

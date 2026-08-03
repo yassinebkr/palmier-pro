@@ -92,10 +92,9 @@ public final class VulkanLayerPipeline: @unchecked Sendable {
         }
 
         guard let pipeline, let layout, let descriptorSetLayout else {
-            print("[VulkanLayerPipeline] FAILED to create")
+            engineLog("[VulkanLayerPipeline] FAILED to create")
             return nil
         }
-        print("[VulkanLayerPipeline] OK")
         self.device = dev
         self.pipeline = pipeline
         self.layout = layout

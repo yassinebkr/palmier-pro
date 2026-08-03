@@ -16,24 +16,27 @@ import Foundation
 /// isolation as immutable swapchain presents.
 public final class WinPlayback {
     public let device: VulkanDevice
-    public let swapchain: VulkanSwapchain
+    public private(set) var swapchain: VulkanSwapchain
     public let renderer: WinFrameRenderer
     public let offscreen: VulkanTexture
+    /// Ping-pong target for the effect passes, like the exporter's.
+    public let scratch: VulkanTexture
     public let renderSize: Size2D
     private let instructions: [RenderInstruction]
     private let totalFrames: Int
     private let fps: Int
 
-    /// Per-track decode cache: the last decoded frame index + its texture, so
-    /// we don't re-decode the same frame when the timeline stalls on it.
-    private final class TrackCache {
-        let decoder: FFmpegDecoder
-        var lastFrame: Int = -1
-        var texture: VulkanTexture?
-        init(decoder: FFmpegDecoder) { self.decoder = decoder }
-    }
-    private var caches: [TrackID: TrackCache] = [:]
+    /// Decode caches, owned outside the presenter so an edit does not reopen
+    /// every clip's decoder on the render thread.
+    private let caches: DecodeCachePool
     private let mediaPaths: [TrackID: String]
+    /// Clip that owns each track slot, so a cache survives a presenter rebuild.
+    private let clipIds: [TrackID: String]
+
+    /// Transform of the clip the user has selected, or nil for no selection.
+    /// Set by the shell each time selection changes; drawn as a manipulation
+    /// frame over the composite. Preview only — the exporter never sees it.
+    public var selection: Transform?
 
     /// Builds the playback for a planned timeline. `mediaPaths` maps each
     /// trackID to the source file FFmpegDecoder opens; one decoder per track
@@ -44,7 +47,9 @@ public final class WinPlayback {
         timeline: Timeline,
         renderSize: Size2D,
         trackSlots: [String: TrackSlot],
-        mediaPaths: [TrackID: String]
+        mediaPaths: [TrackID: String],
+        clipIds: [TrackID: String] = [:],
+        caches: DecodeCachePool = DecodeCachePool()
     ) {
         guard let renderer = WinFrameRenderer(device: device) else { return nil }
         guard let offscreen = VulkanTexture(
@@ -52,6 +57,12 @@ public final class WinPlayback {
             width: UInt32(renderSize.width),
             height: UInt32(renderSize.height)
         ) else { return nil }
+        guard let scratch = VulkanTexture(
+            device: device,
+            width: UInt32(renderSize.width),
+            height: UInt32(renderSize.height)
+        ) else { return nil }
+        self.scratch = scratch
         self.device = device
         self.swapchain = swapchain
         self.renderer = renderer
@@ -63,8 +74,11 @@ public final class WinPlayback {
             resolveTimeline: { _ in nil }
         )
         self.totalFrames = timeline.totalFrames
-        self.fps = 30
+        self.fps = max(1, timeline.fps)
         self.mediaPaths = mediaPaths
+        self.clipIds = clipIds
+        self.caches = caches
+        caches.keepOnly(clipIds: Set(clipIds.values))
     }
 
     /// Plays the timeline from frame 0, presenting each frame to the swapchain
@@ -92,12 +106,34 @@ public final class WinPlayback {
         print("[WinPlayback] played \(frame) frame(s)")
     }
 
+    /// Swaps in a freshly created swapchain after a window resize. The caller
+    /// must have waited for device idle; decoders and the offscreen survive.
+    public func replaceSwapchain(_ next: VulkanSwapchain) {
+        // The device is idle, so the last submit has finished and its buffer
+        // can go — the fence that gated it belongs to the outgoing swapchain.
+        releasePendingCommandBuffer()
+        swapchain = next
+    }
+
+    deinit {
+        // Owners wait for device idle before releasing the presenter, so the
+        // last submit has completed and its buffer is safe to free.
+        releasePendingCommandBuffer()
+    }
+
     /// Renders one timeline frame: segment lookup → per-track decode →
-    /// WinFrameRenderer composite → blit to swapchain → present.
-    private func drawTimelineFrame(frame: Int) {
+    /// WinFrameRenderer composite → blit to swapchain → present. Public so an
+    /// external clock (the shell's render loop) can drive frames directly.
+    /// Returns false when the swapchain rejected the frame (stale after a
+    /// resize) — the owner should recreate the swapchain and retry.
+    @discardableResult
+    public func drawTimelineFrame(frame: Int) -> Bool {
+        // Before the composite, not after: `offscreen` is the blit's source,
+        // so rendering into it while the previous frame's blit is still
+        // reading overwrites the picture being presented.
+        guard awaitPreviousFrame() else { return true }
         guard let instruction = segment(for: frame) else {
-            presentCleared()
-            return
+            return clearAndPresent()
         }
 
         // Resolve each required track's source frame into a texture. The
@@ -113,95 +149,139 @@ public final class WinPlayback {
             }
         }
 
+        // Handle sizes are in presented pixels, so they stay constant however
+        // the canvas is scaled into the window.
+        let overlay = selection.map {
+            SelectionOverlay.quads(for: $0, surface: Size2D(
+                width: Double(swapchain.extent.width),
+                height: Double(swapchain.extent.height)))
+        } ?? []
+
         // Composite into offscreen via the FrameRendering entry point.
         renderer.render(
             instruction: instruction,
             frame: frame,
             sourceFrame: { id in sources[id] },
+            overlay: overlay,
             into: offscreen
         )
 
-        blitAndPresent()
+        // The same effect pass the exporter runs — the preview showing an
+        // ungraded frame the export would grade is silent drift.
+        var presented = offscreen
+        let allEffects = instruction.layers.flatMap { $0.clip.effects ?? [] }
+        if !allEffects.isEmpty {
+            let firstLayerStart = instruction.layers.first?.clip.startFrame ?? 0
+            presented = renderer.applyEffectsOneShot(
+                allEffects, frame: frame, clipStartFrame: firstLayerStart,
+                source: offscreen, scratch: scratch
+            ) ?? offscreen
+        }
+
+        return blitAndPresent(from: presented)
     }
 
-    /// Finds the RenderInstruction covering `frame`, or nil if past the end.
     private func segment(for frame: Int) -> RenderInstruction? {
-        for instr in instructions where frame >= instr.frameRange.start && frame < instr.frameRange.end {
-            return instr
-        }
-        return instructions.last
+        TimelineLookup.segment(instructions, frame: frame)
     }
 
-    /// Source-frame index for a clip at a given timeline frame. MVP: speed=1.
     private func sourceFrameIndex(for layer: LayerPlan, timelineFrame: Int) -> Int {
-        let local = timelineFrame - layer.clip.startFrame
-        let scaled = Double(local) * layer.clip.speed
-        return max(0, Int(scaled.rounded()))
+        TimelineLookup.sourceFrame(for: layer, timelineFrame: timelineFrame)
     }
 
-    /// Returns the decoded texture for `trackID` at `frame`, decoding + caching
-    /// if the cache is stale. Reuses the existing texture when the frame hasn't
-    /// changed (avoids re-decode on repeated plays of the same frame).
+    /// The decoded texture for `trackID` at `frame`. The seek-and-walk rule
+    /// lives in DecodedFrameCache so playback and export cannot drift apart.
     private func texture(for trackID: TrackID, frame: Int, natSize: Size2D) -> VulkanTexture? {
-        let cache: TrackCache
-        if let existing = caches[trackID] {
-            cache = existing
-        } else {
-            guard let path = mediaPaths[trackID],
-                  let decoder = try? FFmpegDecoder(path: path) else {
-                return nil
+        guard let path = mediaPaths[trackID] else {
+            engineLog("[playback] no media path for track \(trackID)")
+            return nil
+        }
+        let clipId = clipIds[trackID] ?? "track-\(trackID.rawValue)"
+        return caches.cache(clipId: clipId, path: path, device: device, fps: fps)?.texture(at: frame)
+    }
+
+    /// How long a frame waits on the GPU before giving up and trying again.
+    /// An unbounded wait turns one driver hiccup into a preview that never
+    /// updates again while the rest of the app keeps responding — the worst
+    /// kind of failure, because nothing about it looks broken.
+    private static let gpuTimeoutNanoseconds: UInt64 = 1_000_000_000
+
+    /// Frames skipped in a row because the GPU did not come back in time.
+    private var stalledFrames = 0
+
+    /// The command buffer the last submit is still executing. Freeing a
+    /// pending buffer lets the pool hand the same memory to the next frame
+    /// while the GPU is reading it, so it is released only once `inFlight`
+    /// signals.
+    private var pendingCommandBuffer: VkCommandBuffer?
+
+    /// Waits for the previous frame's blit and releases its command buffer.
+    /// False means the GPU did not come back inside the timeout: skip this
+    /// frame and try again — the swapchain is sound, so rebuilding it would
+    /// not help.
+    private func awaitPreviousFrame() -> Bool {
+        var inFlightHandle: VkFence? = swapchain.inFlight
+        let waited = withUnsafePointer(to: &inFlightHandle) { f in
+            vkWaitForFences(device.device, 1, f, UInt32(VK_TRUE), Self.gpuTimeoutNanoseconds)
+        }
+        guard waited == VK_SUCCESS else {
+            stalledFrames += 1
+            PreviewStats.shared.recordStall()
+            if stalledFrames == 1 || stalledFrames % 60 == 0 {
+                engineLog("[WinPlayback] GPU busy past \(Self.gpuTimeoutNanoseconds / 1_000_000) ms; " +
+                          "skipped \(stalledFrames) frame(s)")
             }
-            cache = TrackCache(decoder: decoder)
-            caches[trackID] = cache
+            return false
         }
+        if stalledFrames > 0 {
+            engineLog("[WinPlayback] recovered after \(stalledFrames) skipped frame(s)")
+            stalledFrames = 0
+        }
+        releasePendingCommandBuffer()
+        return true
+    }
 
-        if frame == cache.lastFrame, let tex = cache.texture {
-            return tex
-        }
+    /// Frees the last submitted command buffer. Only call once its fence has
+    /// signalled, or the device is idle.
+    private func releasePendingCommandBuffer() {
+        guard let cmd = pendingCommandBuffer else { return }
+        pendingCommandBuffer = nil
+        free(commandBuffer: cmd)
+    }
 
-        // Seek if we jumped backward or far forward; otherwise decode forward.
-        if frame < cache.lastFrame || frame > cache.lastFrame + 1 {
-            try? cache.decoder.seek(timestamp: Int64(frame))
-            cache.lastFrame = frame - 1
-        }
+    private func free(commandBuffer: VkCommandBuffer) {
+        var toFree: VkCommandBuffer? = commandBuffer
+        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(device.device, device.commandPool, 1, $0) }
+    }
 
-        // Walk forward to the requested frame.
-        while cache.lastFrame < frame {
-            cache.lastFrame += 1
-            if cache.lastFrame == frame {
-                if let bgra = try? cache.decoder.nextBGRAFrame() {
-                    let w = cache.decoder.info.width
-                    let h = cache.decoder.info.height
-                    if cache.texture == nil {
-                        cache.texture = VulkanTexture(device: device, width: UInt32(w), height: UInt32(h))
-                    }
-                    if cache.texture?.width == UInt32(w), cache.texture?.height == UInt32(h) {
-                        _ = cache.texture?.upload(bgra: bgra)
-                    }
-                } else {
-                    return cache.texture  // EOF — hold last frame
-                }
-            } else {
-                _ = try? cache.decoder.nextBGRAFrame()  // discard intermediate
-            }
-        }
-        return cache.texture
+    private func clearAndPresent() -> Bool {
+        renderer.renderEmpty(size: renderSize, fps: fps, into: offscreen)
+        return blitAndPresent()
     }
 
     /// Blits the offscreen composite to the next swapchain image and presents.
-    private func blitAndPresent() {
+    /// The caller must have called `awaitPreviousFrame()` first.
+    ///
+    /// Returns false when the swapchain must be recreated. Every failure after
+    /// the image is acquired reports itself that way on purpose: the acquire
+    /// signalled `imageAvailable`, only a submit can consume it, and rebuilding
+    /// the swapchain is what clears a semaphore left signalled.
+    ///
+    /// The in-flight fence is reset only once a submit is certain to follow.
+    /// Resetting it earlier — as this did — means any bail-out between the
+    /// reset and the submit leaves it unsignalled forever, and the next frame
+    /// blocks on it for good.
+    @discardableResult
+    private func blitAndPresent(from source: VulkanTexture? = nil) -> Bool {
+        let presented = source ?? offscreen
         let dev = device.device
         var inFlightHandle: VkFence? = swapchain.inFlight
-        withUnsafePointer(to: &inFlightHandle) { f in
-            _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
-        }
-        _ = withUnsafePointer(to: &inFlightHandle) { f in vkResetFences(dev, 1, f) }
-
         var imageIndex: UInt32 = 0
         let acquireResult = vkAcquireNextImageKHR(
-            dev, swapchain.swapchain, UInt64.max, swapchain.imageAvailable, nil, &imageIndex
+            dev, swapchain.swapchain, Self.gpuTimeoutNanoseconds,
+            swapchain.imageAvailable, nil, &imageIndex
         )
-        guard acquireResult == VK_SUCCESS || acquireResult == VK_SUBOPTIMAL_KHR else { return }
+        guard acquireResult == VK_SUCCESS || acquireResult == VK_SUBOPTIMAL_KHR else { return false }
 
         // Record: blit offscreen → swapchain image. The offscreen render pass
         // left the texture in SHADER_READ_ONLY_OPTIMAL; VulkanBlit transitions
@@ -214,25 +294,26 @@ public final class WinPlayback {
         cbInfo.commandBufferCount = 1
         var cmd: VkCommandBuffer? = nil
         guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
-              let cmd, let swapImage else { return }
+              let cmd, let swapImage else { return false }
         var beginInfo = VkCommandBufferBeginInfo()
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
         beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
         guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
-            var toFree: VkCommandBuffer? = cmd
-            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-            return
+            free(commandBuffer: cmd)   // never submitted, so never pending
+            return false
         }
         VulkanBlit.record(
             commandBuffer: cmd,
-            src: offscreen.image, srcExtent: VkExtent2D(width: offscreen.width, height: offscreen.height),
+            src: presented.image, srcExtent: VkExtent2D(width: presented.width, height: presented.height),
             dst: swapImage, dstExtent: swapchain.extent
         )
         guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
-            var toFree: VkCommandBuffer? = cmd
-            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-            return
+            free(commandBuffer: cmd)
+            return false
         }
+
+        // Certain of a submit now: reset the fence it will signal.
+        _ = withUnsafePointer(to: &inFlightHandle) { f in vkResetFences(dev, 1, f) }
 
         var waitSemaphore: VkSemaphore? = swapchain.imageAvailable
         var signalSemaphore: VkSemaphore? = swapchain.renderFinished
@@ -256,31 +337,41 @@ public final class WinPlayback {
                 }
             }
         }
-        var toFree: VkCommandBuffer? = cmd
-        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
-        guard submitResult == VK_SUCCESS else { return }
+        // A failed submit leaves the fence reset and nothing to signal it, so
+        // the swapchain has to be rebuilt rather than waited on again.
+        guard submitResult == VK_SUCCESS else {
+            free(commandBuffer: cmd)
+            return false
+        }
+        // Executing now. It is freed after the next frame's fence wait.
+        pendingCommandBuffer = cmd
 
         var swapchainHandle: VkSwapchainKHR? = swapchain.swapchain
         var presentInfo = VkPresentInfoKHR()
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
-        withUnsafePointer(to: &signalSemaphore) { ss in
+        let presentResult: VkResult = withUnsafePointer(to: &signalSemaphore) { ss in
             presentInfo.waitSemaphoreCount = 1
             presentInfo.pWaitSemaphores = ss
-            withUnsafePointer(to: &swapchainHandle) { sw in
+            return withUnsafePointer(to: &swapchainHandle) { sw in
                 presentInfo.pSwapchains = sw
                 presentInfo.swapchainCount = 1
-                withUnsafePointer(to: &imageIndex) { ii in
+                return withUnsafePointer(to: &imageIndex) { ii in
                     presentInfo.pImageIndices = ii
-                    withUnsafePointer(to: &presentInfo) { pi in
-                        _ = vkQueuePresentKHR(device.graphicsQueue, pi)
+                    return withUnsafePointer(to: &presentInfo) { pi in
+                        vkQueuePresentKHR(device.graphicsQueue, pi)
                     }
                 }
             }
         }
+        return presentResult == VK_SUCCESS || presentResult == VK_SUBOPTIMAL_KHR
     }
 
-    /// Clears + presents a frame for timeline gaps (no segment). Reuses the
-    /// blit path after clearing the offscreen — for the MVP we just present
-    /// whatever the offscreen already holds, since gaps are rare in the test.
-    private func presentCleared() { blitAndPresent() }
+    /// Presents black, for a playhead with nothing under it. It has to
+    /// actually clear: leaving the last composited frame up reads as the
+    /// preview being stuck on a clip that is no longer there.
+    @discardableResult
+    public func presentCleared() -> Bool {
+        guard awaitPreviousFrame() else { return true }
+        return clearAndPresent()
+    }
 }

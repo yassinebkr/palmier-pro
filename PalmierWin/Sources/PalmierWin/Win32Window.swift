@@ -17,6 +17,13 @@ public final class Win32Window: @unchecked Sendable {
     // CreateWindowExW retain the LPCWSTR pointer).
     private let className: [WCHAR]
 
+    /// Current client-area size in pixels (0x0 when minimized).
+    public var clientSize: (width: Int, height: Int) {
+        var rect = RECT()
+        GetClientRect(hwnd, &rect)
+        return (Int(rect.right - rect.left), Int(rect.bottom - rect.top))
+    }
+
     /// Wraps an existing HWND owned by someone else (the .NET shell). No class
     /// registration, no DestroyWindow — the surface backs onto their window.
     public init(foreignHwnd: HWND) {

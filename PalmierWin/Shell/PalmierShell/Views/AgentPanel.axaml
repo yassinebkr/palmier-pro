@@ -1,0 +1,171 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+             xmlns:views="clr-namespace:PalmierShell.Views"
+             xmlns:core="clr-namespace:PalmierShell.Core"
+             x:Class="PalmierShell.Views.AgentPanel"
+             x:DataType="vm:AgentViewModel">
+  <UserControl.Styles>
+    <!-- Copy button stays out of the way until the message is hovered. -->
+    <Style Selector="Button.copy">
+      <Setter Property="Opacity" Value="0"/>
+      <Setter Property="Transitions">
+        <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.12"/></Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Grid.entry:pointerover Button.copy">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="*,Auto,Auto,Auto" Margin="10">
+    <ScrollViewer Grid.Row="0" x:Name="Scroll" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8" Margin="0,0,4,8">
+        <TextBlock Text="Edit with AI" FontSize="13" HorizontalAlignment="Center" Margin="0,8,0,0"
+                   Foreground="{StaticResource ThemeTextTertiaryBrush}"
+                   IsVisible="{Binding !Entries.Count}"/>
+        <TextBlock Text="Try: &#x201C;add all my clips to the timeline&#x201D; or &#x201C;add a title that says Intro&#x201D;"
+                   FontSize="11" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                   Foreground="{StaticResource ThemeTextMutedBrush}"
+                   IsVisible="{Binding !Entries.Count}"/>
+        <ItemsControl ItemsSource="{Binding Entries}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:AgentEntryViewModel">
+              <!-- Hovering a message reveals its copy button; text is
+                   selectable so Ctrl+C works on a fragment too. -->
+              <Grid Classes="entry" Margin="0,2" ColumnDefinitions="*,Auto" Background="Transparent">
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Copy message" Click="OnCopyEntry"/>
+                    <MenuItem Header="Copy whole conversation" Click="OnCopyConversation"/>
+                  </ContextMenu>
+                </Grid.ContextMenu>
+                <!-- User bubble, right-aligned -->
+                <Border Grid.Column="0" IsVisible="{Binding IsUser}" HorizontalAlignment="Right" MaxWidth="200"
+                        Background="{StaticResource ThemeProminentBrush}" CornerRadius="10" Padding="10,6">
+                  <SelectableTextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap"/>
+                </Border>
+                <!-- Assistant text -->
+                <SelectableTextBlock Grid.Column="0" IsVisible="{Binding IsAssistant}" Text="{Binding Text}"
+                                     FontSize="12" TextWrapping="Wrap"
+                                     Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+                <!-- Tool chip: expands to what was sent and what came back -->
+                <StackPanel Grid.Column="0" IsVisible="{Binding IsTool}" HorizontalAlignment="Left" Spacing="3">
+                  <Border Background="{StaticResource ThemeRaisedBrush}" CornerRadius="6" Padding="8,3"
+                          BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="1"
+                          Tapped="OnToggleToolDetail" Cursor="Hand">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                               Fill="{Binding ToolSucceeded, Converter={x:Static views:AgentPanel.ToolDotBrush}}"/>
+                      <TextBlock Text="{Binding Text}" FontSize="11"
+                                 Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+                      <TextBlock Text="&#x203A;" FontSize="11" IsVisible="{Binding HasDetail}"
+                                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border IsVisible="{Binding Expanded}" Padding="8,5" CornerRadius="6"
+                          Background="{StaticResource ThemeBaseBrush}"
+                          BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="1">
+                    <SelectableTextBlock Text="{Binding Detail}" FontSize="10" FontFamily="Consolas"
+                                         TextWrapping="Wrap" MaxWidth="220"
+                                         Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                  </Border>
+                </StackPanel>
+                <!-- Error, with a retry that reuses the failed turn -->
+                <StackPanel Grid.Column="0" IsVisible="{Binding IsError}" Spacing="4">
+                  <SelectableTextBlock Text="{Binding Text}" FontSize="11"
+                                       TextWrapping="Wrap" Foreground="#E54F4F"/>
+                  <Button Content="Retry" FontSize="11" Padding="8,2" HorizontalAlignment="Left"
+                          IsVisible="{Binding CanRetry}"
+                          Command="{Binding $parent[ItemsControl].((vm:AgentViewModel)DataContext).RetryCommand}"
+                          ToolTip.Tip="Send the same turn again"/>
+                </StackPanel>
+                <Button Grid.Column="1" Classes="copy" VerticalAlignment="Top" Margin="4,0,0,0"
+                        Width="20" Height="20" Padding="0" Background="Transparent"
+                        Click="OnCopyEntry" ToolTip.Tip="Copy">
+                  <Path Data="M 3,3 H 9 V 11 H 3 Z M 1,1 H 7 V 3 M 1,1 V 9 H 3"
+                        Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding Busy}">
+          <TextBlock Text="Working&#x2026;" FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTimecodeBrush}"/>
+          <Button Content="Stop" FontSize="10" Padding="8,1" Command="{Binding StopCommand}"
+                  ToolTip.Tip="Stop after the current step"/>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+    <!-- Permission prompt (destructive tool waiting on a decision) -->
+    <Border Grid.Row="1" Margin="0,0,0,6" Padding="8" CornerRadius="8"
+            Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeTimecodeBrush}" BorderThickness="1"
+            IsVisible="{Binding PermissionText, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel Spacing="6">
+        <TextBlock Text="{Binding PermissionText}" FontSize="11" TextWrapping="Wrap"
+                   Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Content="Allow" FontSize="11" Padding="8,3" Command="{Binding AllowPermissionCommand}"/>
+          <Button Content="Always allow" FontSize="11" Padding="8,3" Command="{Binding AlwaysAllowPermissionCommand}"/>
+          <Button Content="Deny" FontSize="11" Padding="8,3" Command="{Binding DenyPermissionCommand}"/>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+    <!-- @-mention completion -->
+    <Border Grid.Row="2" Margin="0,0,0,6" CornerRadius="8"
+            Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="1"
+            IsVisible="{Binding MentionOpen}">
+      <ItemsControl ItemsSource="{Binding MentionCandidates}" Margin="4">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <Button Content="{Binding}" FontSize="11" Padding="8,3" Margin="1"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" Click="OnMentionClicked"/>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+    <Border Grid.Row="3" Background="{StaticResource ThemeRaisedBrush}" CornerRadius="8"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="1" Padding="6">
+      <Grid RowDefinitions="Auto,Auto">
+        <TextBox Grid.Row="0" Text="{Binding InputText, Mode=TwoWay}" FontSize="12"
+                 Watermark="Ask, or type @ to reference media" BorderThickness="0"
+                 Background="Transparent" AcceptsReturn="False" KeyDown="OnInputKeyDown"
+                 TextWrapping="Wrap" MaxHeight="90" IsEnabled="{Binding !Busy}"/>
+        <!-- Footer: model picker, key status, settings, send.
+             Column 0 is starred, not Auto: a long model id has to shrink the
+             picker rather than push the buttons outside the border. -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="2,6,0,0">
+          <views:ModelBox Grid.Column="0" ItemsSource="{Binding Models}" MaxWidth="140"
+                          Text="{Binding SelectedModel, Mode=TwoWay}" HorizontalAlignment="Left"
+                          VerticalAlignment="Center" ToolTip.Tip="{Binding SelectedModel}"/>
+          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="#3FB950"
+                   VerticalAlignment="Center"
+                   ToolTip.Tip="API key set" IsVisible="{Binding HasApiKey}"/>
+          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="#E54F4F"
+                   VerticalAlignment="Center"
+                   ToolTip.Tip="No API key — set one in Settings"
+                   IsVisible="{Binding !HasApiKey}"/>
+          <!-- Provider and key live in Settings; one place owns them. -->
+          <Button Grid.Column="2" Padding="5,2" Width="24" Height="24" Margin="0,0,4,0"
+                  VerticalAlignment="Center" Click="OnOpenSettings"
+                  ToolTip.Tip="Provider and API key settings">
+            <Path Data="M 6,0 L 7.5,2.2 L 10.2,2 L 10.8,4.6 L 12,6 L 10.8,7.4 L 10.2,10 L 7.5,9.8 L 6,12 L 4.5,9.8 L 1.8,10 L 1.2,7.4 L 0,6 L 1.2,4.6 L 1.8,2 L 4.5,2.2 Z M 6,4.2 A 1.8,1.8 0 1 0 6,7.8 A 1.8,1.8 0 1 0 6,4.2"
+                  Stroke="{StaticResource ThemeTextTertiaryBrush}" StrokeThickness="1"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Button>
+          <Button Grid.Column="3" Command="{Binding SendCommand}" IsEnabled="{Binding CanSend}"
+                  Width="24" Height="24" Padding="0" CornerRadius="12" VerticalAlignment="Center"
+                  ToolTip.Tip="Send">
+            <Path Data="M 1,6 L 11,1 L 7,11 L 5.5,6.5 Z"
+                  Fill="{StaticResource ThemeTextSecondaryBrush}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Button>
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

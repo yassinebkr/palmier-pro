@@ -10,9 +10,38 @@ import WinSDK
 /// All `vk*` functions used here are statically exported by vulkan-1.lib (no
 /// loader). The Win32 surface needs the `VK_KHR_win32_surface` instance
 /// extension and `VK_KHR_swapchain` device extension (both enabled upstream).
+/// The presentation surface for one HWND, owned independently of the
+/// swapchains built on it.
+///
+/// A window may have only one live swapchain. Creating a second surface and
+/// swapchain for an HWND that still has one — which is what recreating on
+/// resize used to do, because the presenter held the old swapchain alive —
+/// fails with `VK_ERROR_NATIVE_WINDOW_IN_USE_KHR`, and the retry fails the
+/// same way forever. Keeping one surface for the window's lifetime and
+/// retiring only the swapchain removes that failure entirely.
+public final class VulkanSurface: @unchecked Sendable {
+    public let instance: VkInstance
+    public let surface: VkSurfaceKHR
+
+    public init?(instance: VkInstance, window: Win32Window) {
+        var info = VkWin32SurfaceCreateInfoKHR()
+        info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR
+        info.hinstance = window.instance
+        info.hwnd = window.hwnd
+        var made: VkSurfaceKHR? = nil
+        guard vkCreateWin32SurfaceKHR(instance, &info, nil, &made) == VK_SUCCESS, let made else { return nil }
+        self.instance = instance
+        self.surface = made
+    }
+
+    deinit { vkDestroySurfaceKHR(instance, surface, nil) }
+}
+
 public final class VulkanSwapchain: @unchecked Sendable {
     public let device: VulkanDevice
     public let instance: VkInstance
+    /// Keeps the surface alive for as long as any swapchain uses it.
+    public let surfaceOwner: VulkanSurface
     public let surface: VkSurfaceKHR
     public let swapchain: VkSwapchainKHR
     public let extent: VkExtent2D
@@ -34,23 +63,25 @@ public final class VulkanSwapchain: @unchecked Sendable {
     /// Creates the surface + swapchain + render pass + framebuffers + sync.
     /// Returns nil if the device can't present to the surface (no graphics+present
     /// queue overlap) or any Vulkan call fails.
-    public init?(device: VulkanDevice, instance: VkInstance, window: Win32Window) {
+    /// Builds a swapchain for `window`. Pass the window's existing
+    /// `VulkanSurface` and the swapchain being replaced when recreating after
+    /// a resize; both default to nil for a first-time create.
+    public init?(device: VulkanDevice, instance: VkInstance, window: Win32Window,
+                 surface sharedSurface: VulkanSurface? = nil,
+                 oldSwapchain: VkSwapchainKHR? = nil) {
         self.device = device
         self.instance = instance
 
-        // 1) Win32 surface from the HWND.
-        var sci = VkWin32SurfaceCreateInfoKHR()
-        sci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR
-        sci.hinstance = window.instance
-        sci.hwnd = window.hwnd
-        var surf: VkSurfaceKHR? = nil
-        guard vkCreateWin32SurfaceKHR(instance, &sci, nil, &surf) == VK_SUCCESS, let surf else { return nil }
+        // 1) Win32 surface — reused across recreations when the caller owns one.
+        guard let owner = sharedSurface ?? VulkanSurface(instance: instance, window: window) else { return nil }
+        self.surfaceOwner = owner
+        let surf = owner.surface
         self.surface = surf
 
         // 2) Capabilities + format + extent.
         guard let (caps, chosenFormat, chosenExtent) = VulkanSwapchain.querySurface(
             physical: device.physical, surface: surf, window: window
-        ) else { vkDestroySurfaceKHR(instance, surf, nil); return nil }
+        ) else { return nil }
         self.extent = chosenExtent
         self.format = chosenFormat
 
@@ -69,10 +100,11 @@ public final class VulkanSwapchain: @unchecked Sendable {
         scc.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
         scc.presentMode = VK_PRESENT_MODE_FIFO_KHR
         scc.clipped = UInt32(VK_TRUE)
+        // Retires the previous swapchain in place rather than leaving the
+        // window with two, which is what the driver refuses.
+        scc.oldSwapchain = oldSwapchain
         var swp: VkSwapchainKHR? = nil
-        guard vkCreateSwapchainKHR(device.device, &scc, nil, &swp) == VK_SUCCESS, let swp else {
-            vkDestroySurfaceKHR(instance, surf, nil); return nil
-        }
+        guard vkCreateSwapchainKHR(device.device, &scc, nil, &swp) == VK_SUCCESS, let swp else { return nil }
         self.swapchain = swp
 
         // 4) Swapchain images → image views.
@@ -80,7 +112,7 @@ public final class VulkanSwapchain: @unchecked Sendable {
         vkGetSwapchainImagesKHR(device.device, swp, &imgCount, nil)
         var images = [VkImage?](repeating: nil, count: Int(imgCount))
         guard vkGetSwapchainImagesKHR(device.device, swp, &imgCount, images.withUnsafeMutableBufferPointer { $0.baseAddress }) == VK_SUCCESS
-        else { vkDestroySwapchainKHR(device.device, swp, nil); vkDestroySurfaceKHR(instance, surf, nil); return nil }
+        else { vkDestroySwapchainKHR(device.device, swp, nil); return nil }
 
         self.imageViews = images.compactMap { image -> VkImageView? in
             guard let image else { return nil }
@@ -171,7 +203,8 @@ public final class VulkanSwapchain: @unchecked Sendable {
         vkDestroyRenderPass(device.device, renderPass, nil)
         for v in imageViews { vkDestroyImageView(device.device, v, nil) }
         vkDestroySwapchainKHR(device.device, swapchain, nil)
-        vkDestroySurfaceKHR(instance, surface, nil)
+        // The surface outlives this swapchain; `surfaceOwner` releases it once
+        // no swapchain for the window is left.
     }
 
     // MARK: - Surface query

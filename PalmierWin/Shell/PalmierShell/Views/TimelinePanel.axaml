@@ -1,0 +1,104 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:PalmierShell.Views"
+             xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+             x:Class="PalmierShell.Views.TimelinePanel"
+             x:DataType="vm:MainViewModel">
+  <Grid RowDefinitions="28,38,*">
+    <!-- Timeline tabs: one per timeline in the project, plus a new-tab button. -->
+    <Border Grid.Row="0" Background="{StaticResource ThemeSurfaceBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Margin="8,0" VerticalAlignment="Stretch">
+        <ItemsControl x:Name="TabStrip" ItemsSource="{Binding Tabs.Tabs}"
+                      DataContext="{Binding}" VerticalAlignment="Stretch">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TimelineTab">
+              <Border Margin="0,0,2,0" CornerRadius="4,4,0,0" Padding="10,0" Background="Transparent"
+                      DoubleTapped="OnTabDoubleTapped" Tapped="OnTabTapped">
+                <Border.Styles>
+                  <Style Selector="Border:pointerover">
+                    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+                  </Style>
+                </Border.Styles>
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center"
+                             IsVisible="{Binding !IsRenaming}"
+                             Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                  <TextBox Text="{Binding EditName, Mode=TwoWay}" FontSize="11" MinWidth="90"
+                           Padding="4,1" IsVisible="{Binding IsRenaming}"
+                           KeyDown="OnTabRenameKeyDown" LostFocus="OnTabRenameLostFocus"/>
+                  <Button Padding="3,0" FontSize="10" Background="Transparent" Content="&#x00D7;"
+                          IsVisible="{Binding !IsActive}" Click="OnTabClose"
+                          Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                  <Border Height="2" VerticalAlignment="Bottom" MinWidth="20" Margin="0,0,0,-1"
+                          Background="{StaticResource ThemeTimecodeBrush}"
+                          IsVisible="{Binding IsActive}"/>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Content="+" FontSize="13" Padding="8,0" Background="Transparent"
+                VerticalAlignment="Stretch" ToolTip.Tip="New timeline"
+                Command="{Binding Tabs.AddCommand}"
+                Foreground="{StaticResource ThemeTextMutedBrush}"/>
+      </StackPanel>
+    </Border>
+    <Border Grid.Row="1" Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center" Margin="8,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+          <StackPanel.Styles>
+            <Style Selector="Button">
+              <Setter Property="Padding" Value="8,4"/>
+              <Setter Property="Width" Value="32"/>
+              <Setter Property="Height" Value="26"/>
+            </Style>
+            <Style Selector="Path">
+              <Setter Property="Stroke" Value="{StaticResource ThemeTextSecondaryBrush}"/>
+              <Setter Property="StrokeThickness" Value="1.4"/>
+              <Setter Property="StrokeLineCap" Value="Round"/>
+              <Setter Property="StrokeJoin" Value="Round"/>
+              <Setter Property="HorizontalAlignment" Value="Center"/>
+              <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+          </StackPanel.Styles>
+          <Button x:Name="UndoButton" Command="{Binding PerformUndoCommand}">
+            <Path Data="M 8,1 L 3,5 L 8,9 M 3,5 H 10 C 13,5 14.5,6.8 14.5,10"/>
+          </Button>
+          <Button x:Name="RedoButton" Command="{Binding PerformRedoCommand}">
+            <Path Data="M 6.5,1 L 11.5,5 L 6.5,9 M 11.5,5 H 4.5 C 1.5,5 0,6.8 0,10"/>
+          </Button>
+          <Border Width="1" Height="20" Background="{StaticResource ThemeBorderBrush}" Margin="4,0"/>
+          <Button x:Name="SelectToolButton" Click="OnSelectTool">
+            <Path Data="M 2,0 L 9.5,6.5 L 6.2,7 L 8,11.2 L 6.3,11.9 L 4.5,7.8 L 2,10 Z"
+                  Fill="{StaticResource ThemeTextSecondaryBrush}" Stroke="{x:Null}"/>
+          </Button>
+          <Button x:Name="BladeToolButton" Click="OnBladeTool">
+            <Path Data="M 3,0 L 9,7.5 M 11,0 L 5,7.5 M 2,10.2 A 1.9,1.9 0 1 0 5.8,10.2 A 1.9,1.9 0 1 0 2,10.2 M 8.2,10.2 A 1.9,1.9 0 1 0 12,10.2 A 1.9,1.9 0 1 0 8.2,10.2"/>
+          </Button>
+          <Button x:Name="TextClipButton" Click="OnAddTextClip" ToolTip.Tip="Add text clip">
+            <Path Data="M 1,1 H 11 M 6,1 V 11"/>
+          </Button>
+          <Button x:Name="SnapButton" Click="OnSnapToggle" ToolTip.Tip="Snap">
+            <Path Data="M 3,1 V 6 A 4,4 0 0 0 11,6 V 1 M 3,1 H 5.5 M 8.5,1 H 11 M 3,4 H 5.5 M 8.5,4 H 11"/>
+          </Button>
+          <Button x:Name="DensityButton" Click="OnDensityToggle" ToolTip.Tip="Compact track rows">
+            <Path Data="M 0,1 H 13 M 0,5 H 13 M 0,9 H 13"/>
+          </Button>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="M 2,5 A 3.6,3.6 0 1 0 9.2,5 A 3.6,3.6 0 1 0 2,5 M 8.3,7.6 L 11.6,10.9"
+                Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.4"
+                StrokeLineCap="Round" VerticalAlignment="Center"/>
+          <Slider Width="140" Minimum="0.5" Maximum="16" VerticalAlignment="Center"
+                  Value="{Binding Timeline.PixelsPerFrame, Mode=TwoWay}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+    <views:TimelineView Grid.Row="2" x:Name="Timeline" DataContext="{Binding Timeline}"/>
+  </Grid>
+</UserControl>

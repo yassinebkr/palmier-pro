@@ -6,3 +6,6 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>

@@ -87,10 +87,9 @@ public final class VulkanPipeline: @unchecked Sendable {
         }
 
         guard let pipeline, let layout, let descriptorSetLayout else {
-            print("[VulkanPipeline] FAILED to create")
+            engineLog("[VulkanPipeline] FAILED to create")
             return nil
         }
-        print("[VulkanPipeline] OK")
         self.device = dev
         self.pipeline = pipeline
         self.layout = layout
@@ -118,7 +117,9 @@ public final class VulkanPipeline: @unchecked Sendable {
                 vkCreateShaderModule(dev, iPtr, nil, &module)
             }
         }
-        print("[shaderModule] codeSize=\(info.codeSize), words=\(spirv.count), result=\(r.rawValue), module=\(module != nil)")
+        if r != VK_SUCCESS {
+            engineLog("[shaderModule] failed: \(spirv.count) words, result \(r.rawValue)")
+        }
         return r == VK_SUCCESS ? module : nil
     }
 
@@ -215,7 +216,9 @@ public final class VulkanPipeline: @unchecked Sendable {
                 }
             }
         }
-        print("[VulkanPipeline.createGraphics] result = \(result.rawValue) (0 = VK_SUCCESS)")
+        if result != VK_SUCCESS {
+            engineLog("[VulkanPipeline.createGraphics] failed: result \(result.rawValue)")
+        }
         return result == VK_SUCCESS ? pipe : nil
     }
 
