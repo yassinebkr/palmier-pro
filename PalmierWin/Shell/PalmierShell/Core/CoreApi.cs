@@ -216,6 +216,31 @@ public static partial class CoreApi {
     }
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    private static unsafe partial int palmier_detect_silence(string path, double thresholdDb,
+                                                             int minSilenceMs, int paddingMs,
+                                                             byte* buf, int bufSize);
+
+    /// Silent spans of `path` in source-media milliseconds, or null when the
+    /// file has no decodable audio. Blocking full decode — call off the UI
+    /// thread.
+    public static unsafe List<SilentRange>? DetectSilence(string path, double thresholdDb,
+                                                          int minSilenceMs, int paddingMs) {
+        int size = 1024;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var buf = new byte[size];
+            fixed (byte* p = buf) {
+                int written = palmier_detect_silence(path, thresholdDb, minSilenceMs, paddingMs,
+                                                     p, size);
+                if (written == 0) return null;
+                if (written > 0)
+                    return SilenceRemoval.ParseRanges(Encoding.UTF8.GetString(buf, 0, written));
+                size = -written;
+            }
+        }
+        return null;
+    }
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_thumbnails(string path, byte[] buf, int bufSize, int count);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_waveform(string path, float[] buf, int columns);

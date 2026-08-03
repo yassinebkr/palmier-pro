@@ -128,6 +128,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
                 () => CoreApi.RippleDelete(Project, ids) > 0);
             Timeline.Reload();
         };
+        Timeline.RemoveSilenceRequested += clipId => _ = RemoveSilenceAsync(clipId);
         Timeline.CloseGapRequested += (trackId, start, end) => {
             Undo.Execute("Ripple Delete Gap",
                 () => CoreApi.palmier_timeline_close_gap(Project, trackId, start, end) == 1);
@@ -560,6 +561,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
 
     /// The window modal dialogs hang off. Set by the shell window.
     public Func<Avalonia.Controls.Window?>? DialogOwner { get; set; }
+
+    /// Opens the silence-removal dialog for a clip. The dialog detects in the
+    /// background and calls back into ApplySilenceRemoval.
+    async Task RemoveSilenceAsync(string clipId) {
+        if (DialogOwner?.Invoke() is not { } owner) return;
+        if (Timeline.State?.FindClip(clipId) is not { } clip) return;
+        await new Views.SilenceDialog(this, clipId, clip.MediaRef).ShowDialog(owner);
+    }
+
+    /// Cuts the detected silent spans out of the clip's time range across all
+    /// tracks — one ripple-delete intent, so one snapshot and one undo entry.
+    public void ApplySilenceRemoval(string clipId, IReadOnlyList<SilentRange> ranges) {
+        if (Timeline.State?.FindClip(clipId) is not { } clip) return;
+        var spans = SilenceRemoval.TimelineRanges(clip, ranges, Timeline.State.Fps);
+        if (spans.Count == 0) return;
+        Undo.Execute("Remove Silence", () => SilenceRemoval.Apply(Project, spans) > 0);
+        Timeline.Reload();
+    }
 
     /// Asks for a new track name and commits it as one undo step. A cancelled
     /// or unchanged prompt leaves no entry behind.

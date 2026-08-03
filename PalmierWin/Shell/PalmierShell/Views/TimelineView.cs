@@ -687,6 +687,11 @@ public sealed class TimelineView : Control {
                 unlink.Click += (_, _) => vm.RequestUnlink(hit.Clip.Id);
                 menu.Items.Add(unlink);
             }
+            if (hit.Clip.MediaType == "video") {
+                var silence = new MenuItem { Header = "Remove Silence…" };
+                silence.Click += (_, _) => vm.RequestRemoveSilence(hit.Clip.Id);
+                menu.Items.Add(silence);
+            }
             var remove = new MenuItem { Header = "Delete Clip" };
             remove.Click += (_, _) => vm.RequestDeleteClip(hit.Clip.Id);
             menu.Items.Add(remove);

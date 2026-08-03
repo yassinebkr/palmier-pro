@@ -159,6 +159,11 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public void RequestDeleteClip(string clipId) => DeleteClipRequested?.Invoke(clipId);
 
+    /// Remove Silence… (context menu): the owner opens the detection dialog.
+    public event Action<string>? RemoveSilenceRequested;
+
+    public void RequestRemoveSilence(string clipId) => RemoveSilenceRequested?.Invoke(clipId);
+
     /// Delete and close the hole: later clips on the affected tracks pull left.
     public event Action<string>? RippleDeleteRequested;
 
