@@ -109,6 +109,9 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
     public var syncLocked: Bool = true
     public var clips: [Clip] = []
 
+    /// User-given track name. Nil means the derived label (V1, A2…).
+    public var name: String?
+
     /// Persisted UI track height in points. Typed as Double (CGFloat is Double
     /// on 64-bit); clamped to [32, 200] on decode to match the app's TrackSize.
     public var displayHeight: Double = 50
@@ -120,7 +123,8 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
         hidden: Bool = false,
         syncLocked: Bool = true,
         clips: [Clip] = [],
-        displayHeight: Double = 50
+        displayHeight: Double = 50,
+        name: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -129,6 +133,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
         self.syncLocked = syncLocked
         self.clips = clips
         self.displayHeight = displayHeight
+        self.name = name
     }
 
     public var endFrame: Int {
@@ -152,7 +157,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, muted, hidden, syncLocked, clips, displayHeight
+        case id, type, muted, hidden, syncLocked, clips, displayHeight, name
     }
 }
 
@@ -167,7 +172,8 @@ public extension Track {
             syncLocked: (try? c.decode(Bool.self, forKey: .syncLocked)) ?? true,
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
-                .map { min(max($0, 32), 200) } ?? 50
+                .map { min(max($0, 32), 200) } ?? 50,
+            name: try? c.decode(String.self, forKey: .name)
         )
     }
 }
