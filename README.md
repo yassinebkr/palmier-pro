@@ -1,141 +1,42 @@
-> **This is a fork** of [palmier-io/palmier-pro](https://github.com/palmier-io/palmier-pro) exploring a **Windows port**. The macOS app above is upstream's; everything below this notice is the original README.
->
-> **Windows port status** (early, in `PalmierWin/`, docs: [`docs/windows-port-proposal.md`](docs/windows-port-proposal.md), [`docs/windows-media-engine-design.md`](docs/windows-media-engine-design.md)):
->
-> - **Works:** `PalmierCore` (portable editor model + engines, tested on both platforms), Swift 6.3.3 toolchain end-to-end, Vulkan renderer, FFmpeg decode/playback/export, all 12 effect kernels re-authored in SPIR-V, and an early ImGui editor shell (palette + panel layout only). CI green on macOS and Windows.
-> - **Not yet:** UI/UX anywhere near the macOS app (no animations, real workflows, or polish — the current shell is a static proof of concept), undo/EditorViewModel rehost, MLX/speech/transcription, agent host, audio engine, updates/auth/telemetry.
-> - Deliberate choice: flat-C bindings (Vulkan + FFmpeg + ImGui + stb_truetype), **no COM / no WinUI3** — see the design doc for why.
+# PalmierWin
 
-<div align="center">
+**A Windows-native AI video editor — built on the open source [Palmier Pro](https://github.com/palmier-io/palmier-pro) codebase.**
 
-# Palmier Pro
+PalmierWin takes Palmier Pro's portable editor core and rebuilds everything Apple-specific on Windows foundations: a C#/Avalonia shell, a Vulkan compositor, FFmpeg decode/encode, and a Swift media engine shared with the original project through `PalmierCore`.
 
-**The video editor built for AI.**
+This is an independent fork by [@yassinebkr](https://github.com/yassinebkr), not an official Palmier product. The upstream macOS app (SwiftUI/AppKit, macOS 26) still lives in `Sources/` and builds unchanged.
 
-<a href="https://github.com/palmier-io/palmier-pro/releases/latest/download/PalmierPro.dmg">
-  <img src="./assets/macos-badge.png" alt="Download Palmier Pro for macOS" width="180" />
-</a>
+## Status
 
-<sub><i>Requires macOS 26 (Tahoe) on Apple Silicon</i></sub>
+The Windows app is real and running. What works today:
 
-<a href="https://x.com/Palmier_io"><img src="https://img.shields.io/badge/Follow-%40Palmier__io-000000?style=flat&logo=x&logoColor=white" alt="Follow on X" /></a>
-<a href="https://discord.com/invite/SMVW6pKYmg"><img src="https://img.shields.io/badge/Join-Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Join Discord" /></a>
-<a href="https://www.ycombinator.com/companies/palmier"><img src="https://img.shields.io/badge/Y%20Combinator-S24-orange" alt="Y Combinator S24" /></a>
-<br />
-<a href="https://trendshift.io/repositories/41342?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-41342" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/41342" alt="palmier-io%2Fpalmier-pro | Trendshift" width="250" height="55"/></a>
+- **Editor shell (Avalonia):** AppTheme-faithful dark UI — media library (folders, search, grid/list, hover scrub), preview with transport + source-monitor tabs, custom timeline (filmstrips, waveforms, roll/trim/blade/ripple edits, snap, ranges, multi-track, tabs), inspector (transform, keyframes, fades, effects, LUT), undo/redo, project files (`.palmier` save/open/autosave), export to H.264/MP4.
+- **Media engine (Swift + Vulkan + FFmpeg):** frame-accurate decode with seek-and-walk caching, 12 effect kernels re-authored in SPIR-V, text layers, audio (miniaudio/WASAPI), composited-frame capture, offscreen export.
+- **AI agent:** multi-provider chat (Anthropic, OpenAI, Z.AI, Moonshot, OpenRouter) with tool-use editing of the timeline, streaming, permission prompts, live model lists.
+- **Generation:** Replicate and fal.ai integration (Seedance 2.0, Kling 3.0, Veo 3 families) with first/last-frame transitions generated straight from timeline cuts, reference media, cost estimates, and provenance sidecars.
 
-<p>
-  <strong>English</strong> ·
-  <a href="docs/readme/README.es.md">Español</a> ·
-  <a href="docs/readme/README.zh-CN.md">简体中文</a> ·
-  <a href="docs/readme/README.zh-TW.md">繁體中文</a> ·
-  <a href="docs/readme/README.ja.md">日本語</a> ·
-  <a href="docs/readme/README.ko.md">한국어</a> ·
-  <a href="docs/readme/README.vi.md">Tiếng Việt</a> ·
-  <a href="docs/readme/README.hi.md">हिन्दी</a> ·
-  <a href="docs/readme/README.bn.md">বাংলা</a> ·
-  <a href="docs/readme/README.ar.md">العربية</a> ·
-  <a href="docs/readme/README.it.md">Italiano</a> ·
-  <a href="docs/readme/README.pt-BR.md">Português (Brasil)</a> ·
-  <a href="docs/readme/README.fr.md">Français</a> ·
-  <a href="docs/readme/README.ru.md">Русский</a> ·
-  <a href="docs/readme/README.tr.md">Türkçe</a>
-</p>
+Architecture: the shell talks to the Swift core in-proc through a thin `@_cdecl` C ABI (`PalmierCoreHost.dll`) — no COM, no WinUI 3. See [`docs/windows-port-proposal.md`](docs/windows-port-proposal.md) for the port's foundations and the `PalmierWin/` directory for the engine.
 
-</div>
+## Building
 
-<img src="./assets/palmier-ui.png" alt="Palmier Pro UI" width="900" />
+Requirements: Swift 6.3.3+ (`x86_64-unknown-windows-msvc`), .NET 9 SDK, MSVC Build Tools, an NVIDIA/AMD/Intel GPU with Vulkan.
 
----
-
-Palmier Pro is an open source video editor for Mac. You and your agent can generate and edit videos together inside the timeline.
-
-### Swift-native video editor
-
-We built Palmier Pro from scratch with Swift. The north star is Premiere Pro, with our take on integrating AI into the workflow.
-
-### Built-in Generative AI
-
-Generate videos and images with SOTA models like Seedance, Kling, Nano Banana Pro inside the timeline editor.
-
-### Integrates with your agents
-
-Connects your Claude/Codex/Cursor via MCP, or use the in-app agent to work on the same project together.
-
-## MCP server
-
-When the app is open, it exposes an MCP server at `http://127.0.0.1:19789/mcp` via HTTP. To connect:
-
-**Claude Code**
-```bash
-claude mcp add --transport http palmier-pro http://127.0.0.1:19789/mcp
+```powershell
+cd PalmierWin
+.\fetch-deps.ps1          # Vulkan headers, FFmpeg, glslang, ImGui, miniaudio
+.\build.bat               # Swift engine + PalmierCoreHost.dll
+dotnet build Shell        # C# shell
+.\Shell\run-shell.ps1     # run the editor
 ```
 
-**Codex**
-```bash
-codex mcp add palmier-pro --url http://127.0.0.1:19789/mcp
-```
+Tests: `dotnet test PalmierWin/Shell/PalmierShell.sln` (300+ interop and geometry tests) and the `palmierwin-spike` engine harness.
 
-**Cursor**
+## Credits
 
-The easiest way is go inside the app `Help` -> `MCP Instructions` -> `Install in Cursor`, or install manually by adding this to `~/.cursor/mcp.json`:
-
-```
-{
-  "mcpServers": {
-    "palmier-pro": {
-      "type": "http",
-      "url": "http://127.0.0.1:19789/mcp"
-    }
-  }
-}
-```
-
-**Claude Desktop**
-
-We bundle a [mcpb](https://github.com/modelcontextprotocol/mcpb) with the app that allows a one click install Desktop Extension on Claude Desktop. Go to `Help` -> `MCP Instructions` -> `Install in Claude Desktop`
-
-## FAQ
-
-**Is Palmier Pro fully open source?**
-
-The video editor (without the generative AI features) is fully open source. The MCP server and the agent chat are also open source. The only thing that is closed source is the generative AI processing.
-
-**Is it free?**
-
-The editor is free. You can download it with no login required, and use it as a video editor like CapCut or Adobe Premiere. You can also use the MCP server for free, and start experimenting using Claude Code/Desktop or Cursor to interact with your timeline editor.
-
-Generative AI features require login and subscription.
-
-**What platforms does it support?**
-
-macOS 26 (Tahoe) on Apple Silicon only.
-
-See [FAQ.md](FAQ.md) for more.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## Community &amp; Support
-
-- **Discord:** Join the community on **[Discord](https://discord.com/invite/SMVW6pKYmg)**.
-- **Twitter / X:** Follow **[@Palmier_io](https://x.com/Palmier_io)** for updates and announcements.
-- **Instagram:** Follow [@palmier.io](https://www.instagram.com/palmier.io) 
-- **Feedback &amp; Support:** Create a [Github Issue](https://github.com/palmier-io/palmier-pro/issues) or email us at founders@palmier.io
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=palmier-io%2Fpalmier-pro&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=palmier-io/palmier-pro&type=date&theme=dark&legend=top-left&sealed_token=noeYrwWrpHCjd3KdAoj1jK1SLWKED61qQxKmx0oIh1oFzShl6A_eSw-ABZEgU2tm7WymnOSjnRltpeY01CPYhh6TN2aBTS9gH9Op0wMbGe1YW2J10xzGfjOtSir7GL-Nm80Wt1TCZ3bqjICSdSPQCQosZOTax4zLC_wNXYWunWmKvtcclfTbvWTd08AF" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=palmier-io/palmier-pro&type=date&legend=top-left&sealed_token=noeYrwWrpHCjd3KdAoj1jK1SLWKED61qQxKmx0oIh1oFzShl6A_eSw-ABZEgU2tm7WymnOSjnRltpeY01CPYhh6TN2aBTS9gH9Op0wMbGe1YW2J10xzGfjOtSir7GL-Nm80Wt1TCZ3bqjICSdSPQCQosZOTax4zLC_wNXYWunWmKvtcclfTbvWTd08AF" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=palmier-io/palmier-pro&type=date&legend=top-left&sealed_token=noeYrwWrpHCjd3KdAoj1jK1SLWKED61qQxKmx0oIh1oFzShl6A_eSw-ABZEgU2tm7WymnOSjnRltpeY01CPYhh6TN2aBTS9gH9Op0wMbGe1YW2J10xzGfjOtSir7GL-Nm80Wt1TCZ3bqjICSdSPQCQosZOTax4zLC_wNXYWunWmKvtcclfTbvWTd08AF" />
- </picture>
-</a>
+PalmierWin is built on [Palmier Pro](https://github.com/palmier-io/palmier-pro) by Palmier, Inc. — the editor core, data model, and product design are theirs. Huge thanks for open-sourcing it.
 
 ## License
 
-Copyright (C) 2026 Palmier, Inc.
+Copyright (C) 2026 Palmier, Inc. (original Palmier Pro code) and the PalmierWin contributors (Windows port).
 
-Palmier Pro is open source under [GPLv3](LICENSE).
+Open source under [GPLv3](LICENSE).
