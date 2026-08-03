@@ -1,55 +1,29 @@
 # FAQ
 
-**Why was Palmier Pro built?**
+**What is PalmierWin?**
 
-We are a YC startup that has been making AI launch videos for other companies. We noticed a big gap between generative AI and the video editor, so we built this to solve our biggest pain points. First, let's talk about how we make our AI videos better:
+PalmierWin is a Windows-native AI video editor built on the open source [Palmier Pro](https://github.com/palmier-io/palmier-pro) codebase. The editor core, timeline model, and product design come from upstream; the Windows app — C#/Avalonia shell, Vulkan compositor, FFmpeg media engine — is built here.
 
-1. many iterations
-2. many editing
+**Is it the same as Palmier Pro?**
 
-With these two requirements, the pain points we've encountered:
+No. Palmier Pro is the macOS app by Palmier, Inc. (macOS 26, Apple Silicon). PalmierWin is an independent fork for Windows, by [@yassinebkr](https://github.com/yassinebkr). The upstream macOS app still lives in this repo (`Sources/`) and builds unchanged, but nothing here is affiliated with or endorsed by Palmier, Inc.
 
-1. Most generative platforms live on the web. To make a production-grade video, we have to go through the editing process inside the video editor. So each iteration looks like: generate on the web → download to your laptop → import to your timeline editor → replace the clip and redo the editing → repeat.
-2. Projects get large, and they become extremely hard to maintain. We have files of all the versions of each shot, which require us to manually rename them to stay organized. We have context spread across different AI agents that we talk to: Claude for scripting, AI chat from the generative platform for generation.
+**What works on Windows today?**
 
-So we built Palmier Pro to solve these issues. The video editor is the single source of truth. You can use your own AI agent to do scripting, generating, and editing with all the context you need.
+The editor: media library, multi-track timeline (filmstrips, waveforms, trims/roll/ripple, keyframes, fades, effects, LUTs), preview with playback, inspector, project files, and export to H.264/MP4. The AI side: multi-provider agent chat that edits the timeline (Anthropic, OpenAI, Z.AI, Moonshot, OpenRouter), and video generation via Replicate and fal.ai (Seedance 2.0, Kling 3.0, Veo 3) including transitions generated from timeline cuts.
 
-**Do you have feature parity with Adobe Premiere Pro or CapCut?**
+**What's missing?**
 
-Not yet. This is still a very early product with a small team behind it, but we are pushing it to get better every day. To give you a clear list:
+Real gaps remain: masking, transitions-as-effects, captions/transcription, multicam, beats, scrub audio parity, and the polish of a shipping product. See the repository issues/PRs for the current state.
 
-What we don't have yet:
+**Is it free?**
 
-1. Transitions
-2. Masking
-3. Graphics
+The editor is free and open source under GPLv3. Agent and generation features need your own provider API keys (Anthropic, OpenAI, Replicate, fal.ai, …) — you pay the provider directly.
 
-We launched it because it was enough for us to make professional AI videos. We acknowledge that without AI features, this is quite a bare-bone video editor. That's why we decided to open source it and release the video editor for free, because we want to improve the product with the community.
+**What platforms does it support?**
 
-**What's the difference between MCP server and the in-app chat?**
+Windows 10/11 x64 with a Vulkan-capable GPU. The macOS app (upstream's) requires macOS 26 on Apple Silicon.
 
-They share the same prompt and tools. The MCP server is free to use for your MCP clients, and the in-app chat requires either BYOK or subscription. The differences are mostly the UX.
+**Why does the repo also contain the Mac app?**
 
-In-app chat:
-1. You can @ to reference media, which is particularly useful when iterating on generative media. 
-2. Less context switching. It lives right inside the timeline.
-3. It has more control on the context window.
-
-External chat with MCP server:
-1. Centralized spending on tokens. You don't have to worry about paying for another service.
-2. A more mature chat client. Claude/Cursor/Codex handles context window/memory/web search and they will continue to get better.
-3. Much more interesting use cases with integrating with other workflows. Since Palmier Pro is just a MCP server, you can connect your video editor with other MCP servers all in one chat, so context is centralized.
-
-Some examples on using Palmier Pro MCP server with Claude:
-
-1. Write your idea and script in Claude, then ask it to generate videos inside Palmier Pro
-2. Pull sound effect from Epidemic Sound MCP server and import to Palmier Pro MCP server
-3. Pull your team's idea in #marketing Slack channel and create a quick prototype in Palmier Pro
-
-**What models are supported?**
-
-We support most SOTA generation models. For images, the most common ones are Nano Banana Pro, GPT-image-2. For videos, Seedance2, Kling3, Grok, Veo, etc. We constantly push update for more. For the in-app chat, only Anthropic at the moment. But you can connect with MCP to try other models.
-
-**What is the future of Palmier Pro?**
-
-We envision Palmier Pro as the future of video editing, a UI for both humans and agents. We strongly believe agents cannot replicate human creativity, but in the process of generating and editing videos, there is a lot of manual work that AI can help with.
+The Windows app shares `PalmierCore` (the portable editor model and engines) with the macOS app, and staying merge-compatible with upstream keeps years of upstream improvements available to the fork. Both sides build in CI.

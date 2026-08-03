@@ -1,69 +1,65 @@
 # PalmierWin
 
-Windows-only Swift package for the Palmier Pro Windows media engine. Per the FFmpeg+Vulkan decision (`docs/windows-media-engine-design.md` REVISION), the render path is **FFmpeg (decode/export) + Vulkan (GPU render)** — both flat-C, both bound here, neither COM. `CMediaFoundation` is kept as a flat-C reference (MFStartup works) but Media Foundation's COM decode surface is unbindable today; the active engine uses FFmpeg/Vulkan. This package is intentionally kept out of the repo-root `Package.swift` (which builds the macOS-only `PalmierPro` app and its Apple-only dependencies — Sparkle/Sentry/MLX/etc.), so macOS CI never sees it and Windows CI builds it explicitly.
+The Windows side of the repo: the Swift media engine, the C ABI host, and the C#/Avalonia shell. Everything is flat-C bindable — FFmpeg + Vulkan + miniaudio + stb_truetype + Dear ImGui (harness only) — **no COM, no WinUI 3**. `CMediaFoundation` is kept as a flat-C reference (MFStartup works) but Media Foundation's COM decode surface is unbindable from Swift; the engine uses FFmpeg/Vulkan.
 
-## Why a separate package
-
-The repo-root `Package.swift` resolves Apple-only SwiftPM dependencies that don't exist on Windows. A Windows-only package lets the Windows media work build in isolation against just the portable `PalmierCore` + flat-C Windows/native libs, mirroring the isolated-package technique used throughout the port (see `docs/windows-port-proposal.md`).
+This package is intentionally kept out of the repo-root `Package.swift` (which builds the macOS-only `PalmierPro` app and its Apple-only dependencies), so macOS CI never sees it and Windows CI builds it explicitly.
 
 ## Layout
 
 ```
 PalmierWin/
   Package.swift              Windows-only manifest; PalmierCore is a path target
-  fetch-deps.ps1             Reproducibly fetches Vulkan-Headers + vulkan-1.lib + FFmpeg
-  CMediaFoundation/          SwiftPM systemLibrary: filtered C wrapper (MFStartup etc.)
-  CVulkan/                   SwiftPM systemLibrary: umbrella include of vulkan.h (flat C)
-  CFFmpeg/                   SwiftPM systemLibrary: umbrella include of libavformat/avcodec (flat C)
-  ThirdParty/                (gitignored — fetched by fetch-deps.ps1)
+  fetch-deps.ps1             Fetches Vulkan-Headers, FFmpeg, glslang, ImGui into ThirdParty/
+  build.bat                  Sources MSVC env, then swift build
+  build-shaders.ps1          Compiles Shaders/*.{vert,frag} -> .spv + Shaders.swift
+  make-test-media.ps1        Generates test_media/ fixtures
+  CMediaFoundation/          systemLibrary: filtered C wrapper (reference)
+  CVulkan/                   systemLibrary: umbrella include of vulkan.h
+  CFFmpeg/                   systemLibrary: libav* umbrella include (+ swresample)
+  CMiniaudio/                Vendored miniaudio (stb-style single header) for WASAPI audio
+  CSTBTrueType/              stb_truetype C target (text layers)
+  CImGui/                    Dear ImGui flat-C++ wrapper (engine dev harness UI)
+  Shaders/                   GLSL sources + compiled .spv (layer quad, effect dispatch)
   Sources/
     PalmierCore/             (gitignored — symlinked in CI, copied in for local builds)
-    PalmierWin/              Swift overlays (Vulkan/FFmpeg/MediaFoundation lifecycle)
-    palmierwin-spike/        Console exe proving the stack links + runs end-to-end
+    PalmierWin/              Engine: decoders, Vulkan objects, compositor, audio, caches
+    PalmierCoreHost/         @_cdecl C ABI over the engine + PalmierCore (the shell's backend)
+    palmierwin-spike/        Engine dev harness (console exe: decode/render/effects/export checks)
+  Shell/
+    PalmierShell/            The Avalonia editor app
+    PalmierShell.Tests/      xunit interop/geometry/generation suites
+    Spike/                   Interop proof (C# -> Swift DLL, HWND rendering)
+    run-shell.ps1            Builds + runs the editor with the right PATH
 ```
 
-## Native deps (fetch-deps.ps1)
+## Build
 
-`CVulkan`/`CFFmpeg` bind third-party headers + libs that aren't in the Windows SDK. `fetch-deps.ps1` reproducibly fetches them into `ThirdParty/` (gitignored):
+Requires the Swift 6.3.3+ Windows toolchain, MSVC Build Tools, and .NET 9 SDK.
 
-- **Vulkan-Headers** (Khronos, MIT) — `git clone --depth 1`. Flat-C; what `CVulkan` umbrella-includes.
-- **vulkan-1.lib** — generated from the system loader `C:\Windows\System32\vulkan-1.dll` via `dumpbin` + `lib.exe` (needs the MSVC env sourced).
-- **FFmpeg shared dev build** (BtbN, GPL) — `curl.exe` download + `Expand-Archive`. Provides `lib/{avformat,avcodec,avutil}.lib` + `include/` + runtime DLLs.
+```powershell
+.\fetch-deps.ps1     # once (or when deps change)
+.\build.bat          # Swift: engine + PalmierCoreHost.dll + spike
+dotnet build Shell   # C# shell
+```
 
-Run it before building (CI does this automatically). Idempotent — skips a step if its output exists.
+`build.bat` sources the MSVC environment itself. `PalmierCore` is a path target:
+CI symlinks `Sources/PalmierCore`; locally without Developer Mode, copy it:
+`cp -r ../Sources/PalmierCore Sources/PalmierCore`.
 
-## PalmierCore dependency
+## The C ABI boundary (PalmierCoreHost)
 
-`PalmierCore` is consumed as a **path target**, not a SwiftPM dependency — because depending on the repo-root package would pull in the Apple-only deps. The `Sources/PalmierCore/` directory is gitignored:
+The shell calls the Swift core in-proc via `PalmierCoreHost.dll`. Rules (learned the hard way — see git history):
 
-- **CI** (`.github/workflows/ci-windows.yml`): symlinks `Sources/PalmierCore` → `../../Sources/PalmierCore` before `swift build`. Windows runners have symlink permission.
-- **Local builds** without Developer Mode (can't symlink): copy instead — `cp -r ../Sources/PalmierCore Sources/PalmierCore`. Keep the copy in sync with the core.
+- Opaque handles for anything stateful; every create has a matching destroy.
+- Value types and JSON across the boundary; events are polled, not callbacks.
+- Teardown is dependency order (swapchain → device → instance).
+- A Vulkan object's Swift owner must outlive every in-flight command buffer that references it.
 
 ## Binding pattern (critical)
 
-Each `C*` systemLibrary target uses a **filtered C wrapper**, NOT an umbrella `#include` of the SDK header. Reason: the Windows SDK's COM-heavy headers (`mediaobj.h`, etc.) use MSVC-specific macros (`DECLSPEC_XFGVIRT`, STDMETHOD vtable declarations) that do not parse under Swift's Clang importer without full MSVC compatibility. Empirically, `#include <mfapi.h>` fails with `expected ')'` in `mediaobj.h:460`.
+Each `C*` systemLibrary target uses a **filtered C wrapper**, NOT an umbrella `#include` of the SDK header. The Windows SDK's COM-heavy headers use MSVC-specific macros that do not parse under Swift's Clang importer. The pattern (see `CMediaFoundation/CMediaFoundation.h`): declare only the symbols actually called, `link` the import lib in the module map, cast at the boundary where a `#define` imports as `Int32` but the C function takes `UInt32`.
 
-The pattern (see `CMediaFoundation/CMediaFoundation.h`):
+## Verification
 
-1. Declare a minimal C header with only the symbols actually called — typedefs for `HRESULT`/`ULONG`, the function prototypes, and macro values as constants.
-2. Module map: `header "Foo.h"` + `link "ImportLib"` (e.g. `Mfplat`).
-3. Swift overlay casts at the boundary where a `#define` imports as `Int32` but the C function takes `UInt32` (`MF_VERSION`, `MFSTARTUP_LITE`).
-4. The linker resolves symbols from the Windows SDK import lib (`Mfplat.lib`, `d3d11.lib`, …) — no extra config needed when the MSVC environment is sourced.
-
-Verified end-to-end on Swift 6.3.3 / `x86_64-unknown-windows-msvc`: `CMediaFoundation` compiles, links against `Mfplat.lib`, and `MFStartup` returns `S_OK` (`0x0`) at runtime.
-
-## Building locally (Windows host)
-
-The MSVC environment must be sourced first (Swift's linker needs the SDK):
-
-```bat
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-set "SWIFT_ROOT=%LOCALAPPDATA%\Programs\Swift"
-set "TC=%SWIFT_ROOT%\Toolchains\6.3.3+Asserts\usr"
-set "PATH=%TC%\bin;%SWIFT_ROOT%\Runtimes\6.3.3\usr\bin;%PATH%"
-set "SDKROOT=%SWIFT_ROOT%\Platforms\6.3.3\Windows.platform\Developer\SDKs\Windows.sdk"
-set "SWIFT_DRIVER_WINDOWS_SDK=Windows.sdk"
-cd PalmierWin
-xcopy /E /I ..\Sources\PalmierCore Sources\PalmierCore   :: if you can't symlink
-swift build
-```
+- `dotnet test Shell/PalmierShell.sln` — the shell + interop suite (300+ tests).
+- `palmierwin-spike` — engine harness: decode/playback/export/effect-kernel readback checks. Needs `test_media/` (`make-test-media.ps1`) and a GPU.
