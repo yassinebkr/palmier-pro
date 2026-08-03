@@ -3,7 +3,7 @@ import Foundation
 public struct TextStyle: Codable, Sendable, Equatable, Hashable {
     public static let axisScaleRange = 0.1...10.0
 
-    public var fontName: String = "Helvetica-Bold"
+    public var fontName: String = "Helvetica"
     public var fontSize: Double = 96
     public var fontScale: Double = 1.0
     public var widthScale: Double = 1.0
@@ -11,7 +11,7 @@ public struct TextStyle: Codable, Sendable, Equatable, Hashable {
     public var tracking: Double = 0
     public var lineSpacing: Double = 0
     public var fontCase: FontCase = .mixed
-    public var isBold: Bool = true
+    public var isBold: Bool = false
     public var isItalic: Bool = false
     public var isUnderlined: Bool = false
     public var isStruckThrough: Bool = false
@@ -33,7 +33,7 @@ public struct TextStyle: Codable, Sendable, Equatable, Hashable {
     /// Full memberwise init (synthesized memberwise inits are internal; this
     /// public form covers every partial shape callers use via default args).
     public init(
-        fontName: String = "Helvetica-Bold",
+        fontName: String = "Helvetica",
         fontSize: Double = 96,
         fontScale: Double = 1.0,
         widthScale: Double = 1.0,
@@ -41,7 +41,7 @@ public struct TextStyle: Codable, Sendable, Equatable, Hashable {
         tracking: Double = 0,
         lineSpacing: Double = 0,
         fontCase: FontCase = .mixed,
-        isBold: Bool = true,
+        isBold: Bool = false,
         isItalic: Bool = false,
         isUnderlined: Bool = false,
         isStruckThrough: Bool = false,
@@ -112,7 +112,7 @@ public struct TextStyle: Codable, Sendable, Equatable, Hashable {
     }
 
     public struct Shadow: Codable, Sendable, Equatable, Hashable {
-        public var enabled: Bool = true
+        public var enabled: Bool = false
         /// Alpha doubles as opacity; layer.shadowOpacity stays at 1.
         public var color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 0.6)
         /// Canvas points; scaled at render time.
@@ -123,7 +123,7 @@ public struct TextStyle: Codable, Sendable, Equatable, Hashable {
         public init() {}
 
         public init(
-            enabled: Bool = true,
+            enabled: Bool = false,
             color: RGBA = RGBA(r: 0, g: 0, b: 0, a: 0.6),
             offsetX: Double = 0,
             offsetY: Double = -2,
@@ -228,28 +228,29 @@ public extension TextStyle {
     /// default returns no inference, meaning the stored default is used.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let fontName = (try? c.decode(String.self, forKey: .fontName)) ?? "Helvetica-Bold"
-        let fontSize = (try? c.decode(Double.self, forKey: .fontSize)) ?? 96
+        let defaults = TextStyle()
+        let fontName = (try? c.decode(String.self, forKey: .fontName)) ?? defaults.fontName
+        let fontSize = (try? c.decode(Double.self, forKey: .fontSize)) ?? defaults.fontSize
         let inferred = TextStyle.boldItalicInference(fontName, fontSize)
         self.init()
         self.fontName = fontName
         self.fontSize = fontSize
-        self.fontScale = (try? c.decode(Double.self, forKey: .fontScale)) ?? 1.0
-        self.widthScale = (try? c.decode(Double.self, forKey: .widthScale)) ?? 1.0
-        self.heightScale = (try? c.decode(Double.self, forKey: .heightScale)) ?? 1.0
-        self.tracking = (try? c.decode(Double.self, forKey: .tracking)) ?? 0
-        self.lineSpacing = (try? c.decode(Double.self, forKey: .lineSpacing)) ?? 0
-        self.fontCase = (try? c.decode(FontCase.self, forKey: .fontCase)) ?? .mixed
+        self.fontScale = (try? c.decode(Double.self, forKey: .fontScale)) ?? defaults.fontScale
+        self.widthScale = (try? c.decode(Double.self, forKey: .widthScale)) ?? defaults.widthScale
+        self.heightScale = (try? c.decode(Double.self, forKey: .heightScale)) ?? defaults.heightScale
+        self.tracking = (try? c.decode(Double.self, forKey: .tracking)) ?? defaults.tracking
+        self.lineSpacing = (try? c.decode(Double.self, forKey: .lineSpacing)) ?? defaults.lineSpacing
+        self.fontCase = (try? c.decode(FontCase.self, forKey: .fontCase)) ?? defaults.fontCase
         self.isBold = (try? c.decode(Bool.self, forKey: .isBold)) ?? inferred.bold
         self.isItalic = (try? c.decode(Bool.self, forKey: .isItalic)) ?? inferred.italic
-        self.isUnderlined = (try? c.decode(Bool.self, forKey: .isUnderlined)) ?? false
-        self.isStruckThrough = (try? c.decode(Bool.self, forKey: .isStruckThrough)) ?? false
-        self.isOverlined = (try? c.decode(Bool.self, forKey: .isOverlined)) ?? false
-        self.color = (try? c.decode(RGBA.self, forKey: .color)) ?? RGBA()
-        self.alignment = (try? c.decode(Alignment.self, forKey: .alignment)) ?? .center
-        self.shadow = (try? c.decode(Shadow.self, forKey: .shadow)) ?? Shadow()
-        self.background = (try? c.decode(Background.self, forKey: .background)) ?? Background()
-        self.border = (try? c.decode(Outline.self, forKey: .border)) ?? Outline()
+        self.isUnderlined = (try? c.decode(Bool.self, forKey: .isUnderlined)) ?? defaults.isUnderlined
+        self.isStruckThrough = (try? c.decode(Bool.self, forKey: .isStruckThrough)) ?? defaults.isStruckThrough
+        self.isOverlined = (try? c.decode(Bool.self, forKey: .isOverlined)) ?? defaults.isOverlined
+        self.color = (try? c.decode(RGBA.self, forKey: .color)) ?? defaults.color
+        self.alignment = (try? c.decode(Alignment.self, forKey: .alignment)) ?? defaults.alignment
+        self.shadow = (try? c.decode(Shadow.self, forKey: .shadow)) ?? defaults.shadow
+        self.background = (try? c.decode(Background.self, forKey: .background)) ?? defaults.background
+        self.border = (try? c.decode(Outline.self, forKey: .border)) ?? defaults.border
     }
 
     /// Hook registered by the app to infer bold/italic from a PostScript font name.

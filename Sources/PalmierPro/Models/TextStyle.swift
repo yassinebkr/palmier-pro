@@ -12,6 +12,10 @@ import SwiftUI
 // `TextStyle()` constructor in an app-side context.
 typealias TextStyle = PalmierCore.TextStyle
 
+extension TextStyle {
+    static var caption: TextStyle { TextStyle(fontSize: AppTheme.Caption.defaultFontSize) }
+}
+
 // MARK: - Rendering helpers
 
 extension TextStyle.RGBA {
