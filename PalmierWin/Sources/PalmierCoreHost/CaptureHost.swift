@@ -132,7 +132,7 @@ final class CaptureSession {
     }
 }
 
-/// Renders timeline `frame` composited at the timeline's render size and
+/// Renders timeline `frame` composited at the project's render size and
 /// writes tightly-packed BGRA into `buf`. `outWidth`/`outHeight` receive the
 /// dimensions. Returns 1 on success, a negative required byte count when the
 /// buffer is too small, and 0 on failure. Blocking GPU + decode work — call
@@ -145,7 +145,7 @@ public func palmierProjectCaptureFrame(_ handle: UnsafeMutableRawPointer?, _ fra
     guard let handle, frame >= 0 else { return 0 }
     let project = Unmanaged<ProjectContext>.fromOpaque(handle).takeUnretainedValue()
     let timeline = project.snapshot()
-    let width = timeline.width, height = timeline.height
+    let (width, height) = project.renderSize
     guard width > 0, height > 0 else { return 0 }
     outWidth?.pointee = Int32(width)
     outHeight?.pointee = Int32(height)

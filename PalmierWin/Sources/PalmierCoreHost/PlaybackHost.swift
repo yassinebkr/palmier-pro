@@ -88,7 +88,8 @@ func renderProjectFrame(_ ctx: EngineContext, frame: Int) -> Int32 {
     let (timeline, generation) = project.renderSnapshotWithGeneration()
 
     if generation != ctx.presenterGeneration {
-        if let next = makePresenter(ctx, device: device, swapchain: swapchain, timeline: timeline) {
+        if let next = makePresenter(ctx, device: device, swapchain: swapchain, timeline: timeline,
+                                    renderSize: project.renderSize) {
             // The outgoing presenter owns the offscreen image the last blit may
             // still be reading, so it cannot be released until the GPU is done.
             if ctx.presenter != nil { vkDeviceWaitIdle(device.device) }
@@ -200,14 +201,15 @@ func buildVideoSlots(timeline: Timeline, natCache: inout [String: Size2D])
 
 /// Builds a WinPlayback presenter for the current timeline snapshot.
 private func makePresenter(_ ctx: EngineContext, device: VulkanDevice,
-                           swapchain: VulkanSwapchain, timeline: Timeline) -> WinPlayback? {
-    let renderSize = Size2D(width: Double(timeline.width), height: Double(timeline.height))
+                           swapchain: VulkanSwapchain, timeline: Timeline,
+                           renderSize: (width: Int, height: Int)) -> WinPlayback? {
+    let size = Size2D(width: Double(renderSize.width), height: Double(renderSize.height))
     let (trackSlots, mediaPaths, clipIds) = buildVideoSlots(timeline: timeline, natCache: &ctx.natSizeCache)
     guard !trackSlots.isEmpty else { return nil }
 
     return WinPlayback(
         device: device, swapchain: swapchain, timeline: timeline,
-        renderSize: renderSize, trackSlots: trackSlots, mediaPaths: mediaPaths,
+        renderSize: size, trackSlots: trackSlots, mediaPaths: mediaPaths,
         clipIds: clipIds, caches: ctx.decodeCaches
     )
 }

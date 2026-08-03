@@ -3,7 +3,7 @@ using Avalonia.Controls;
 
 namespace PalmierShell.Views;
 
-/// Arranges its single child centered at a fixed aspect ratio (16:9). Used to
+/// Arranges its single child centered at the project's aspect ratio. Used to
 /// aspect-fit the preview HWND inside the black canvas without touching the
 /// Vulkan blit.
 public sealed class AspectFitPanel : Panel {

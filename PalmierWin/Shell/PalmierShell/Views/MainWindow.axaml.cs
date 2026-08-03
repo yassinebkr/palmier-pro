@@ -328,6 +328,9 @@ public partial class MainWindow : Window {
 
     void OnSettingsClick(object? sender, RoutedEventArgs e) => ShowSettings();
 
+    void OnProjectSettings(object? sender, RoutedEventArgs e) =>
+        new ProjectSettingsDialog(viewModel).ShowDialog(this);
+
     /// `tabIndex` picks the pane: 0 Appearance, 1 AI, 2 Generation.
     public void ShowSettings(int tabIndex = 0) =>
         new SettingsWindow(viewModel, tabIndex).ShowDialog(this);

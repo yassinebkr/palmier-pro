@@ -250,6 +250,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
             Folders = Media.Folders.ToList(),
         };
 
+    // MARK: Project render size
+
+    [ObservableProperty] int projectRenderWidth = 1920;
+    [ObservableProperty] int projectRenderHeight = 1080;
+
+    /// Aspect-fit ratio the preview canvas (AspectFitPanel) letterboxes to.
+    public double ProjectAspectRatio => (double)ProjectRenderWidth / ProjectRenderHeight;
+
+    /// The transport badge: the reduced ratio, like upstream's "16:9".
+    public string ProjectAspectBadge => AspectLabel(ProjectRenderWidth, ProjectRenderHeight);
+
+    public string ProjectDimensions => $"{ProjectRenderWidth} × {ProjectRenderHeight}";
+
+    partial void OnProjectRenderWidthChanged(int value) => NotifyRenderSizeChanged();
+    partial void OnProjectRenderHeightChanged(int value) => NotifyRenderSizeChanged();
+
+    void NotifyRenderSizeChanged() {
+        OnPropertyChanged(nameof(ProjectAspectRatio));
+        OnPropertyChanged(nameof(ProjectAspectBadge));
+        OnPropertyChanged(nameof(ProjectDimensions));
+    }
+
+    public static string AspectLabel(int width, int height) {
+        int g = GreatestCommonDivisor(width, height);
+        return $"{width / g}:{height / g}";
+    }
+
+    static int GreatestCommonDivisor(int a, int b) {
+        (a, b) = (Math.Abs(a), Math.Abs(b));
+        while (b != 0) (a, b) = (b, a % b);
+        return Math.Max(1, a);
+    }
+
+    /// Pulls the core's render size into the bound properties (after New/Open).
+    public void RefreshRenderSize() {
+        if (CoreApi.palmier_project_render_size(Project, out int w, out int h) != 1) return;
+        ProjectRenderWidth = w;
+        ProjectRenderHeight = h;
+    }
+
+    /// Applies a render size. The core validates (even, 16…7680); false means
+    /// rejected. Project state, so no undo entry — but the project is dirty.
+    public bool SetProjectRenderSize(int width, int height) {
+        if (width == ProjectRenderWidth && height == ProjectRenderHeight) return true;
+        if (CoreApi.palmier_project_set_render_size(Project, width, height) != 1) return false;
+        RefreshRenderSize();
+        ProjectDirty = true;
+        return true;
+    }
+
     public async Task SaveProjectAsync(string path) {
         var document = BuildDocument();
         await Task.Run(() => {
@@ -277,6 +327,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.Reload();
         Timeline.Scrub(0);
         Undo.Clear();
+        RefreshRenderSize();
         ProjectPath = path;
         ProjectDirty = false;
         return missing;
@@ -287,6 +338,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         // An empty timelines array is rejected by the core, so build a fresh
         // one the same way a new project does.
         await Media.RestoreLibraryAsync([], []);
+        CoreApi.palmier_project_set_render_size(Project, 1920, 1080);
         while (CoreApi.palmier_project_timeline_count(Project) > 1)
             CoreApi.palmier_project_remove_timeline(Project, 1);
         foreach (var clip in Timeline.State?.Tracks.SelectMany(t => t.Clips).ToList() ?? [])
@@ -296,6 +348,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.Reload();
         Timeline.Scrub(0);
         Undo.Clear();
+        RefreshRenderSize();
         ProjectPath = null;
         ProjectDirty = false;
     }

@@ -36,6 +36,12 @@ public static partial class CoreApi {
     public static partial int palmier_project_set_preview_source(IntPtr project, string path);
     [LibraryImport(Dll)] public static partial void palmier_project_clear_preview_source(IntPtr project);
 
+    /// The project's render size — the canvas preview, capture, and export
+    /// composite at. Even dimensions, 16…7680; the setter returns 0 otherwise.
+    /// A project setting, not an undoable timeline edit.
+    [LibraryImport(Dll)] public static partial int palmier_project_set_render_size(IntPtr project, int width, int height);
+    [LibraryImport(Dll)] public static partial int palmier_project_render_size(IntPtr project, out int width, out int height);
+
     public static string TimelineName(IntPtr project, int index) {
         var buf = new byte[256];
         return palmier_project_timeline_name(project, index, buf, buf.Length) == 1

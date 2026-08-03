@@ -29,7 +29,8 @@ public func palmierExportFcpxml(_ projectHandle: UnsafeMutableRawPointer?,
     let outputPath = String(cString: path)
     let timeline = project.snapshot()
     guard timeline.totalFrames > 0 else { return 0 }
-    let xml = FcpxmlWriter(timeline: timeline).render()
+    let size = project.renderSize
+    let xml = FcpxmlWriter(timeline: timeline, width: size.width, height: size.height).render()
     guard let data = xml.data(using: .utf8) else { return 0 }
     return writeFcpxmlAtomically(data, to: outputPath) ? 1 : 0
 }
@@ -95,11 +96,13 @@ private final class FcpxmlWriter {
     private var redundantAudioClipIds: Set<String> = []
     private var usedCompoundIds: Set<String> = []
 
-    init(timeline: Timeline) {
+    /// `width`/`height` are the project's render size: the sequence the XML
+    /// describes composites at that canvas, whatever the timeline defaults say.
+    init(timeline: Timeline, width: Int, height: Int) {
         self.timeline = timeline
         self.fps = max(1, timeline.fps)
-        self.seqWidth = timeline.width
-        self.seqHeight = timeline.height
+        self.seqWidth = width
+        self.seqHeight = height
     }
 
     func render() -> String {

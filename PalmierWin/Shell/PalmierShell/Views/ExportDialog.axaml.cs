@@ -36,7 +36,7 @@ public partial class ExportDialog : Window {
         if (main is null) return;
         var state = main.Timeline.State;
         int frames = main.Timeline.TotalFrames;
-        mediaInfo = $"{state?.Width ?? 1920} × {state?.Height ?? 1080} · {state?.Fps ?? 30} fps · " +
+        mediaInfo = $"{main.ProjectDimensions} · {state?.Fps ?? 30} fps · " +
                     $"{TimeSpan.FromSeconds(frames / 30.0):m\\:ss}";
         ApplyFormat();
         refresh = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };

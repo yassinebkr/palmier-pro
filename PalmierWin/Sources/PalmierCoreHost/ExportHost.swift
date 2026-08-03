@@ -60,8 +60,9 @@ final class ExportContext: @unchecked Sendable {
 }
 
 /// Starts exporting `project`'s timeline to `path` (H.264/MP4 at the
-/// timeline's resolution and fps). Returns an export handle to poll, or NULL
-/// when the timeline is empty or the encoder/device can't be created.
+/// project's render size and the timeline's fps). Returns an export handle to
+/// poll, or NULL when the timeline is empty or the encoder/device can't be
+/// created.
 @_cdecl("palmier_export_start")
 public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
                                _ path: UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? {
@@ -73,9 +74,10 @@ public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
 
     let ctx = ExportContext()
     ctx.totalFrames = timeline.totalFrames
+    let renderSize = project.renderSize
 
     let thread = Thread {
-        runExport(ctx, timeline: timeline, outputPath: outputPath)
+        runExport(ctx, timeline: timeline, renderSize: renderSize, outputPath: outputPath)
     }
     thread.name = "palmier-export"
     thread.start()
@@ -133,7 +135,8 @@ public func palmierExportDestroy(_ handle: UnsafeMutableRawPointer?) {
     Unmanaged<ExportContext>.fromOpaque(handle).release()
 }
 
-private func runExport(_ ctx: ExportContext, timeline: Timeline, outputPath: String) {
+private func runExport(_ ctx: ExportContext, timeline: Timeline,
+                       renderSize: (width: Int, height: Int), outputPath: String) {
     // Headless Vulkan: offscreen rendering needs no surface extensions.
     guard let instance = Vulkan.createInstance(appName: "palmier-export", extensions: []) else {
         ctx.finish(error: "Could not create the GPU instance for export.")
@@ -142,18 +145,19 @@ private func runExport(_ ctx: ExportContext, timeline: Timeline, outputPath: Str
     // The device, exporter, and every pool they own must be released before
     // the instance goes away — an inner scope guarantees that ordering, which
     // a `defer` here would not.
-    render(ctx, instance: instance, timeline: timeline, outputPath: outputPath)
+    render(ctx, instance: instance, timeline: timeline, renderSize: renderSize, outputPath: outputPath)
     Vulkan.destroyInstance(instance)
 }
 
 private func render(_ ctx: ExportContext, instance: VkInstance,
-                    timeline: Timeline, outputPath: String) {
+                    timeline: Timeline, renderSize: (width: Int, height: Int),
+                    outputPath: String) {
     guard let device = VulkanDevice.create(instance: instance) else {
         ctx.finish(error: "Could not create the GPU device for export.")
         return
     }
 
-    let renderSize = Size2D(width: Double(timeline.width), height: Double(timeline.height))
+    let size = Size2D(width: Double(renderSize.width), height: Double(renderSize.height))
     var natCache: [String: Size2D] = [:]
     let (trackSlots, mediaPaths, _) = buildVideoSlots(timeline: timeline, natCache: &natCache)
     guard !trackSlots.isEmpty else {
@@ -161,9 +165,10 @@ private func render(_ ctx: ExportContext, instance: VkInstance,
         return
     }
 
-    let config = FFmpegEncoder.Config(width: timeline.width, height: timeline.height, fps: timeline.fps)
+    let config = FFmpegEncoder.Config(width: renderSize.width, height: renderSize.height,
+                                      fps: timeline.fps)
     guard let exporter = WinExporter(
-        device: device, timeline: timeline, renderSize: renderSize,
+        device: device, timeline: timeline, renderSize: size,
         trackSlots: trackSlots, mediaPaths: mediaPaths,
         outputPath: outputPath, encoderConfig: config
     ) else {
