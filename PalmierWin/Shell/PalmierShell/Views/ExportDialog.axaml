@@ -19,6 +19,11 @@
     </DockPanel>
   </Border>
   <StackPanel Margin="16" Spacing="10">
+    <ComboBox x:Name="FormatBox" SelectedIndex="0" HorizontalAlignment="Stretch"
+              SelectionChanged="OnFormatChanged">
+      <ComboBoxItem>MP4 video (H.264)</ComboBoxItem>
+      <ComboBoxItem>FCPXML — DaVinci Resolve / Final Cut</ComboBoxItem>
+    </ComboBox>
     <Grid ColumnDefinitions="*,Auto">
       <TextBox x:Name="PathBox" Grid.Column="0" FontSize="12" Watermark="Output file"/>
       <Button Grid.Column="1" Content="Browse&#x2026;" Margin="6,0,0,0" Click="OnBrowse"/>

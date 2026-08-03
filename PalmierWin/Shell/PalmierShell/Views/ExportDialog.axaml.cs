@@ -26,6 +26,7 @@ public partial class ExportDialog : Window {
     readonly MainViewModel main;
     readonly Dictionary<int, JobRow> rows = new();
     readonly DispatcherTimer? refresh;
+    string mediaInfo = "";
 
     public ExportDialog() : this(null!) { }  // XAML designer only
 
@@ -35,11 +36,9 @@ public partial class ExportDialog : Window {
         if (main is null) return;
         var state = main.Timeline.State;
         int frames = main.Timeline.TotalFrames;
-        InfoText.Text = $"{state?.Width ?? 1920} × {state?.Height ?? 1080} · {state?.Fps ?? 30} fps · " +
-                        $"{TimeSpan.FromSeconds(frames / 30.0):m\\:ss} · H.264 MP4";
-        PathBox.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-            "palmier-export.mp4");
+        mediaInfo = $"{state?.Width ?? 1920} × {state?.Height ?? 1080} · {state?.Fps ?? 30} fps · " +
+                    $"{TimeSpan.FromSeconds(frames / 30.0):m\\:ss}";
+        ApplyFormat();
         refresh = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         refresh.Tick += (_, _) => RefreshJobs();
         refresh.Start();
@@ -47,13 +46,45 @@ public partial class ExportDialog : Window {
         RefreshJobs();
     }
 
+    bool IsFcpxml => FormatBox.SelectedIndex == 1;
+
+    void OnFormatChanged(object? sender, SelectionChangedEventArgs e) {
+        // SelectionChanged fires while InitializeComponent is still parsing;
+        // named controls further down the XAML are not assigned yet.
+        if (main is null || PathBox is null) return;
+        ApplyFormat();
+    }
+
+    /// Switches path extension, info line, and queueing between MP4 (queued
+    /// render) and FCPXML (written immediately — it's instant).
+    void ApplyFormat() {
+        InfoText.Text = IsFcpxml ? mediaInfo + " · FCPXML 1.10" : mediaInfo + " · H.264 MP4";
+        QueueButton.IsVisible = !IsFcpxml;
+        string path = PathBox.Text?.Trim() ?? "";
+        string ext = IsFcpxml ? ".fcpxml" : ".mp4";
+        if (path.Length == 0) {
+            PathBox.Text = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+                "palmier-export" + ext);
+        } else if (!path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) {
+            PathBox.Text = Path.ChangeExtension(path, ext);
+        }
+    }
+
     async void OnBrowse(object? sender, RoutedEventArgs e) {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
-            Title = "Export video",
-            SuggestedFileName = "palmier-export.mp4",
-            DefaultExtension = "mp4",
-            FileTypeChoices = [new FilePickerFileType("MP4 video") { Patterns = ["*.mp4"] }],
-        });
+        var file = await StorageProvider.SaveFilePickerAsync(IsFcpxml
+            ? new FilePickerSaveOptions {
+                Title = "Export FCPXML",
+                SuggestedFileName = "palmier-export.fcpxml",
+                DefaultExtension = "fcpxml",
+                FileTypeChoices = [new FilePickerFileType("FCPXML") { Patterns = ["*.fcpxml"] }],
+            }
+            : new FilePickerSaveOptions {
+                Title = "Export video",
+                SuggestedFileName = "palmier-export.mp4",
+                DefaultExtension = "mp4",
+                FileTypeChoices = [new FilePickerFileType("MP4 video") { Patterns = ["*.mp4"] }],
+            });
         if (file?.TryGetLocalPath() is { } path) PathBox.Text = path;
     }
 
@@ -63,9 +94,30 @@ public partial class ExportDialog : Window {
         RefreshJobs();
     }
 
-    void OnExportNow(object? sender, RoutedEventArgs e) {
+    async void OnExportNow(object? sender, RoutedEventArgs e) {
+        if (IsFcpxml) {
+            await ExportFcpxmlAsync();
+            return;
+        }
         if (!TryEnqueue(out _)) return;
         Close();
+    }
+
+    async Task ExportFcpxmlAsync() {
+        string path = PathBox.Text?.Trim() ?? "";
+        if (path.Length == 0 || main.Timeline.TotalFrames == 0) {
+            StatusText.Text = main.Timeline.TotalFrames == 0
+                ? "The timeline is empty — nothing to export."
+                : "Choose an output file first.";
+            return;
+        }
+        if (CoreApi.palmier_export_fcpxml(main.Project, path) == 1) {
+            await MessageDialog.AskAsync(this, "Export complete",
+                $"FCPXML written to {path}", "OK");
+        } else {
+            await MessageDialog.AskAsync(this, "Export failed",
+                "The timeline could not be written as FCPXML.", "OK");
+        }
     }
 
     bool TryEnqueue(out string path) {

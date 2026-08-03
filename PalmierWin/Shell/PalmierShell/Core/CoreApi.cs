@@ -311,6 +311,10 @@ public static partial class CoreApi {
     public static partial int palmier_export_error(IntPtr export, byte[] buf, int bufSize);
     [LibraryImport(Dll)] public static partial void palmier_export_destroy(IntPtr export);
 
+    /// Writes the active timeline as FCPXML (UTF-8 path). 1 on success, 0 on failure.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int palmier_export_fcpxml(IntPtr project, string path);
+
     public static string GetExportError(IntPtr export) {
         var buf = new byte[512];
         if (palmier_export_error(export, buf, buf.Length) != 1) return "Export failed.";
