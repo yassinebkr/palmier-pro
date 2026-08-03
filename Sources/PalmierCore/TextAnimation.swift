@@ -38,6 +38,16 @@ public struct TextAnimation: Codable, Sendable, Equatable {
         public var isPerWord: Bool { renderMode == .perWord }
         public var usesHighlight: Bool { isPerWord }
 
+        public var needsIncomingCaptionCoverage: Bool {
+            switch self {
+            case .fadeIn, .popIn, .slideUp, .typewriter,
+                 .wordReveal, .wordSlide, .wordPop, .wordCycle:
+                true
+            default:
+                false
+            }
+        }
+
         public var displayName: String {
             switch self {
             case .none: "Off"

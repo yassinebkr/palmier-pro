@@ -4,6 +4,7 @@ import Foundation
 extension ToolExecutor {
     private static let addCaptionsAllowedKeys: Set<String> = Set([
         "style", "transform", "censorProfanity", "language", "animation", "highlightColor", "maxWords",
+        "maximumGapSeconds",
     ])
 
     func addCaptions(_ editor: EditorViewModel, _ args: [String: Any]) async throws -> ToolResult {
@@ -28,6 +29,23 @@ extension ToolExecutor {
             maxWords = n
         }
 
+        let gapSettings: CaptionGapSettings
+        if let rawMaximumGap = args["maximumGapSeconds"] {
+            guard !isJSONBoolean(rawMaximumGap),
+                  rawMaximumGap is NSNumber || rawMaximumGap is Double || rawMaximumGap is Int,
+                  let maximumGapSeconds = args.double("maximumGapSeconds"),
+                  let parsed = CaptionGapSettings(maximumGapSeconds: maximumGapSeconds) else {
+                throw ToolError(
+                    "add_captions: maximumGapSeconds must be a finite number from "
+                    + "\(CaptionGapSettings.maximumGapRange.lowerBound) through "
+                    + "\(CaptionGapSettings.maximumGapRange.upperBound)."
+                )
+            }
+            gapSettings = parsed
+        } else {
+            gapSettings = .default
+        }
+
         let context = try await transcriptionContext(args, path: "add_captions") {
             await editor.captionCloudCreditCost(for: .init(autoDetect: true, provider: .cloud))
         }
@@ -47,6 +65,7 @@ extension ToolExecutor {
             censorProfanity: args.bool("censorProfanity") ?? false,
             locale: context.preferredLocale,
             maxWords: maxWords,
+            gapSettings: gapSettings,
             provider: provider,
             animation: animation
         )
