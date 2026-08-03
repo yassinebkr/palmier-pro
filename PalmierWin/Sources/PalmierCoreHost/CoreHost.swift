@@ -1,4 +1,5 @@
 import CVulkan
+import Foundation
 import PalmierCore
 import PalmierWin
 import WinSDK
@@ -40,25 +41,93 @@ public func palmierDemoRippleShift() -> Int32 {
 
 // MARK: - Engine host (interop spike 2: Swift renders into a shell-owned HWND)
 
+/// Ceiling on any GPU wait the render thread makes. Waiting forever means one
+/// hiccup freezes the preview for the rest of the session.
+let engineGpuTimeoutNanoseconds: UInt64 = 1_000_000_000
+
 /// Retained engine state behind the opaque handle.
-private final class EngineContext {
+final class EngineContext {
     let instance: VkInstance
     var device: VulkanDevice?
     let window: Win32Window
+    /// One surface for the window's lifetime; swapchains are retired against it.
+    var surface: VulkanSurface?
     var swapchain: VulkanSwapchain?
-    init(instance: VkInstance, device: VulkanDevice, window: Win32Window, swapchain: VulkanSwapchain) {
+    /// Client size the last swapchain rebuild was attempted at. A rebuild the
+    /// driver refused is retried when the target size changes, not every frame.
+    var lastSwapchainAttempt: (width: Int, height: Int)?
+
+    // Everything below `inbox` is owned by the render thread. The shell runs on
+    // its own thread, so what it sets goes through the lock and is picked up at
+    // the top of a frame — a Vulkan presenter must never be released out from
+    // under the thread drawing with it.
+    private let inbox = NSLock()
+    private var pendingProject: ProjectContext??
+    private var pendingSelection: String?
+
+    /// Timeline playback (attached via palmier_engine_set_project).
+    var project: ProjectContext?
+    var presenter: WinPlayback?
+    var presenterGeneration: Int = -1
+    /// The timeline has no video to plan; the presenter only clears the screen.
+    var presenterEmpty = false
+    /// Revision whose planning already failed, so it is not retried per frame.
+    var plannedGeneration: Int?
+    var natSizeCache: [String: Size2D] = [:]
+    /// Decoders survive presenter rebuilds; an edit must not reopen every clip.
+    let decodeCaches = DecodeCachePool()
+    /// Clip the shell has selected, drawn with a manipulation frame.
+    var selectedClipId: String?
+
+    /// Called from the shell's thread.
+    func post(project: ProjectContext?) {
+        inbox.lock()
+        pendingProject = .some(project)
+        inbox.unlock()
+    }
+
+    /// Called from the shell's thread.
+    func post(selection: String?) {
+        inbox.lock()
+        pendingSelection = selection
+        inbox.unlock()
+    }
+
+    /// Called from the render thread, once per frame, before anything reads
+    /// the fields it updates.
+    func drainInbox() {
+        inbox.lock()
+        let nextProject = pendingProject
+        let nextSelection = pendingSelection
+        pendingProject = nil
+        inbox.unlock()
+
+        selectedClipId = nextSelection
+        guard let nextProject else { return }
+        project = nextProject
+        presenter = nil
+        presenterEmpty = false
+        presenterGeneration = -1
+    }
+
+    init(instance: VkInstance, device: VulkanDevice, window: Win32Window,
+         surface: VulkanSurface, swapchain: VulkanSwapchain) {
         self.instance = instance
         self.device = device
         self.window = window
+        self.surface = surface
         self.swapchain = swapchain
     }
-    // Teardown order is dependency order: swapchain → device → (caller does
-    // instance). Optionals let deinit force that sequence.
+    // Teardown order is dependency order: presenter (offscreen/decoders) →
+    // swapchain → surface → device → (caller does instance). Optionals let
+    // deinit force that sequence.
     deinit {
         if let device {
             vkDeviceWaitIdle(device.device)
         }
+        presenter = nil
         swapchain = nil
+        surface = nil
         device = nil
     }
 }
@@ -73,26 +142,45 @@ public func palmierEngineCreate(_ hwnd: UnsafeMutableRawPointer?) -> UnsafeMutab
                                                extensions: ["VK_KHR_surface", "VK_KHR_win32_surface"]),
           let device = VulkanDevice.create(instance: instance) else { return nil }
     let window = Win32Window(foreignHwnd: nativeHwnd)
-    guard let swapchain = VulkanSwapchain(device: device, instance: instance, window: window) else { return nil }
-    let ctx = EngineContext(instance: instance, device: device, window: window, swapchain: swapchain)
+    guard let surface = VulkanSurface(instance: instance, window: window),
+          let swapchain = VulkanSwapchain(device: device, instance: instance,
+                                          window: window, surface: surface) else { return nil }
+    let ctx = EngineContext(instance: instance, device: device, window: window,
+                            surface: surface, swapchain: swapchain)
     return Unmanaged.passRetained(ctx).toOpaque()
 }
 
-/// Renders one frame (animated clear color) and presents. Returns 1 on
-/// success, 0 on failure. Message pumping is the caller's job.
+/// Renders one frame and presents. With a project attached this composites
+/// the timeline frame through WinFrameRenderer; otherwise it renders the
+/// animated clear (interop diagnostic). Returns 1 on success, 0 on failure.
+/// Message pumping is the caller's job.
 @_cdecl("palmier_engine_render_frame")
 public func palmierEngineRenderFrame(_ handle: UnsafeMutableRawPointer?, _ frame: Int32) -> Int32 {
     guard let handle else { return 0 }
     let ctx = Unmanaged<EngineContext>.fromOpaque(handle).takeUnretainedValue()
-    guard let dev = ctx.device, let swap = ctx.swapchain else { return 0 }
+    // Apply anything the shell posted, on this thread, before deciding what to
+    // draw — otherwise a project attached a moment ago is not seen until the
+    // next frame, or never on the diagnostic path.
+    ctx.drainInbox()
+    if ctx.project != nil { return renderProjectFrame(ctx, frame: Int(frame)) }
+    guard let dev = ctx.device else { return 0 }
+    // Same rule as the project path: a missing swapchain is a state to retry
+    // out of, not a permanent failure.
+    guard let swap = ctx.swapchain else { return 1 }
     let vkDev = dev.device
 
+    // Bounded wait, and the fence is reset only once a submit is certain: the
+    // same rule as WinPlayback.blitAndPresent, and for the same reason — a
+    // fence reset without a submit to signal it wedges every later frame.
     var fence: VkFence? = swap.inFlight
-    withUnsafePointer(to: &fence) { f in _ = vkWaitForFences(vkDev, 1, f, UInt32(VK_TRUE), UInt64.max) }
-    _ = withUnsafePointer(to: &fence) { f in vkResetFences(vkDev, 1, f) }
+    let waited = withUnsafePointer(to: &fence) { f in
+        vkWaitForFences(vkDev, 1, f, UInt32(VK_TRUE), engineGpuTimeoutNanoseconds)
+    }
+    guard waited == VK_SUCCESS else { return 1 }   // busy, not broken: try again
 
     var imageIndex: UInt32 = 0
-    let acquire = vkAcquireNextImageKHR(vkDev, swap.swapchain, UInt64.max, swap.imageAvailable, nil, &imageIndex)
+    let acquire = vkAcquireNextImageKHR(vkDev, swap.swapchain, engineGpuTimeoutNanoseconds,
+                                        swap.imageAvailable, nil, &imageIndex)
     guard acquire == VK_SUCCESS || acquire == VK_SUBOPTIMAL_KHR else { return 0 }
 
     var cbInfo = VkCommandBufferAllocateInfo()
@@ -126,6 +214,8 @@ public func palmierEngineRenderFrame(_ handle: UnsafeMutableRawPointer?, _ frame
     }
     vkCmdEndRenderPass(cmd)
     guard vkEndCommandBuffer(cmd) == VK_SUCCESS else { return 0 }
+
+    _ = withUnsafePointer(to: &fence) { f in vkResetFences(vkDev, 1, f) }
 
     var waitSem: VkSemaphore? = swap.imageAvailable
     var signalSem: VkSemaphore? = swap.renderFinished
