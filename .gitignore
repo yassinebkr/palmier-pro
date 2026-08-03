@@ -47,3 +47,16 @@ imgui.ini
 # .NET build output
 bin/
 obj/
+
+# Local-only working files (never pushed)
+videos/
+windows-editor.png
+PalmierWin/Shell/shots/
+docs/superpowers/
+docs-local/
+docs/claude-summary.md
+docs/claude-ux-proposals.md
+docs/seedance-prompt-engineering.md
+docs/kling-prompt-engineering.md
+docs/windows-media-engine-design.md
+docs/windows-shell-design.md
