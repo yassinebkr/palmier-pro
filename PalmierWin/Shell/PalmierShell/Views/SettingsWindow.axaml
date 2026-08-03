@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+        xmlns:core="clr-namespace:PalmierShell.Core"
+        x:Class="PalmierShell.Views.SettingsWindow"
+        x:DataType="vm:AgentViewModel"
+        Title="Settings" Width="460" Height="470" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeBaseBrush}">
+  <Window.Styles>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="Foreground" Value="{StaticResource ThemeTextMutedBrush}"/>
+      <Setter Property="Margin" Value="0,14,0,6"/>
+    </Style>
+    <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Foreground" Value="{StaticResource ThemeTextTertiaryBrush}"/>
+    </Style>
+  </Window.Styles>
+  <Grid RowDefinitions="32,Auto,*,Auto">
+    <Border Grid.Row="0" Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPressed">
+      <DockPanel>
+        <views:CaptionButtons DockPanel.Dock="Right" ShowMinimize="False" ShowMaximize="False"/>
+        <TextBlock Text="Settings" FontSize="11" VerticalAlignment="Center" Margin="12,0"
+                   Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+      </DockPanel>
+    </Border>
+    <TabControl x:Name="Panes" Grid.Row="1" Grid.RowSpan="2" Margin="8">
+      <TabItem Header="Appearance" FontSize="12">
+        <StackPanel Margin="8,4">
+          <TextBlock Classes="section" Text="ACCENT"/>
+          <TextBlock FontSize="11" TextWrapping="Wrap"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"
+                     Text="Used for the timecode, keyframes, snap guides, the active timeline tab, and export progress."/>
+          <ItemsControl x:Name="AccentSwatches" Margin="0,10,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+          <TextBlock Classes="section" Text="TIMELINE"/>
+          <CheckBox x:Name="SnapDefault" FontSize="12" Content="Snap to clip edges and the playhead"/>
+        </StackPanel>
+      </TabItem>
+      <TabItem Header="AI" FontSize="12">
+        <StackPanel Margin="8,4" Spacing="4">
+          <TextBlock Classes="section" Text="PROVIDER"/>
+          <ComboBox x:Name="ProviderBox" HorizontalAlignment="Stretch" FontSize="12"
+                    ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:ProviderInfo"><TextBlock Text="{Binding Name}"/></DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Classes="section" Text="API KEY"/>
+          <TextBox x:Name="ApiKeyBox" PasswordChar="&#x2022;" FontSize="12"
+                   Text="{Binding ApiKeyInput, Mode=TwoWay}"
+                   Watermark="{Binding HasApiKey, Converter={x:Static views:SettingsWindow.KeyWatermark}}"/>
+          <TextBlock FontSize="10" TextWrapping="Wrap"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"
+                     Text="One key per provider, encrypted for this Windows user. Leave blank to keep the saved key."/>
+          <TextBlock Classes="section" Text="MODEL"/>
+          <Grid ColumnDefinitions="*,Auto">
+            <!-- Click to browse, type to search, paste to use anything. -->
+            <views:ModelBox Grid.Column="0" ItemsSource="{Binding Models}"
+                            Text="{Binding SelectedModel, Mode=TwoWay}" Watermark="Choose a model"/>
+            <Button Grid.Column="1" Margin="6,0,0,0" FontSize="11" Content="Refresh"
+                    Command="{Binding RefreshModelsCommand}"
+                    IsEnabled="{Binding !RefreshingModels}"
+                    ToolTip.Tip="Reload the model list from the provider"/>
+          </Grid>
+          <TextBlock FontSize="10" Foreground="{StaticResource ThemeTextMutedBrush}"
+                     Text="{Binding ModelsMessage}" TextWrapping="Wrap"/>
+        </StackPanel>
+      </TabItem>
+      <TabItem Header="Generation" FontSize="12">
+        <StackPanel Margin="8,4" Spacing="4">
+          <TextBlock Classes="section" Text="VIDEO GENERATION KEYS"/>
+          <TextBlock FontSize="11" TextWrapping="Wrap"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"
+                     Text="Used by the Generate panel in the media library. Stored encrypted for this Windows user."/>
+          <ItemsControl x:Name="GenerationKeys" Margin="0,8,0,0"/>
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                Spacing="8" Margin="16,0,16,16">
+      <TextBlock x:Name="StatusText" FontSize="11" VerticalAlignment="Center"
+                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
+      <Button Content="Close" Click="OnClose"/>
+      <Button Content="Save" Click="OnSave"
+              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+    </StackPanel>
+  </Grid>
+</Window>

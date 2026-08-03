@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PalmierShell.Views.CaptionButtons">
+  <!-- Win11-shaped caption buttons drawn in the app's own chrome. The window
+       borders are gone (ExtendClientArea + NoChrome), so these are the only
+       minimize/maximize/close the user has - they must read instantly. -->
+  <UserControl.Styles>
+    <Style Selector="Button.caption">
+      <Setter Property="Width" Value="44"/>
+      <Setter Property="VerticalAlignment" Value="Stretch"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="Button.caption /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="CornerRadius" Value="0"/>
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.08"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1FFFFFFF"/>
+    </Style>
+    <Style Selector="Button.caption:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#33FFFFFF"/>
+    </Style>
+    <Style Selector="Button.caption Path">
+      <Setter Property="Stroke" Value="{StaticResource ThemeTextSecondaryBrush}"/>
+      <Setter Property="StrokeThickness" Value="1"/>
+    </Style>
+    <!-- Close hovers Windows red; anything subtler reads as a dead button. -->
+    <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C42B1C"/>
+    </Style>
+    <Style Selector="Button.caption.close:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#B02A1B"/>
+    </Style>
+    <Style Selector="Button.caption.close:pointerover Path">
+      <Setter Property="Stroke" Value="White"/>
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Orientation="Horizontal">
+    <Button x:Name="MinimizeButton" Classes="caption" Click="OnMinimize">
+      <Path Data="M 0,0 H 10" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+    </Button>
+    <Button x:Name="MaximizeButton" Classes="caption" Click="OnMaximize">
+      <Path x:Name="MaximizeGlyph" Data="M 0,0 H 9 V 9 H 0 Z"
+            VerticalAlignment="Center" HorizontalAlignment="Center"/>
+    </Button>
+    <Button Classes="caption close" Click="OnClose">
+      <Path Data="M 0,0 L 9,9 M 9,0 L 0,9" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+    </Button>
+  </StackPanel>
+</UserControl>

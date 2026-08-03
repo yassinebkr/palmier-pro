@@ -1,0 +1,273 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        xmlns:gen="clr-namespace:PalmierShell.Core.Generation"
+        x:Class="PalmierShell.Views.GenerateWindow"
+        x:DataType="vm:GeneratePanelViewModel"
+        Title="Generate Video" Width="440" Height="720"
+        MinWidth="380" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeSurfaceBrush}">
+  <!-- Its own window because the composer is a form: docked in the library it
+       was cut off at the bottom, which hid the price and the Generate button.
+       Scrolls, so a long prompt preview cannot push anything out of reach. -->
+  <Grid RowDefinitions="32,*,Auto">
+    <!-- App-drawn title strip: the OS chrome is gone everywhere, sub-windows
+         included, so each window carries its own. -->
+    <Border Grid.Row="0" Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPressed">
+      <DockPanel>
+        <views:CaptionButtons DockPanel.Dock="Right" ShowMinimize="False" ShowMaximize="False"/>
+        <TextBlock Text="Generate Video" FontSize="11" VerticalAlignment="Center" Margin="12,0"
+                   Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+      </DockPanel>
+    </Border>
+    <!-- Horizontal scrolling off so wrapping text measures against the
+         viewport. The inset is a margin on the content, not padding on the
+         viewer: as padding it is not subtracted before children measure, and
+         long advice lines overflow the right edge by exactly its width. -->
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="8" Margin="14,12,14,14">
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+          <StackPanel Grid.Column="0" Spacing="3">
+            <TextBlock Text="First frame" FontSize="10"
+                       Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            <Panel Height="96" Background="{StaticResource ThemeRaisedBrush}"
+                   PointerPressed="OnPickFirstFrame">
+              <TextBlock Text="+" FontSize="18" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" IsVisible="{Binding !HasFirstFrame}"
+                         Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              <Image Source="{Binding FirstFrameThumb}" Stretch="UniformToFill"/>
+              <Button Content="&#x00D7;" FontSize="10" Padding="5,0" Background="#B0000000"
+                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="2"
+                      IsVisible="{Binding HasFirstFrame}"
+                      Command="{Binding ClearFirstFrameCommand}"/>
+            </Panel>
+            <!-- Steer the slot along the timeline: a cut lands on adjacent,
+                 near-identical frames, and the frame you want to travel from
+                 is rarely exactly the frame the cut sits on. -->
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center"
+                        IsVisible="{Binding CanNudgeFirst}">
+              <Button Classes="icon" Content="&#x00AB;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Back 1 s"
+                      Command="{Binding NudgeFirstCommand}" CommandParameter="-30"/>
+              <Button Classes="icon" Content="&#x2039;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Back 1 frame"
+                      Command="{Binding NudgeFirstCommand}" CommandParameter="-1"/>
+              <TextBlock Text="{Binding FirstFrameLabel}" FontSize="10" Margin="4,0"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource ThemeTimecodeBrush}"/>
+              <Button Classes="icon" Content="&#x203A;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Forward 1 frame"
+                      Command="{Binding NudgeFirstCommand}" CommandParameter="1"/>
+              <Button Classes="icon" Content="&#x00BB;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Forward 1 s"
+                      Command="{Binding NudgeFirstCommand}" CommandParameter="30"/>
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="3">
+            <TextBlock Text="Last frame" FontSize="10"
+                       Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            <Panel Height="96" Background="{StaticResource ThemeRaisedBrush}"
+                   PointerPressed="OnPickLastFrame">
+              <TextBlock Text="+" FontSize="18" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" IsVisible="{Binding !HasLastFrame}"
+                         Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              <Image Source="{Binding LastFrameThumb}" Stretch="UniformToFill"/>
+              <Button Content="&#x00D7;" FontSize="10" Padding="5,0" Background="#B0000000"
+                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="2"
+                      IsVisible="{Binding HasLastFrame}"
+                      Command="{Binding ClearLastFrameCommand}"/>
+            </Panel>
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center"
+                        IsVisible="{Binding CanNudgeLast}">
+              <Button Classes="icon" Content="&#x00AB;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Back 1 s"
+                      Command="{Binding NudgeLastCommand}" CommandParameter="-30"/>
+              <Button Classes="icon" Content="&#x2039;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Back 1 frame"
+                      Command="{Binding NudgeLastCommand}" CommandParameter="-1"/>
+              <TextBlock Text="{Binding LastFrameLabel}" FontSize="10" Margin="4,0"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource ThemeTimecodeBrush}"/>
+              <Button Classes="icon" Content="&#x203A;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Forward 1 frame"
+                      Command="{Binding NudgeLastCommand}" CommandParameter="1"/>
+              <Button Classes="icon" Content="&#x00BB;" FontSize="10" Padding="5,0"
+                      ToolTip.Tip="Forward 1 s"
+                      Command="{Binding NudgeLastCommand}" CommandParameter="30"/>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+
+        <!-- Which image mode the stills go in. Invisible until now, and the
+             difference between a transition and a rejected likeness request. -->
+        <TextBlock Text="{Binding FrameModeText}" FontSize="10" TextWrapping="Wrap"
+                   IsVisible="{Binding FrameModeText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Foreground="{StaticResource ThemeTextMutedBrush}"/>
+
+        <!-- How much neighbouring footage the generated clip replaces. Zero
+             keeps the boundary frames; changing a span recaptures the stills
+             at the new endpoints. -->
+        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding ShowSpanPickers}">
+          <TextBlock Text="Replace" FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          <ComboBox ItemsSource="{Binding SpanChoices}" SelectedItem="{Binding SpanBefore}"
+                    FontSize="11"/>
+          <TextBlock Text="s before," FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          <ComboBox ItemsSource="{Binding SpanChoices}" SelectedItem="{Binding SpanAfter}"
+                    FontSize="11"/>
+          <TextBlock Text="s after" FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+        </StackPanel>
+
+        <!-- Reference media, on the models whose schemas take them. The prompt
+             addresses each one by its chip label. -->
+        <StackPanel Spacing="4" IsVisible="{Binding CanAttachReferences}">
+          <TextBlock Text="Reference media (optional — instead of frames)" FontSize="10"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          <ItemsControl ItemsSource="{Binding ReferenceImages}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ReferenceItemViewModel">
+                <Border Background="{StaticResource ThemeRaisedBrush}" CornerRadius="3"
+                        Padding="6,2" Margin="0,1">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="&#x00D7;" FontSize="10" Padding="4,0"
+                            Classes="icon"
+                            Command="{Binding $parent[Window].((vm:GeneratePanelViewModel)DataContext).RemoveReferenceCommand}"
+                            CommandParameter="{Binding}"/>
+                    <TextBlock Text="{Binding Label}" FontSize="10" Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource ThemeTimecodeBrush}"/>
+                    <TextBlock Text="{Binding FileName}" FontSize="10" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+                  </DockPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding ReferenceVideos}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ReferenceItemViewModel">
+                <Border Background="{StaticResource ThemeRaisedBrush}" CornerRadius="3"
+                        Padding="6,2" Margin="0,1">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="&#x00D7;" FontSize="10" Padding="4,0"
+                            Classes="icon"
+                            Command="{Binding $parent[Window].((vm:GeneratePanelViewModel)DataContext).RemoveReferenceCommand}"
+                            CommandParameter="{Binding}"/>
+                    <TextBlock Text="{Binding Label}" FontSize="10" Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource ThemeTimecodeBrush}"/>
+                    <TextBlock Text="{Binding FileName}" FontSize="10" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+                  </DockPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Content="+ Image reference" FontSize="11" Padding="8,3" Click="OnAddRefImage"/>
+            <Button Content="+ Video reference" FontSize="11" Padding="8,3" Click="OnAddRefVideo"/>
+            <Button Content="Use surrounding video" FontSize="11" Padding="8,3"
+                    IsVisible="{Binding HasPendingPlacement}"
+                    Command="{Binding AttachVideoContextCommand}"
+                    ToolTip.Tip="Extracts the clips around the armed cut or gap (the chosen spans, or 2 s a side) and attaches them as [Video1]/[Video2]. Replaces the stills — this model takes frames or references, not both."/>
+          </StackPanel>
+          <TextBlock Text="{Binding ReferenceConflict}" FontSize="11" TextWrapping="Wrap"
+                     IsVisible="{Binding ReferenceConflict, Converter={x:Static ObjectConverters.IsNotNull}}"
+                     Foreground="{StaticResource ThemeTimecodeBrush}"/>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Message}" FontSize="11" TextWrapping="Wrap"
+                   IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+
+        <TextBox Watermark="Subject, action, environment, camera move" AcceptsReturn="True"
+                 MinHeight="88" TextWrapping="Wrap" FontSize="12"
+                 Text="{Binding Prompt, Mode=TwoWay}"/>
+
+        <!-- What the model will be asked, and what is wrong with it. This is
+             the part that makes a prompt better; the appended text is small. -->
+        <ItemsControl ItemsSource="{Binding Advice}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Margin="0,1"
+                         Foreground="{StaticResource ThemeTimecodeBrush}"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <CheckBox FontSize="11" IsChecked="{Binding TunePrompt, Mode=TwoWay}"
+                  Content="{Binding StyleName, StringFormat='Tune the prompt for {0}'}"
+                  ToolTip.Tip="{Binding PromptAdvice}"/>
+        <Button Classes="icon" FontSize="11" Padding="6,3" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Left"
+                Command="{Binding TogglePromptPreviewCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="{Binding PromptPreviewChevron}" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            <TextBlock Text="{Binding PromptPreviewLabel}" VerticalAlignment="Center"
+                       Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+          </StackPanel>
+        </Button>
+        <Border IsVisible="{Binding ShowPromptPreview}" CornerRadius="4" Padding="8,6"
+                Background="{StaticResource ThemeRaisedBrush}">
+          <SelectableTextBlock Text="{Binding FinalPrompt}" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+        </Border>
+
+        <TextBlock Text="Model" FontSize="10" Margin="0,4,0,0"
+                   Foreground="{StaticResource ThemeTextMutedBrush}"/>
+        <ComboBox ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}"
+                  HorizontalAlignment="Stretch" FontSize="12">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="gen:IGenerationProvider">
+              <TextBlock Text="{Binding Name}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <views:ModelBox ItemsSource="{Binding ModelChoices}" Text="{Binding ModelId, Mode=TwoWay}"/>
+
+        <TextBlock Text="{Binding PromptWarning}" FontSize="11" TextWrapping="Wrap"
+                   IsVisible="{Binding HasPromptWarning}"
+                   Foreground="{StaticResource ThemeTimecodeBrush}"/>
+
+        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,4,0,0">
+          <TextBlock Grid.Column="0" Text="Length" FontSize="12" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          <ComboBox Grid.Column="1" ItemsSource="{Binding Durations}" FontSize="12"
+                    SelectedItem="{Binding SelectedDuration}"/>
+          <TextBlock Grid.Column="2" Text="Size" FontSize="12" VerticalAlignment="Center"
+                     Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          <ComboBox Grid.Column="3" ItemsSource="{Binding Resolutions}" FontSize="12"
+                    SelectedItem="{Binding SelectedResolution}"/>
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Pinned: the cost and the commit button never scroll away. -->
+    <Border Grid.Row="2" Background="{StaticResource ThemeRaisedBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,1,0,0"
+            Padding="14,10">
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+        <TextBlock Grid.Column="0" Text="{Binding PriceText}" FontSize="12"
+                   VerticalAlignment="Center" ToolTip.Tip="{Binding PriceBasis}"
+                   Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+        <CheckBox Grid.Column="1" Content="2 takes" FontSize="11" VerticalAlignment="Center"
+                  IsChecked="{Binding TwoTakes, Mode=TwoWay}"
+                  ToolTip.Tip="Runs the same request twice in parallel so you can pick the better result. Doubles the cost."/>
+        <Button Grid.Column="2" Content="Generate" FontSize="12" Padding="16,5"
+                Command="{Binding GenerateCommand}" IsEnabled="{Binding CanGenerate}"/>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

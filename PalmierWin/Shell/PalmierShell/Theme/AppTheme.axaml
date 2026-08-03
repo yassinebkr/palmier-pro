@@ -1,0 +1,170 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <Color x:Key="ThemeBaseColor">#FF0A0A0A</Color>
+    <Color x:Key="ThemeSurfaceColor">#FF161616</Color>
+    <Color x:Key="ThemeRaisedColor">#FF1E1E1E</Color>
+    <Color x:Key="ThemeProminentColor">#FF2C2C2C</Color>
+    <Color x:Key="ThemeTimecodeColor">#FFF29933</Color>
+    <Color x:Key="ThemeErrorColor">#FFE54F4F</Color>
+    <Color x:Key="ThemeSuccessColor">#FF4FB85F</Color>
+    <Color x:Key="ThemeTrackVideoColor">#FF1D5878</Color>
+    <Color x:Key="ThemeTrackAudioColor">#FF2E7765</Color>
+    <Color x:Key="ThemeTrackTextColor">#FF715486</Color>
+    <SolidColorBrush x:Key="ThemeBaseBrush" Color="{StaticResource ThemeBaseColor}"/>
+    <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="{StaticResource ThemeSurfaceColor}"/>
+    <SolidColorBrush x:Key="ThemeRaisedBrush" Color="{StaticResource ThemeRaisedColor}"/>
+    <SolidColorBrush x:Key="ThemeProminentBrush" Color="{StaticResource ThemeProminentColor}"/>
+    <SolidColorBrush x:Key="ThemeTimecodeBrush" Color="{StaticResource ThemeTimecodeColor}"/>
+    <SolidColorBrush x:Key="ThemeBorderBrush" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTextBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTextSecondaryBrush" Color="#CCFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTextTertiaryBrush" Color="#9EFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTextMutedBrush" Color="#57FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeTrackVideoBrush" Color="{StaticResource ThemeTrackVideoColor}"/>
+    <SolidColorBrush x:Key="ThemeTrackAudioBrush" Color="{StaticResource ThemeTrackAudioColor}"/>
+    <SolidColorBrush x:Key="ThemeTrackTextBrush" Color="{StaticResource ThemeTrackTextColor}"/>
+  </Styles.Resources>
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource ThemeBaseBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    <Setter Property="FontSize" Value="13"/>
+  </Style>
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{StaticResource ThemeProminentBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Padding" Value="10,4"/>
+  </Style>
+  <Style Selector="Button /template/ ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12"/>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+      </Transitions>
+    </Setter>
+  </Style>
+  <!-- The rest state is ThemeProminent, so hover has to leave it — pointing
+       hover back at the same brush is why buttons read as dead under the
+       mouse. One shade brighter up, one darker down. -->
+  <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#FF3A3A3A"/>
+  </Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="#FF232323"/>
+  </Style>
+  <!-- Toggles and combos share the button language, hover included. -->
+  <Style Selector="ToggleButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#FF3A3A3A"/>
+  </Style>
+  <Style Selector="ComboBox:pointerover /template/ Border#Background">
+    <Setter Property="Background" Value="#FF3A3A3A"/>
+  </Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter">
+    <Setter Property="Opacity" Value="0.45"/>
+  </Style>
+  <!-- Icon buttons sit on a surface only a shade darker than the hover fill,
+       so they need a lift of their own: a white wash plus a brighter glyph.
+       Without it the hover reads as nothing happening. -->
+  <Style Selector="Button.icon">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="6,4"/>
+    <Setter Property="CornerRadius" Value="5"/>
+  </Style>
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#1FFFFFFF"/>
+  </Style>
+  <Style Selector="Button.icon:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="#33FFFFFF"/>
+  </Style>
+  <Style Selector="Button.icon Path">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Stroke" Duration="0:0:0.12"/>
+        <BrushTransition Property="Fill" Duration="0:0:0.12"/>
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.icon:pointerover Path">
+    <Setter Property="Stroke" Value="{StaticResource ThemeTextBrush}"/>
+  </Style>
+  <Style Selector="Button.icon:pointerover TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+  </Style>
+  <!-- The panel-collapse control: a real button you can see at rest. -->
+  <Style Selector="Button.railToggle">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="5"/>
+    <Setter Property="Padding" Value="6,4"/>
+  </Style>
+  <Style Selector="Button.railToggle:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource ThemeProminentBrush}"/>
+    <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+  </Style>
+  <Style Selector="Button.railToggle:pointerover Path">
+    <Setter Property="Stroke" Value="{StaticResource ThemeTextBrush}"/>
+  </Style>
+  <Style Selector="Button.railToggle Path">
+    <Setter Property="Transitions">
+      <Transitions><BrushTransition Property="Stroke" Duration="0:0:0.12"/></Transitions>
+    </Setter>
+  </Style>
+  <!-- Preview scrub bar: a hairline that thickens under the pointer, so it
+       reads as chrome at rest and as a control when you reach for it. -->
+  <Style Selector="Slider.scrub /template/ Track">
+    <Setter Property="Height" Value="4"/>
+  </Style>
+  <Style Selector="Slider.scrub /template/ Thumb">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Opacity" Value="0"/>
+    <Setter Property="Transitions">
+      <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.12"/></Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Slider.scrub:pointerover /template/ Thumb">
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="Border.hoverable">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12"/>
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Flyout">
+    <Setter Property="Placement" Value="Top"/>
+  </Style>
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <!-- AutoCompleteBox ships a light-themed inner TextBox and popup list. -->
+  <Style Selector="AutoCompleteBox">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="AutoCompleteBox /template/ TextBox#PART_TextBox">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="AutoCompleteBox /template/ ListBox">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+  </Style>
+  <Style Selector="AutoCompleteBox /template/ Popup Border">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+  </Style>
+</Styles>

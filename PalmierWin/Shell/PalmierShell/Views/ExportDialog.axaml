@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        x:Class="PalmierShell.Views.ExportDialog"
+        Title="Export" Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeSurfaceBrush}">
+  <StackPanel>
+  <Border Height="32" Background="{StaticResource ThemeRaisedBrush}"
+          BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+          PointerPressed="OnTitleBarPressed">
+    <DockPanel>
+      <views:CaptionButtons DockPanel.Dock="Right" ShowMinimize="False" ShowMaximize="False"/>
+      <TextBlock Text="Export Video" FontSize="11" VerticalAlignment="Center" Margin="12,0"
+                 Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+    </DockPanel>
+  </Border>
+  <StackPanel Margin="16" Spacing="10">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBox x:Name="PathBox" Grid.Column="0" FontSize="12" Watermark="Output file"/>
+      <Button Grid.Column="1" Content="Browse&#x2026;" Margin="6,0,0,0" Click="OnBrowse"/>
+    </Grid>
+    <TextBlock x:Name="InfoText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+    <ProgressBar x:Name="Progress" Minimum="0" Maximum="100" Height="6"
+                 Foreground="{StaticResource ThemeTimecodeBrush}" IsVisible="False"/>
+    <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="CloseButton" Content="Close" Click="OnClose"/>
+      <Button x:Name="ExportButton" Content="Export" Click="OnExport"
+              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+    </StackPanel>
+  </StackPanel>
+  </StackPanel>
+</Window>

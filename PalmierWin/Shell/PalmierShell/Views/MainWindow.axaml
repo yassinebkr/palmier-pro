@@ -1,0 +1,267 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+        x:Class="PalmierShell.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Palmier Pro" Width="1440" Height="900"
+        MinWidth="960" MinHeight="600"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeBaseBrush}">
+  <Grid x:Name="RootGrid">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="36"/>
+      <RowDefinition Height="*" MinHeight="240"/>
+      <RowDefinition Height="4"/>
+      <RowDefinition Height="240" MinHeight="140"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="230" MinWidth="170" MaxWidth="420"/>
+      <ColumnDefinition Width="4"/>
+      <ColumnDefinition Width="280" MinWidth="220" MaxWidth="520"/>
+      <ColumnDefinition Width="4"/>
+      <ColumnDefinition Width="*" MinWidth="360"/>
+      <ColumnDefinition Width="4"/>
+      <ColumnDefinition Width="340" MinWidth="240" MaxWidth="520"/>
+    </Grid.ColumnDefinitions>
+    <!-- Top bar: the app's own title bar now that the OS chrome is gone.
+         Dragging it moves the window; the caption buttons live at its far
+         right, flush to the edge like native ones. -->
+    <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="7"
+            Background="{StaticResource ThemeSurfaceBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPressed">
+      <DockPanel>
+        <views:CaptionButtons x:Name="Caption" DockPanel.Dock="Right"/>
+      <Grid ColumnDefinitions="*,Auto,*" VerticalAlignment="Center" Margin="12,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="icon" FontSize="11" Padding="8,3" Content="File"
+                  Foreground="{StaticResource ThemeTextMutedBrush}">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnFileMenuOpening">
+                <MenuItem Header="New Project" Click="OnNewProject"/>
+                <MenuItem Header="Open Project…" Click="OnOpenProject"/>
+                <MenuItem x:Name="RecentMenu" Header="Open Recent"/>
+                <Separator/>
+                <MenuItem Header="Save" Click="OnSaveProject" InputGesture="Ctrl+S"/>
+                <MenuItem Header="Save As…" Click="OnSaveProjectAs"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </StackPanel>
+        <!-- Click the title to rename the project. The press is claimed here
+             so the title bar's drag/maximize handling never sees it. -->
+        <Panel Grid.Column="1">
+          <TextBlock Text="{Binding ProjectTitle}" FontSize="12" VerticalAlignment="Center"
+                     IsVisible="{Binding !RenamingProject}" PointerPressed="OnRenameProject"
+                     Foreground="{StaticResource ThemeTextSecondaryBrush}"
+                     ToolTip.Tip="Click to rename · a dot means unsaved changes"/>
+          <TextBox x:Name="ProjectNameBox" FontSize="12" MinWidth="140" MaxWidth="320"
+                   Height="24" Padding="6,2" VerticalContentAlignment="Center"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding RenamingProject}"
+                   Text="{Binding ProjectNameEdit, Mode=TwoWay}"
+                   KeyDown="OnProjectNameKeyDown" LostFocus="OnProjectNameCommitted"/>
+        </Panel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
+                    HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button Classes="icon" Click="OnSettingsClick" ToolTip.Tip="Settings">
+            <Path Data="M 6,0 L 7.5,2.2 L 10.2,2 L 10.8,4.6 L 12,6 L 10.8,7.4 L 10.2,10 L 7.5,9.8 L 6,12 L 4.5,9.8 L 1.8,10 L 1.2,7.4 L 0,6 L 1.2,4.6 L 1.8,2 L 4.5,2.2 Z M 6,4.2 A 1.8,1.8 0 1 0 6,7.8 A 1.8,1.8 0 1 0 6,4.2"
+                  Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1"
+                  VerticalAlignment="Center"/>
+          </Button>
+          <Button Padding="12,3" FontSize="11" Click="OnExportClick">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="M 5,0 V 7 M 2,4 L 5,7 L 8,4 M 0,9 H 10"
+                    Stroke="{StaticResource ThemeTextSecondaryBrush}" StrokeThickness="1.3"
+                    StrokeLineCap="Round" VerticalAlignment="Center"/>
+              <TextBlock Text="Export" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Border Width="22" Height="22" CornerRadius="11" Background="#7A5CC5">
+            <TextBlock Text="Y" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </StackPanel>
+      </Grid>
+      </DockPanel>
+    </Border>
+    <!-- Agent panel, collapsible to an icon rail -->
+    <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource ThemeSurfaceBrush}"
+            BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,1,0">
+      <Panel>
+        <Grid RowDefinitions="Auto,*" IsVisible="{Binding !AgentCollapsed}">
+          <!-- Collapse: a bordered button, not a bare chevron. It is the only
+               way back to the rail, so it has to be findable at rest. -->
+          <Button Grid.Row="0" Classes="railToggle" HorizontalAlignment="Right"
+                  Margin="0,6,8,0" Click="OnToggleAgentPanel"
+                  ToolTip.Tip="Collapse the Edit with AI panel">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Path Data="M 5,0 L 1,4 L 5,8" Stroke="{StaticResource ThemeTextTertiaryBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+              <Path Data="M 0,0 V 8" Stroke="{StaticResource ThemeTextMutedBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <views:AgentPanel Grid.Row="1" DataContext="{Binding Agent}"/>
+        </Grid>
+        <StackPanel IsVisible="{Binding AgentCollapsed}" Spacing="10" Margin="0,8">
+          <Button Classes="railToggle" HorizontalAlignment="Center"
+                  Click="OnToggleAgentPanel" ToolTip.Tip="Expand the Edit with AI panel">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Path Data="M 0,0 V 8" Stroke="{StaticResource ThemeTextMutedBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+              <Path Data="M 1,0 L 5,4 L 1,8" Stroke="{StaticResource ThemeTextTertiaryBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Classes="icon" HorizontalAlignment="Center"
+                  Click="OnToggleAgentPanel" ToolTip.Tip="Edit with AI">
+            <Path Data="M 0,1.5 H 14 V 10 H 8 L 5,13 V 10 H 0 Z"
+                  Stroke="{StaticResource ThemeTextTertiaryBrush}" StrokeThickness="1.2"
+                  StrokeJoin="Round"/>
+          </Button>
+        </StackPanel>
+      </Panel>
+    </Border>
+    <GridSplitter Grid.Row="1" Grid.Column="1" Background="{StaticResource ThemeBaseBrush}"
+                  ResizeDirection="Columns" IsVisible="{Binding !AgentCollapsed}"/>
+    <!-- Media library -->
+    <Border Grid.Row="1" Grid.Column="2" Background="{StaticResource ThemeSurfaceBrush}">
+      <views:MediaPanel DataContext="{Binding Media}"/>
+    </Border>
+    <GridSplitter Grid.Row="1" Grid.Column="3" Background="{StaticResource ThemeBaseBrush}" ResizeDirection="Columns"/>
+    <!-- Preview (center) + transport -->
+    <Grid Grid.Row="1" Grid.Column="4" RowDefinitions="30,*,Auto,48">
+      <Border Grid.Row="0" Background="{StaticResource ThemeSurfaceBrush}"
+              BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center" Margin="10,0">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+            <Path Data="M 5,0 L 1,4 L 5,8" Stroke="{StaticResource ThemeTextMutedBrush}"
+                  StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+            <Path Data="M 1,0 L 5,4 L 1,8" Stroke="{StaticResource ThemeTextMutedBrush}"
+                  StrokeThickness="1.3" StrokeLineCap="Round" VerticalAlignment="Center"/>
+          </StackPanel>
+          <!-- Viewer tabs: the timeline plus any library media opened as a source -->
+          <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Hidden"
+                        VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Viewer.Tabs}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="3"/></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ViewerTab">
+                  <Button Padding="10,3" CornerRadius="4" FontSize="11"
+                          Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Viewer.ActivateCommand}"
+                          CommandParameter="{Binding}"
+                          Background="{Binding IsActive, Converter={x:Static views:MainWindow.TabBackground}}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                 MaxWidth="150" TextTrimming="CharacterEllipsis"
+                                 Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+                      <TextBlock Text="&#x00D7;" FontSize="12" VerticalAlignment="Center"
+                                 IsVisible="{Binding !IsTimeline}" PointerPressed="OnViewerTabClose"
+                                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <!-- Capture Frame to Media: the front door to the transition
+               workflow, so it lives on the preview it captures from. -->
+          <Button Grid.Column="2" Classes="icon" Padding="8,2" FontSize="11"
+                  Command="{Binding CaptureFrameCommand}"
+                  ToolTip.Tip="Save the frame under the playhead into the media library">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Path Data="M 0,2.5 H 3 L 4.5,0.5 H 9 L 10.5,2.5 H 13 V 11 H 0 Z M 6.75,4 A 2.6,2.6 0 1 0 6.75,9.2 A 2.6,2.6 0 1 0 6.75,4"
+                    Stroke="{StaticResource ThemeTextTertiaryBrush}" StrokeThickness="1.1"
+                    StrokeJoin="Round" VerticalAlignment="Center"/>
+              <TextBlock Text="Capture Frame" VerticalAlignment="Center"
+                         Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+      <views:AspectFitPanel Grid.Row="1" Background="Black">
+        <views:PreviewHost x:Name="Preview"/>
+      </views:AspectFitPanel>
+      <!-- Scrub bar for whatever the viewer shows: timeline or source clip -->
+      <Slider Grid.Row="2" Classes="scrub" Height="16" Margin="12,0,12,2" Minimum="0"
+              Maximum="{Binding Transport.LengthFrames}"
+              Value="{Binding Transport.PositionFrames, Mode=TwoWay}"/>
+      <Border Grid.Row="3" Background="{StaticResource ThemeRaisedBrush}"
+              BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,1,0,0">
+        <Grid ColumnDefinitions="Auto,*,Auto,*,Auto" VerticalAlignment="Center" Margin="12,0">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Transport.CurrentTimecode}" FontFamily="Consolas" FontSize="12"
+                       Foreground="{StaticResource ThemeTimecodeBrush}"/>
+            <TextBlock Text="/" FontFamily="Consolas" FontSize="12"
+                       Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            <TextBlock Text="{Binding Transport.TotalTimecode}" FontFamily="Consolas" FontSize="12"
+                       Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+            <StackPanel.Styles>
+              <Style Selector="Button">
+                <Setter Property="Width" Value="34"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="Padding" Value="0"/>
+              </Style>
+              <Style Selector="Path">
+                <Setter Property="Fill" Value="{StaticResource ThemeTextSecondaryBrush}"/>
+                <Setter Property="Stroke" Value="{StaticResource ThemeTextSecondaryBrush}"/>
+                <Setter Property="StrokeThickness" Value="1.4"/>
+                <Setter Property="StrokeLineCap" Value="Round"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+              </Style>
+            </StackPanel.Styles>
+            <Button Command="{Binding Transport.SkipToStartCommand}">
+              <Path Data="M 1,0 V 10 M 11,0 L 3.5,5 L 11,10 Z"/>
+            </Button>
+            <Button Command="{Binding Transport.StepBackCommand}">
+              <Path Data="M 8,0 L 1,5 L 8,10 Z"/>
+            </Button>
+            <Button Command="{Binding Transport.PlayPauseCommand}">
+              <Panel>
+                <Path Data="M 0,0 L 9,5.5 L 0,11 Z" IsVisible="{Binding !Transport.Playing}"/>
+                <Path Data="M 0,0 H 2.6 V 11 H 0 Z M 5.4,0 H 8 V 11 H 5.4 Z"
+                      IsVisible="{Binding Transport.Playing}"/>
+              </Panel>
+            </Button>
+            <Button Command="{Binding Transport.StepForwardCommand}">
+              <Path Data="M 1,0 L 8,5 L 1,10 Z"/>
+            </Button>
+            <Button Command="{Binding Transport.SkipToEndCommand}">
+              <Path Data="M 11,0 V 10 M 1,0 L 8.5,5 L 1,10 Z"/>
+            </Button>
+          </StackPanel>
+          <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <StackPanel.Styles>
+              <Style Selector="TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource ThemeTextMutedBrush}"/>
+              </Style>
+            </StackPanel.Styles>
+            <TextBlock Text="16:9"/>
+            <TextBlock Text="30"/>
+            <TextBlock Text="FHD"/>
+            <TextBlock Text="Fit" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+    <GridSplitter Grid.Row="1" Grid.Column="5" Background="{StaticResource ThemeBaseBrush}" ResizeDirection="Columns"/>
+    <!-- Inspector (right) -->
+    <Border Grid.Row="1" Grid.Column="6" Background="{StaticResource ThemeSurfaceBrush}">
+      <views:InspectorPanel DataContext="{Binding Inspector}"/>
+    </Border>
+    <GridSplitter Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="7" Background="{StaticResource ThemeBaseBrush}" ResizeDirection="Rows"/>
+    <!-- Timeline (bottom, spans all columns) -->
+    <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="7" Background="{StaticResource ThemeSurfaceBrush}">
+      <views:TimelinePanel DataContext="{Binding}"/>
+    </Border>
+  </Grid>
+</Window>

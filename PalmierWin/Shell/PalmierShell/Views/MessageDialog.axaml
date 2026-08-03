@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        x:Class="PalmierShell.Views.MessageDialog"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeSurfaceBrush}">
+  <StackPanel>
+  <Border Height="30" Background="{StaticResource ThemeRaisedBrush}"
+          BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+          PointerPressed="OnTitleBarPressed">
+    <DockPanel>
+      <views:CaptionButtons DockPanel.Dock="Right" ShowMinimize="False" ShowMaximize="False"/>
+      <Panel/>
+    </DockPanel>
+  </Border>
+  <StackPanel Margin="18" Spacing="12">
+    <TextBlock x:Name="TitleText" FontSize="13"/>
+    <SelectableTextBlock x:Name="BodyText" FontSize="12" TextWrapping="Wrap"
+                         Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+    <TextBox x:Name="Input" FontSize="12" IsVisible="False"/>
+    <StackPanel x:Name="Buttons" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"/>
+  </StackPanel>
+  </StackPanel>
+</Window>
