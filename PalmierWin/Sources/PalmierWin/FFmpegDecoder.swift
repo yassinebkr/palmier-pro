@@ -31,11 +31,22 @@ public final class FFmpegDecoder {
 
     public let info: VideoInfo
 
+    /// Presentation timestamp, in the video stream's time base, of the frame
+    /// `nextBGRAFrame` last returned. `Int64.min` before the first decode.
+    /// A seek lands on a keyframe, so this is the only way a caller can tell
+    /// which frame it actually got.
+    public private(set) var lastTimestamp: Int64 = .min
+
     private var fmt: UnsafeMutablePointer<AVFormatContext>?
     private var codec: UnsafeMutablePointer<AVCodecContext>?
     private var sws: UnsafeMutablePointer<SwsContext>?
     private var swsDst: UnsafeMutablePointer<AVFrame>?  // reusable BGRA output frame
     private var frame: UnsafeMutablePointer<AVFrame>?
+    /// Reference to the most recently decoded frame. `avcodec_receive_frame`
+    /// unrefs its output frame whenever it fails, so at end of stream `frame`
+    /// is empty — converting it asserts inside swscale. This holds a
+    /// refcounted reference (no pixel copy) so the last good picture survives.
+    private var keep: UnsafeMutablePointer<AVFrame>?
     private var packet: UnsafeMutablePointer<AVPacket>?
     private var streamIndex: Int32 = -1
 
@@ -82,6 +93,11 @@ public final class FFmpegDecoder {
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
             throw DecodeError.openCodecFailed(-1)
         }
+        // libavcodec defaults thread_count to 1. Walking forward from a
+        // keyframe after a seek is pure decode, so single-threaded decode is
+        // what made clicking in the timeline wait on one core.
+        cc.pointee.thread_count = 0                 // auto: one per core
+        cc.pointee.thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE
         let openCodec = avcodec_open2(cc, decoder, nil)
         guard openCodec == 0 else {
             var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
@@ -91,12 +107,14 @@ public final class FFmpegDecoder {
         self.codec = cc
 
         guard let frame = av_frame_alloc(),
+              let keep = av_frame_alloc(),
               let packet = av_packet_alloc() else {
             var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
             throw DecodeError.openCodecFailed(-1)
         }
         self.frame = frame
+        self.keep = keep
         self.packet = packet
 
         self.info = VideoInfo(
@@ -111,6 +129,7 @@ public final class FFmpegDecoder {
         if let sws { sws_freeContext(sws) }
         if let packet { var p: UnsafeMutablePointer<AVPacket>? = packet; av_packet_free(&p) }
         if let frame { var f: UnsafeMutablePointer<AVFrame>? = frame; av_frame_free(&f) }
+        if let keep { var f: UnsafeMutablePointer<AVFrame>? = keep; av_frame_free(&f) }
         if let codec { var c: UnsafeMutablePointer<AVCodecContext>? = codec; avcodec_free_context(&c) }
         if let fmt { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
     }
@@ -130,15 +149,34 @@ public final class FFmpegDecoder {
     /// Decodes the next frame and converts it to tightly-packed BGRA in a
     /// freshly-allocated Data (row stride = width * 4). Returns nil at EOF.
     public func nextBGRAFrame() throws -> Data? {
+        guard try decodeNextFrame() else { return nil }
+        guard let bgra = currentBGRAFrame() else { throw DecodeError.decodeFailed(-1) }
+        return bgra
+    }
+
+    /// Advances to the next frame without converting it. Returns false at EOF.
+    ///
+    /// Separate from the conversion on purpose: a seek lands on the keyframe
+    /// before the target, so reaching a requested frame usually means stepping
+    /// through most of a GOP. Converting each of those to BGRA — a full
+    /// scale plus a frame-sized allocation and copy — is work thrown away, and
+    /// it is most of why clicking in the timeline used to stall the preview.
+    @discardableResult
+    public func decodeNextFrame() throws -> Bool {
         guard let fmt, let codec, let frame, let packet else { throw DecodeError.decodeFailed(-1) }
         let cc = codec
 
         while true {
             let recv = avcodec_receive_frame(cc, frame)
             if recv == 0 {
-                let bgra = convertToBGRA()
-                if bgra.isEmpty { throw DecodeError.decodeFailed(-1) }
-                return bgra
+                let pts = frame.pointee.best_effort_timestamp
+                lastTimestamp = pts == noPTSValue ? frame.pointee.pts : pts
+                if let keep {
+                    av_frame_unref(keep)
+                    av_frame_ref(keep, frame)
+                }
+                hasDecodedFrame = true
+                return true
             }
             if recv == AVERROR_EAGAIN {
                 av_packet_unref(packet)
@@ -155,10 +193,21 @@ public final class FFmpegDecoder {
                 if send < 0 && send != AVERROR_EAGAIN { throw DecodeError.decodeFailed(send) }
                 continue
             }
-            if recv == AVERROR_EOF { return nil }
+            if recv == AVERROR_EOF { return false }
             throw DecodeError.decodeFailed(recv)
         }
     }
+
+    /// BGRA bytes for the frame `decodeNextFrame` last produced, or nil when
+    /// nothing has decoded yet or the conversion failed.
+    public func currentBGRAFrame() -> Data? {
+        guard hasDecodedFrame else { return nil }
+        let bgra = convertToBGRA()
+        return bgra.isEmpty ? nil : bgra
+    }
+
+    /// Whether any frame has been decoded since the last seek.
+    private var hasDecodedFrame = false
 
     /// Scale the current decoded frame into flat BGRA via sws_scale_frame.
     /// The dst AVFrame is reused across calls; sws_scale_frame allocates its
@@ -166,7 +215,7 @@ public final class FFmpegDecoder {
     /// so the caller owns the bytes before the next decode.
     private func convertToBGRA() -> Data {
         let cc = codec!
-        let frm = frame!
+        guard let frm = keep, frm.pointee.format >= 0, frm.pointee.width > 0 else { return Data() }
         let w = cc.pointee.width
         let h = cc.pointee.height
         let sws = ensureSws()!
@@ -216,6 +265,45 @@ public final class FFmpegDecoder {
         if r < 0 { throw DecodeError.decodeFailed(r) }
         if let codec { avcodec_flush_buffers(codec) }
         if let frame { av_frame_unref(frame) }
+        if let keep { av_frame_unref(keep) }
+        lastTimestamp = .min
+        hasDecodedFrame = false
+    }
+
+    /// Decodes the frame at `index` (in `fps` units), seeking first and then
+    /// walking forward from wherever the seek landed.
+    ///
+    /// The walk is the point: `seek` lands on the nearest keyframe *before* the
+    /// target, so taking the next decoded frame returns the keyframe — often
+    /// frame 0 — rather than the frame that was asked for. Callers that need a
+    /// specific frame must use this rather than seek-then-decode.
+    ///
+    /// Returns nil at end of stream. `maxDecodeAhead` bounds the walk so a
+    /// stream without timestamps cannot spin.
+    public func frame(at index: Int, fps: Int, maxDecodeAhead: Int = 600) throws -> Data? {
+        try seek(toFrame: max(0, index), fps: fps)
+        var decoded = 0
+        while decoded <= maxDecodeAhead {
+            // Only the frame that is actually wanted gets converted.
+            guard try decodeNextFrame() else { return currentBGRAFrame() }
+            decoded += 1
+            guard let landed = lastFrameIndex(fps: fps) else { return currentBGRAFrame() }
+            if landed >= index { return currentBGRAFrame() }
+        }
+        return currentBGRAFrame()
+    }
+
+    /// Frame index of the last decoded frame at `fps`, or nil before the first
+    /// decode or when the stream carries no timestamps.
+    public func lastFrameIndex(fps: Int) -> Int? {
+        guard lastTimestamp != .min, fps > 0, let fmt, let streamsBase = fmt.pointee.streams,
+              Int(streamIndex) < Int(fmt.pointee.nb_streams),
+              let stream = streamsBase[Int(streamIndex)] else { return nil }
+        let tb = stream.pointee.time_base
+        guard tb.den > 0 else { return nil }
+        // pts * time_base * fps, rounded to the nearest frame.
+        let numerator = lastTimestamp * Int64(tb.num) * Int64(fps)
+        return Int((Double(numerator) / Double(tb.den)).rounded())
     }
 
     /// Seek to a frame index at the given fps, converting through the video
@@ -240,5 +328,9 @@ private func fferrtag(_ a: UInt8, _ b: UInt8, _ c: UInt8, _ d: UInt8) -> Int32 {
     let tag = UInt32(a) | (UInt32(b) << 8) | (UInt32(c) << 16) | (UInt32(d) << 24)
     return -Int32(bitPattern: tag)
 }
+/// AV_NOPTS_VALUE — the importer cannot expand the macro (it casts through
+/// UINT64_C), so the same value is spelled out here.
+private let noPTSValue = Int64.min
+
 private let AVERROR_EOF: Int32 = fferrtag(0x45, 0x4F, 0x46, 0x20)    // 'E','O','F',' '
 private let AVERROR_EAGAIN: Int32 = -Int32(EAGAIN)                  // AVERROR(e) = -(e)

@@ -110,13 +110,36 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
         sourceFrame: (TrackID) -> VulkanTexture?,
         into output: VulkanTexture
     ) {
+        render(instruction: instruction, frame: frame, sourceFrame: sourceFrame,
+               overlay: [], into: output)
+    }
+
+    /// Clears `output` to black. The render pass clears on load, so an
+    /// instruction with no layers is exactly an empty frame.
+    public func renderEmpty(size: Size2D, fps: Int, into output: VulkanTexture) {
+        render(instruction: RenderInstruction(frameRange: FrameRange(start: 0, end: 1),
+                                              layers: [], renderSize: size, fps: fps),
+               frame: 0, sourceFrame: { _ in nil }, overlay: [], into: output)
+    }
+
+    /// As `render`, plus overlay quads composited above every layer. Only the
+    /// preview passes these; the exporter uses the protocol entry point.
+    public func render(
+        instruction: RenderInstruction,
+        frame: Int,
+        sourceFrame: (TrackID) -> VulkanTexture?,
+        overlay: [SelectionOverlay.Quad],
+        into output: VulkanTexture
+    ) {
         // Pre-resolve all source textures BEFORE allocating the command buffer.
         // Text/group sources may submit their own GPU work (texture upload,
         // child compositing) — that must NOT happen during command buffer
         // recording. The resolved sources are passed into the recording method.
-        let sources = prepareSources(
+        var sources = prepareSources(
             instruction: instruction, frame: frame, sourceFrame: sourceFrame
         )
+        // Overlay quads draw last so the selection frame sits above every layer.
+        sources.append(contentsOf: prepareOverlay(overlay))
         // Every caller submits + waits on the previous frame's command buffer
         // before calling render again, so its descriptors are safe to free now.
         inFlightDescriptors.removeAll()
@@ -165,16 +188,96 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
                 vkQueueSubmit(device.graphicsQueue, 1, si, fence)
             }
         }
+        _ = finish(submitResult, fence: fence, commandBuffer: cmd)
+    }
+
+    /// Applies a clip's effect stack in its own one-shot submission: records
+    /// the ping-pong passes between `source` and `scratch`, submits, and waits
+    /// (bounded). Returns the texture holding the result, or nil when nothing
+    /// ran. Shared by playback and export — the preview showing ungraded
+    /// frames while the export grades them is the same class of drift as the
+    /// old duplicated decode rule.
+    public func applyEffectsOneShot(_ effects: [Effect], frame: Int, clipStartFrame: Int,
+                                    source: VulkanTexture, scratch: VulkanTexture) -> VulkanTexture? {
+        guard effects.contains(where: \.enabled) else { return nil }
+        let dev = device.device
+        var cbInfo = VkCommandBufferAllocateInfo()
+        cbInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        cbInfo.commandPool = device.commandPool
+        cbInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        cbInfo.commandBufferCount = 1
+        var cmd: VkCommandBuffer? = nil
+        guard withUnsafePointer(to: &cbInfo, { vkAllocateCommandBuffers(dev, $0, &cmd) }) == VK_SUCCESS,
+              let cmd else { return nil }
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        guard withUnsafePointer(to: &beginInfo, { vkBeginCommandBuffer(cmd, $0) }) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        let result = applyEffects(effects, frame: frame, clipStartFrame: clipStartFrame,
+                                  source: source, scratch: scratch, commandBuffer: cmd)
+        guard vkEndCommandBuffer(cmd) == VK_SUCCESS else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        var fenceInfo = VkFenceCreateInfo()
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        var fence: VkFence? = nil
+        guard withUnsafePointer(to: &fenceInfo, { vkCreateFence(dev, $0, nil, &fence) }) == VK_SUCCESS,
+              let fence else {
+            var toFree: VkCommandBuffer? = cmd
+            withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+            return nil
+        }
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        var cmdHandle: VkCommandBuffer? = cmd
+        let submitResult: VkResult = withUnsafePointer(to: &cmdHandle) { ch in
+            submitInfo.pCommandBuffers = ch
+            return withUnsafePointer(to: &submitInfo) { si in
+                vkQueueSubmit(device.graphicsQueue, 1, si, fence)
+            }
+        }
+        return finish(submitResult, fence: fence, commandBuffer: cmd) ? result : nil
+    }
+
+    /// Waits for a one-shot submission, then releases its fence and command
+    /// buffer. Bounded: every other GPU wait on the render thread is capped,
+    /// and an unbounded one here turned a single driver hiccup into a preview
+    /// frozen for the session and an app that hung on the way out.
+    ///
+    /// Returns whether the work completed. On timeout the fence and buffer are
+    /// deliberately leaked — destroying objects a running submission still
+    /// owns is undefined, and one frame's worth of handles is the cheaper side
+    /// of that trade.
+    private func finish(_ submitResult: VkResult, fence: VkFence, commandBuffer: VkCommandBuffer) -> Bool {
+        let dev = device.device
+        var completed = false
         if submitResult == VK_SUCCESS {
             var fenceHandle: VkFence? = fence
-            withUnsafePointer(to: &fenceHandle) { f in
-                _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
+            let waited = withUnsafePointer(to: &fenceHandle) { f in
+                vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), gpuTimeoutNanoseconds)
+            }
+            completed = waited == VK_SUCCESS
+            if !completed {
+                engineLog("[WinFrameRenderer] composite did not complete in " +
+                          "\(gpuTimeoutNanoseconds / 1_000_000) ms")
+                return false
             }
         }
         vkDestroyFence(dev, fence, nil)
-        var toFree: VkCommandBuffer? = cmd
+        var toFree: VkCommandBuffer? = commandBuffer
         withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+        return completed
     }
+
+    /// Ceiling on any GPU wait the compositor makes.
+    private let gpuTimeoutNanoseconds: UInt64 = 1_000_000_000
 
     /// Composites `instruction` into `output`. Records into `commandBuffer`
     /// (the caller's recording command buffer — no submit). The caller submits
@@ -215,6 +318,27 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
             prepared.append(PreparedLayer(texture: srcTexture, descriptor: desc, pushConstants: pc))
         }
         return prepared
+    }
+
+    /// Turns overlay quads into draws. They all sample the same 1×1 white
+    /// texture, so one descriptor serves the whole set; only the placement and
+    /// alpha differ. Empty when the texture or descriptor cannot be made —
+    /// a missing selection frame must never cost the frame itself.
+    public func prepareOverlay(_ quads: [SelectionOverlay.Quad]) -> [PreparedLayer] {
+        guard !quads.isEmpty, let white = fallbackTexture,
+              let descriptor = VulkanDescriptor(device: device,
+                                                layout: layerPipeline.descriptorSetLayout,
+                                                texture: white) else { return [] }
+        return quads.map { quad in
+            PreparedLayer(
+                texture: white,
+                descriptor: descriptor,
+                pushConstants: LayerPlacement.PushConstants(
+                    a: Float(quad.matrix.a), b: Float(quad.matrix.b),
+                    c: Float(quad.matrix.c), d: Float(quad.matrix.d),
+                    tx: Float(quad.matrix.tx), ty: Float(quad.matrix.ty),
+                    opacity: Float(min(1, max(0, quad.opacity)))))
+        }
     }
 
     /// Records the composite of `sources` into `output`. No source resolution
@@ -653,15 +777,7 @@ public final class WinFrameRenderer: FrameRendering, @unchecked Sendable {
                 vkQueueSubmit(device.graphicsQueue, 1, si, fence)
             }
         }
-        if submitResult == VK_SUCCESS {
-            var fenceHandle: VkFence? = fence
-            withUnsafePointer(to: &fenceHandle) { f in
-                _ = vkWaitForFences(dev, 1, f, UInt32(VK_TRUE), UInt64.max)
-            }
-        }
-        vkDestroyFence(dev, fence, nil)
-        var toFree: VkCommandBuffer? = cmd
-        withUnsafePointer(to: &toFree) { vkFreeCommandBuffers(dev, device.commandPool, 1, $0) }
+        guard finish(submitResult, fence: fence, commandBuffer: cmd) else { return nil }
         return offscreen
     }
 

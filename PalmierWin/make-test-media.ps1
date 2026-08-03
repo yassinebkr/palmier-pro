@@ -15,3 +15,26 @@ $out = Join-Path $outDir "testsrc.mp4"
 & $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" -c:v libx264 -pix_fmt yuv420p $out
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $out"
+
+# A/V clip for audio-path tests: testsrc video + 440 Hz sine, 2s.
+$outAV = Join-Path $outDir "testav.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" `
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outAV
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outAV"
+
+# 24 fps, one solid colour per second. Frame indices in the app are in the
+# timeline's 30 fps domain, so anything that reads a frame out of a file has to
+# convert with the timeline's rate and not the file's — reading at the file's
+# rate lands 25% late here, which is a different colour and an obvious failure.
+$out24 = Join-Path $outDir "colorbands24.mp4"
+$bands = @("red", "green", "blue", "yellow", "magenta") | ForEach-Object {
+    "color=c=$($_):size=160x120:rate=24:duration=1"
+}
+$inputs = ($bands | ForEach-Object { "-f", "lavfi", "-i", $_ })
+& $ffmpeg -y @inputs `
+    -filter_complex "[0:v][1:v][2:v][3:v][4:v]concat=n=5:v=1:a=0[v]" -map "[v]" `
+    -c:v libx264 -pix_fmt yuv420p -r 24 $out24
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $out24"

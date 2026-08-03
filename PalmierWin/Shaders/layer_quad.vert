@@ -11,7 +11,8 @@ layout(push_constant) uniform Layer {
 
 // Unit quad corner in [0,1] x [0,1]. The CPU's placement matrix already maps
 // this into normalized device coords [0,1] with top-left origin; this shader
-// converts to Vulkan clip space [-1,1] with Y flipped.
+// converts to Vulkan clip space [-1,1]. Vulkan NDC +Y points DOWN (unlike
+// GL), so top-left origin maps straight through — no Y flip.
 vec2 positions[4] = vec2[](
     vec2(0.0, 0.0),
     vec2(1.0, 0.0),
@@ -26,5 +27,5 @@ void main() {
     float px = u.a * unit.x + u.c * unit.y + u.tx;
     float py = u.b * unit.x + u.d * unit.y + u.ty;
     fragUV = unit;
-    gl_Position = vec4(px * 2.0 - 1.0, 1.0 - py * 2.0, 0.0, 1.0);
+    gl_Position = vec4(px * 2.0 - 1.0, py * 2.0 - 1.0, 0.0, 1.0);
 }
