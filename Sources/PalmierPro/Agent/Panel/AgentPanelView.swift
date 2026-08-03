@@ -198,7 +198,9 @@ struct AgentPanelView: View {
             Text(L10n.string("using API key"))
                 .font(.system(size: AppTheme.FontSize.xs).italic())
                 .foregroundStyle(AppTheme.Text.tertiaryColor)
-                .help(L10n.string("Streaming through your \(service.effectiveProvider.displayName) API key (BYOK)"))
+                .help(service.effectiveProvider.id == "openai"
+                    ? L10n.string("Streaming through your OpenAI API key (BYOK)")
+                    : L10n.string("Streaming through your Anthropic API key (BYOK)"))
         }
     }
 

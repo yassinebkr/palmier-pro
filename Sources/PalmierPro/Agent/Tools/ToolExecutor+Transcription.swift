@@ -213,7 +213,7 @@ extension ToolExecutor {
         try validateUnknownKeys(args, allowed: Self.getTranscriptAllowedKeys, path: "get_transcript")
         let clipFilter = args.string("clipId")
         let window = try Self.frameWindow(args)
-        let clipFilter = try resolveTranscriptClipFilter(clipFilter, editor)
+        let resolvedClipFilter = try resolveTranscriptClipFilter(clipFilter, editor)
 
         let granularity = args.string("granularity") ?? "words"
         guard granularity == "words" || granularity == "segments" else {
@@ -228,7 +228,7 @@ extension ToolExecutor {
 
         let out = transcript.responsePayload(
             fps: editor.timeline.fps,
-            clipId: clipFilter,
+            clipId: resolvedClipFilter,
             startFrame: window?.lowerBound,
             endFrame: window?.upperBound,
             maxWords: Self.transcriptWordLimit,
