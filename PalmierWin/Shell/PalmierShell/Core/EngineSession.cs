@@ -29,7 +29,19 @@ public sealed class EngineSession : IDisposable {
         set {
             if (playing == value) return;
             playing = value;
-            if (value && rate == 0) rate = 1;
+            if (value) {
+                if (rate == 0) rate = 1;
+                // A loop only wraps playback inside it; starting outside
+                // jumps in. Forward play only — reverse shuttle stays put.
+                if (Volatile.Read(ref rate) > 0) {
+                    int jumped = TimelineMath.LoopEntryFrame(PlayheadFrame,
+                        Volatile.Read(ref loopStart), Volatile.Read(ref loopEnd));
+                    if (jumped != PlayheadFrame) {
+                        PlayheadFrame = jumped;
+                        PlayheadAdvanced?.Invoke(jumped);
+                    }
+                }
+            }
             PlayingChanged?.Invoke(value, PlayheadFrame);
         }
     }

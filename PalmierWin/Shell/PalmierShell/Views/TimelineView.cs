@@ -60,6 +60,20 @@ public sealed class TimelineView : Control {
     int rollMinBoundary, rollMaxBoundary;
     bool rollActive;
 
+    // Loop-edge drag state (Select tool, same 6px grab as trim edges). The
+    // frame is a preview until the release commits it through the view model.
+    int loopDragEdge = -1;          // 0 = start, 1 = end
+    int loopDragFrame;
+    bool loopDragActive;
+
+    /// 0/1 when `x` grabs the loop range's start/end edge, else null.
+    int? LoopEdgeUnderPointer(double x) {
+        if (vm?.HasLoop != true || vm.Tool != TimelineTool.Select) return null;
+        if (Math.Abs(x - FrameToX(vm.LoopStart!.Value)) <= EdgeGrabWidth) return 0;
+        if (Math.Abs(x - FrameToX(vm.LoopEnd!.Value)) <= EdgeGrabWidth) return 1;
+        return null;
+    }
+
     /// Allowed drag interval so the ghost previews the core's clamp: the
     /// moved group stays inside the gap between its non-moved neighbors.
     void ComputeDragBounds(ClipState grabbed) {
@@ -165,19 +179,21 @@ public sealed class TimelineView : Control {
 
         // The loop range: accent-tinted wash and a solid bar across the ruler
         // top, so it never reads as the delete range's white wash.
-        if (vm.LoopStart is not null || vm.LoopEnd is not null) {
-            double lx0 = vm.LoopStart is { } ls ? FrameToX(ls) : HeaderWidth;
-            double lx1 = vm.LoopEnd is { } le ? FrameToX(le) : bounds.Width;
+        int? loopStart = loopDragActive && loopDragEdge == 0 ? loopDragFrame : vm.LoopStart;
+        int? loopEnd = loopDragActive && loopDragEdge == 1 ? loopDragFrame : vm.LoopEnd;
+        if (loopStart is not null || loopEnd is not null) {
+            double lx0 = loopStart is { } ls ? FrameToX(ls) : HeaderWidth;
+            double lx1 = loopEnd is { } le ? FrameToX(le) : bounds.Width;
             var accent = new SolidColorBrush(TimecodeColor);
-            if (vm.HasLoop && lx1 > Math.Max(HeaderWidth, lx0)) {
+            if (loopStart is not null && loopEnd is not null && lx1 > Math.Max(HeaderWidth, lx0)) {
                 double left = Math.Max(HeaderWidth, lx0);
                 ctx.FillRectangle(AccentWash(0x22), new Rect(left, 0, lx1 - left, bounds.Height));
                 ctx.FillRectangle(accent, new Rect(left, 0, lx1 - left, 3));
             }
             var tick = new Pen(accent, 2);
-            if (vm.LoopStart is not null && lx0 >= HeaderWidth)
+            if (loopStart is not null && lx0 >= HeaderWidth)
                 ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, RulerHeight));
-            if (vm.LoopEnd is not null && lx1 >= HeaderWidth)
+            if (loopEnd is not null && lx1 >= HeaderWidth)
                 ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, RulerHeight));
         }
 
@@ -624,6 +640,17 @@ public sealed class TimelineView : Control {
             return;
         }
 
+        // A loop edge grabbed within the trim margin resizes the loop; it
+        // claims the press before clip selection does.
+        if (p.X >= HeaderWidth && LoopEdgeUnderPointer(p.X) is { } loopEdge) {
+            loopDragEdge = loopEdge;
+            loopDragFrame = loopEdge == 0 ? vm.LoopStart!.Value : vm.LoopEnd!.Value;
+            loopDragActive = false;
+            dragStartX = p.X;
+            e.Pointer.Capture(this);
+            return;
+        }
+
         var hit = HitTestClip(p);
         if (hit is { } h) {
             if (vm.Tool == TimelineTool.Blade) {
@@ -688,6 +715,14 @@ public sealed class TimelineView : Control {
         if (vm is null || p.X < HeaderWidth) return;
         var menu = new MenuFlyout();
 
+        bool clearLoopOffered = false;
+        if (vm.LoopStart is { } ls && vm.LoopEnd is { } le && le > ls &&
+            p.X >= FrameToX(ls) && p.X <= FrameToX(le)) {
+            var clearLoop = new MenuItem { Header = "Clear Loop" };
+            clearLoop.Click += (_, _) => vm.ClearLoop();
+            menu.Items.Add(clearLoop);
+            clearLoopOffered = true;
+        }
         if (JunctionAt(p) is { } cut) {
             var transition = new MenuItem { Header = "Generate Transition Here…" };
             transition.Click += (_, _) => vm.RequestTransition(cut.Left, cut.Right);
@@ -771,6 +806,7 @@ public sealed class TimelineView : Control {
         }
 
         if (menu.Items.Count == 0) return;
+        if (clearLoopOffered && menu.Items.Count > 1) menu.Items.Insert(1, new Separator());
         menu.ShowAt(this, showAtPointer: true);
     }
 
@@ -977,6 +1013,16 @@ public sealed class TimelineView : Control {
             vm.Scrub(XToFrame(p.X));
             return;
         }
+        if (loopDragEdge >= 0) {
+            double loopDx = p.X - dragStartX;
+            if (!loopDragActive && Math.Abs(loopDx) > 2) loopDragActive = true;
+            if (loopDragActive) {
+                loopDragFrame = TimelineMath.ClampLoopEdge(loopDragEdge, XToFrame(p.X),
+                    vm.LoopStart, vm.LoopEnd, vm.TotalFrames);
+                InvalidateVisual();
+            }
+            return;
+        }
         if (rollLeftId is not null) {
             double rollDx = p.X - dragStartX;
             if (!rollActive && Math.Abs(rollDx) > 2) rollActive = true;
@@ -1052,13 +1098,14 @@ public sealed class TimelineView : Control {
         // A cut reads as a roll handle; a lone edge reads as a trim handle.
         bool overJunction = JunctionAt(p) is not null;
         bool overEdge = HitTestClip(p) is { } h && EdgeUnderPointer(h.Clip, p.X) is not null;
+        bool overLoopEdge = p.X >= HeaderWidth && LoopEdgeUnderPointer(p.X) is not null;
         if (overJunction != hoverJunction) {
             hoverJunction = overJunction;
             InvalidateVisual();
         }
         // Both move an edit point along the timeline, so both read as the
         // horizontal double-arrow; only the number of edges differs.
-        Cursor = overJunction || overEdge
+        Cursor = overJunction || overEdge || overLoopEdge
             ? new Cursor(StandardCursorType.SizeWestEast)
             : Cursor.Default;
     }
@@ -1075,6 +1122,8 @@ public sealed class TimelineView : Control {
                 fadeIsIn ? faded.FadeOutFrames : fadeFramesPreview);
         if (rollLeftId is { } rl && rollRightId is { } rr && rollActive)
             vm?.RequestRoll(rl, rr, rollBoundary);
+        if (loopDragEdge >= 0 && loopDragActive)
+            vm?.SetLoopEdge(loopDragEdge, loopDragFrame);
         if (trimClipId is { } tid && trimActive)
             vm?.RequestTrim(tid, trimEdge, trimBoundary);
         if (dragClipId is { } id && dragActive) {
@@ -1112,7 +1161,10 @@ public sealed class TimelineView : Control {
     /// it, then Avalonia raises capture-lost for the same gesture.
     bool DisarmGesture() {
         bool armed = scrubbing || rollLeftId is not null || trimClipId is not null
-                     || dragClipId is not null || envelopeActive || fadeActive;
+                     || dragClipId is not null || envelopeActive || fadeActive
+                     || loopDragEdge >= 0;
+        loopDragEdge = -1;
+        loopDragActive = false;
         envelopeClipId = null;
         envelopeActive = false;
         fadeClipId = null;

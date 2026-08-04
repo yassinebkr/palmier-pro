@@ -94,6 +94,58 @@ public class TimelineUxTests {
     public void AdvancePlayhead_IncompleteLoopFallsBackToEndWrap() =>
         Assert.Equal((0, true, false), TimelineMath.AdvancePlayhead(99, 1, 100, 50, -1));
 
+    [Theory]
+    [InlineData(5, 60)]    // parked before the loop jumps to its start
+    [InlineData(60, 60)]   // parked on the start stays
+    [InlineData(75, 75)]   // parked inside stays
+    [InlineData(90, 60)]   // parked on the end (exclusive) jumps
+    [InlineData(120, 60)]  // parked after the loop jumps
+    public void LoopEntryFrame_OutsideJumpsToLoopStart(int playhead, int expected) =>
+        Assert.Equal(expected, TimelineMath.LoopEntryFrame(playhead, 60, 90));
+
+    [Theory]
+    [InlineData(30, -1, -1, 30)]   // no loop: untouched
+    [InlineData(30, -1, 90, 30)]   // half a loop: untouched
+    [InlineData(30, 90, 60, 30)]   // inverted loop: untouched
+    public void LoopEntryFrame_WithoutAFullLoopLeavesThePlayhead(int playhead, int start, int end, int expected) =>
+        Assert.Equal(expected, TimelineMath.LoopEntryFrame(playhead, start, end));
+
+    [Theory]
+    [InlineData(0, 30, 30, 90, 30)]    // start clamps to the end minus one
+    [InlineData(0, -5, 30, 90, 0)]     // start never goes negative
+    [InlineData(1, 20, 30, 90, 31)]    // end clamps to the start plus one
+    [InlineData(1, 500, 30, 90, 180)]  // end clamps to the timeline length
+    public void ClampLoopEdge_KeepsOneFrameInsideTheTimeline(int edge, int frame, int start, int end, int expected) =>
+        Assert.Equal(expected, TimelineMath.ClampLoopEdge(edge, frame, start, end, 180));
+
+    /// Loop edge drags and clearing on the real view model.
+    [Fact]
+    public void LoopEdges_DragClampAndClear() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            var vm = new TimelineViewModel(project);
+            Assert.NotNull(vm.AddClip(TestMediaPath("testsrc.mp4"), 300));
+
+            vm.Scrub(30);
+            vm.MarkLoopStart();
+            vm.Scrub(90);
+            vm.MarkLoopEnd();
+            Assert.True(vm.HasLoop);
+
+            vm.SetLoopEdge(0, 95);   // past the end: clamps to end - 1
+            Assert.Equal(89, vm.LoopStart);
+            vm.SetLoopEdge(1, 10);   // before the start: clamps to start + 1
+            Assert.Equal(90, vm.LoopEnd);
+
+            vm.ClearLoop();
+            Assert.Null(vm.LoopStart);
+            Assert.Null(vm.LoopEnd);
+            Assert.False(vm.HasLoop);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
     /// Loop point semantics on the real view model: toggling, invalidation,
     /// and HasLoop. Needs one clip so the playhead can leave frame 0.
     [Fact]

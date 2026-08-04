@@ -279,6 +279,21 @@ public sealed partial class TimelineViewModel : ObservableObject {
         OnPropertyChanged(nameof(HasLoop));
     }
 
+    public void ClearLoop() {
+        LoopStart = null;
+        LoopEnd = null;
+        OnPropertyChanged(nameof(HasLoop));
+    }
+
+    /// Moves one loop edge (0 = start, 1 = end), committed when the drag
+    /// releases. Playback state like the marks, so no undo entry.
+    public void SetLoopEdge(int edge, int frame) {
+        int clamped = TimelineMath.ClampLoopEdge(edge, frame, LoopStart, LoopEnd, TotalFrames);
+        if (edge == 0) LoopStart = clamped;
+        else LoopEnd = clamped;
+        OnPropertyChanged(nameof(HasLoop));
+    }
+
     /// Delete every property's keyframe at one clip diamond: (clipId, frame).
     /// The timeline's diamonds merge all animated properties, so deleting what
     /// the diamond shows means deleting across all of them.
