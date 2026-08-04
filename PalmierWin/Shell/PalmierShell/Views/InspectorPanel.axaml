@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+             xmlns:core="clr-namespace:PalmierShell.Core"
              xmlns:views="clr-namespace:PalmierShell.Views"
              x:Class="PalmierShell.Views.InspectorPanel"
              x:DataType="vm:InspectorViewModel">
@@ -181,7 +182,7 @@
               <TextBox Classes="value" Text="{Binding TextContent}" AcceptsReturn="False"/>
               <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" Margin="0,4,0,0">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Size"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding TextFontSize}"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding TextFontSize, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"/>
                 <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding TextColorHex}"
                          Watermark="#RRGGBB"/>
@@ -198,23 +199,23 @@
                always clear which property gets a key. -->
           <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Center X"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding CenterX}"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding CenterX, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Center Y"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding CenterY}"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding CenterY, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Width"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ScaleWidth}"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ScaleWidth, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="2" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Height"/>
-            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ScaleHeight}"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ScaleHeight, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="3" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
             <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Rotation"/>
-            <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Rotation}"/>
+            <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Rotation, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="4" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe rotation at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="rotation"/>
           </Grid>
@@ -223,24 +224,24 @@
         <Expander Classes="section" Header="PLAYBACK">
           <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto">
             <TextBlock Grid.Column="0" Classes="field" Text="Speed"/>
-            <TextBox Grid.Column="1" Classes="value" Text="{Binding Speed}"/>
+            <TextBox Grid.Column="1" Classes="value" Text="{Binding Speed, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
           </Grid>
         </Expander>
 
         <Expander Classes="section" Header="LEVELS">
           <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Volume"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VolumeDb}"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VolumeDb, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe volume at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="volume"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Opacity"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Opacity}"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Opacity, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe opacity at the playhead"
                     Command="{Binding AddKeyframeCommand}" CommandParameter="opacity"/>
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Fade In"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding FadeInSeconds}"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding FadeInSeconds, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Fade Out"/>
-            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding FadeOutSeconds}"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding FadeOutSeconds, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
           </Grid>
         </Expander>
 
@@ -252,28 +253,28 @@
                   ColumnSpacing="0" RowSpacing="2">
               <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Blacks"
                          ToolTip.Tip="-1 to 1"/>
-              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Blacks}"/>
+              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Blacks, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Whites"/>
-              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Whites}"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Whites, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Highlights"/>
-              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Highlights}"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Highlights, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Shadows"/>
-              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding Shadows}"/>
+              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding Shadows, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Clarity"/>
-              <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Clarity}"/>
+              <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Clarity, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="5" Grid.Column="0" Classes="field" Text="Dehaze"/>
-              <TextBox Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Dehaze}"/>
+              <TextBox Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Dehaze, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             </Grid>
           </Expander>
 
           <Expander Classes="section" Header="EFFECTS">
             <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
               <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Vignette"/>
-              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VignetteAmount}"/>
+              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VignetteAmount, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Grain"/>
-              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GrainAmount}"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GrainAmount, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Glow"/>
-              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GlowIntensity}"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GlowIntensity, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Invert"/>
               <CheckBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Center"
                         IsChecked="{Binding InvertEnabled, Mode=TwoWay}"/>
@@ -324,13 +325,13 @@
                         FontSize="11" IsChecked="{Binding ChromaKeyEnabled, Mode=TwoWay}"/>
               <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"
                          ToolTip.Tip="R G B, 0 to 1"/>
-              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding ChromaKeyR}"/>
-              <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding ChromaKeyG}"/>
-              <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding ChromaKeyB}"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding ChromaKeyR, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
+              <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding ChromaKeyG, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
+              <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding ChromaKeyB, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Threshold"/>
-              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ChromaThreshold}"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ChromaThreshold, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
               <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Spill"/>
-              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ChromaSpill}"/>
+              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ChromaSpill, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             </Grid>
           </Expander>
 
@@ -342,7 +343,7 @@
               <Button Grid.Row="0" Grid.Column="2" Content="…" Padding="8,2" Margin="4,0,0,0"
                       Click="OnChooseLut" ToolTip.Tip="Choose a .cube LUT"/>
               <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Intensity"/>
-              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding LutIntensity}"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding LutIntensity, Converter={x:Static core:DoubleTextConverter.Instance}}"/>
             </Grid>
           </Expander>
         </StackPanel>

@@ -1,4 +1,5 @@
 using PalmierShell.Core;
+using PalmierShell.ViewModels;
 using Xunit;
 
 namespace PalmierShell.Tests;
@@ -195,5 +196,23 @@ public class ClipEffectTests {
         Assert.Equal(1, CoreApi.palmier_project_capture_frame(
             project, frame, pixels, pixels.Length, out _, out _));
         return pixels;
+    }
+}
+
+public class EffectParamClampTests {
+    [Fact]
+    public void OutOfRangeWhitesClampToTheRegistryRange() {
+        var values = new Dictionary<string, object> { ["whites"] = 4.0, ["blacks"] = -3.0 };
+        InspectorViewModel.ClampEffectParams("color.blacksWhites", values);
+        Assert.Equal(1.0, values["whites"]);
+        Assert.Equal(-1.0, values["blacks"]);
+    }
+
+    [Fact]
+    public void InRangeAndUnknownParamsPassThrough() {
+        var values = new Dictionary<string, object> { ["whites"] = 0.4, ["path"] = "luts/x.cube" };
+        InspectorViewModel.ClampEffectParams("color.blacksWhites", values);
+        Assert.Equal(0.4, values["whites"]);
+        Assert.Equal("luts/x.cube", values["path"]);
     }
 }
