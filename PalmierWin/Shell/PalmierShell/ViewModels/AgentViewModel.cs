@@ -298,6 +298,14 @@ public sealed partial class AgentViewModel : ObservableObject {
         CoreApi.palmier_agent_set_media(agent, JsonSerializer.Serialize(items));
     }
 
+    /// App shutdown: stops the poll timer and cancels any in-flight turn.
+    /// Must run before the agent handle is destroyed — a later tick would
+    /// poll a dead handle.
+    public void Shutdown() {
+        pollTimer.Stop();
+        if (agent != IntPtr.Zero) CoreApi.palmier_agent_cancel(agent);
+    }
+
     void Poll() {
         string? json = CoreApi.PollAgent(agent);
         if (json is not null) {

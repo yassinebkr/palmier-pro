@@ -97,14 +97,20 @@ public static class SettingsStore {
         foreach (var (provider, key) in settings.Keys)
             if (key.Length > 0) encrypted[provider] = Encrypt(key);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(
-            new Persisted(settings.Provider, settings.Model, "") {
-                KeysProtected = encrypted,
-                Models = new Dictionary<string, string>(settings.Models),
-                Accent = settings.Accent,
-                SnapEnabled = settings.SnapEnabled,
-            }));
+        try {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(
+                new Persisted(settings.Provider, settings.Model, "") {
+                    KeysProtected = encrypted,
+                    Models = new Dictionary<string, string>(settings.Models),
+                    Accent = settings.Accent,
+                    SnapEnabled = settings.SnapEnabled,
+                }));
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // An unwritable AppData must not take the app down; the session
+            // keeps the settings in memory and nothing persists.
+            Console.Error.WriteLine($"settings: could not save to {SettingsPath}: {ex.Message}");
+        }
     }
 
     /// Read-modify-write under the gate, so a pane that owns one section

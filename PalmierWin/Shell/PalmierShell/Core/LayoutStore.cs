@@ -33,7 +33,10 @@ public sealed record WorkspaceLayout(
 /// Persists the workspace layout under %APPDATA%\PalmierPro. Synchronous file
 /// I/O — call off the UI thread.
 public static class LayoutStore {
-    static string LayoutPath => Path.Combine(
+    /// Test seam: redirects the layout file. Never set in production code.
+    public static string? PathOverride;
+
+    static string LayoutPath => PathOverride ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "PalmierPro", "layout.json");
 

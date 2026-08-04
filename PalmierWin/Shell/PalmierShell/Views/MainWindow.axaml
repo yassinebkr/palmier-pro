@@ -188,7 +188,16 @@
       </Border>
       <views:AspectFitPanel Grid.Row="1" Background="Black"
                             AspectRatio="{Binding ProjectAspectRatio}">
-        <views:PreviewHost x:Name="Preview"/>
+        <Panel>
+          <!-- Shown when the engine cannot start (no Vulkan device); the
+               native preview surface is hidden so this text can draw. -->
+          <TextBlock x:Name="PreviewFallback" IsVisible="false"
+                     Text="Preview unavailable — no Vulkan-capable GPU or driver was found.&#x0a;Editing still works; playback, capture, and export need one."
+                     TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     FontSize="13" Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+          <views:PreviewHost x:Name="Preview"/>
+        </Panel>
       </views:AspectFitPanel>
       <!-- Scrub bar for whatever the viewer shows: timeline or source clip -->
       <Slider Grid.Row="2" Classes="scrub" Height="16" Margin="12,0,12,2" Minimum="0"

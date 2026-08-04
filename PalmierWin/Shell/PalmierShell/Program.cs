@@ -9,9 +9,17 @@ static class Program {
     internal static WorkspaceLayout Layout { get; private set; } = WorkspaceLayout.Default;
 
     [STAThread]
-    public static void Main(string[] args) {
+    public static int Main(string[] args) {
+        CrashHandler.Install();
+        if (!CoreApi.TryLoadNativeHost()) {
+            CrashHandler.ShowFatal("PalmierWin cannot start",
+                "PalmierCoreHost.dll could not be loaded.\n\n" +
+                "Reinstall PalmierWin, or keep PalmierShell.exe together with the files it shipped with.");
+            return 2;
+        }
         Layout = LayoutStore.Load();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
     }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()

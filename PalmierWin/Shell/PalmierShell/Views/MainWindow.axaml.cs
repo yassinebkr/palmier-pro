@@ -46,6 +46,10 @@ public partial class MainWindow : Window {
                 ShowGenerateWindow(viewModel.Media.Generate.IsOpen);
         };
         Preview.SessionReady += viewModel.AttachEngine;
+        Preview.SessionFailed += () => {
+            Preview.IsVisible = false;
+            PreviewFallback.IsVisible = true;
+        };
         Preview.InputReady += viewModel.AttachPreviewInput;
         ApplyLayout(Program.Layout);
         Closing += OnClosing;
@@ -193,6 +197,10 @@ public partial class MainWindow : Window {
     async void OnOpened(object? sender, EventArgs e) {
         RecentreIfOffScreen();
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        // Dev flag: throw on the UI thread to exercise the global crash
+        // handler end to end (log on disk, dialog, exit).
+        if (args.Contains("--crash-test"))
+            throw new InvalidOperationException("Deliberate crash from --crash-test.");
         bool addToTimeline = args.Contains("--add-to-timeline");
         foreach (var path in args.Where(a => !a.StartsWith("--") && File.Exists(a))) {
             await viewModel.Media.ImportFileAsync(Path.GetFullPath(path));

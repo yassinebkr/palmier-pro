@@ -34,13 +34,24 @@ public sealed class PreviewHost : NativeControlHost {
             Dispatcher.UIThread.Post(TryCreateSession, DispatcherPriority.Background);
             return;
         }
-        Session = new EngineSession(hwnd);
+        try {
+            Session = new EngineSession(hwnd);
+        } catch (Exception ex) {
+            // No Vulkan-capable GPU or driver: the preview stays dark, the
+            // rest of the editor keeps working, and the window says why.
+            Console.Error.WriteLine($"preview: engine unavailable: {ex.Message}");
+            SessionFailed?.Invoke();
+            return;
+        }
         Session.Start();
         SessionReady?.Invoke(Session);
 
         input = new PreviewInput(hwnd);
         InputReady?.Invoke(input);
     }
+
+    /// Fired on the UI thread when the engine cannot start (no Vulkan device).
+    public event Action? SessionFailed;
 
     protected override void DestroyNativeControlCore(IPlatformHandle control) {
         input?.Dispose();
