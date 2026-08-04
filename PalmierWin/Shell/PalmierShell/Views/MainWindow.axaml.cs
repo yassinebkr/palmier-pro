@@ -375,6 +375,27 @@ public partial class MainWindow : Window {
                 timeline.ClearRange();
                 e.Handled = true;
                 break;
+            // Ctrl+I / Ctrl+O mark the loop range (I/O alone are the delete
+            // range, so the loop rides the modifier).
+            case Key.I when e.KeyModifiers == KeyModifiers.Control:
+                timeline.MarkLoopStart();
+                e.Handled = true;
+                break;
+            case Key.O when e.KeyModifiers == KeyModifiers.Control:
+                timeline.MarkLoopEnd();
+                e.Handled = true;
+                break;
+            // Escape: an armed timeline gesture cancels first; nothing armed
+            // means fall back to the Select tool. Dialogs and renames consume
+            // their own Escape before it reaches here.
+            case Key.Escape when e.KeyModifiers == KeyModifiers.None:
+                if (TimelinePanelHost.CancelTimelineGesture()) {
+                    e.Handled = true;
+                } else if (timeline.Tool != TimelineTool.Select) {
+                    timeline.Tool = TimelineTool.Select;
+                    e.Handled = true;
+                }
+                break;
             // Shift+Delete ripples the selection, or the marked range when
             // nothing is selected; plain Delete lifts and leaves the gap.
             case Key.Delete or Key.Back

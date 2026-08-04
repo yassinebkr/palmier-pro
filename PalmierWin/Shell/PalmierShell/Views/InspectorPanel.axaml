@@ -51,6 +51,7 @@
           <StackPanel Margin="0,6,0,0">
             <ToggleButton Classes="hdr" IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
                           Background="Transparent" BorderThickness="0" Padding="6,2" Margin="-6,0,0,0"
+                          HorizontalAlignment="Stretch"
                           HorizontalContentAlignment="Stretch" Cursor="Hand">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="{TemplateBinding Header}" FontSize="10" VerticalAlignment="Center"
@@ -72,6 +73,7 @@
             <Border Height="1" Background="{StaticResource ThemeBorderBrush}" Margin="0,2,0,0"/>
             <ContentPresenter Content="{TemplateBinding Content}"
                               IsVisible="{TemplateBinding IsExpanded}"
+                              HorizontalAlignment="Stretch"
                               Margin="0,4,0,2"/>
           </StackPanel>
         </ControlTemplate>

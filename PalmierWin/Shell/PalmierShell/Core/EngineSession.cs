@@ -12,6 +12,14 @@ public sealed class EngineSession : IDisposable {
 
     bool playing;
     int rate = 1;
+    // Loop range in frames; -1 when unset. Read on the render thread.
+    int loopStart = -1, loopEnd = -1;
+
+    /// Sets or clears the playback loop range (either side null clears it).
+    public void SetLoop(int? start, int? end) {
+        Volatile.Write(ref loopStart, start ?? -1);
+        Volatile.Write(ref loopEnd, end ?? -1);
+    }
 
     /// Fired when playback starts/stops, with the frame it starts from.
     public event Action<bool, int>? PlayingChanged;
@@ -82,21 +90,13 @@ public sealed class EngineSession : IDisposable {
             while (await timer.WaitForNextTickAsync(cts.Token).ConfigureAwait(false)) {
                 if (Playing) {
                     int step = Rate;
-                    int next = PlayheadFrame + step;
-                    if (step == 1 && next >= TotalFrames) {
-                        // Normal play wraps; the shuttle stops at the ends —
-                        // rewinding through frame 0 into a wrap reads as a glitch.
-                        PlayheadFrame = 0;
-                        PlayheadAdvanced?.Invoke(0);
-                        PlayheadLooped?.Invoke(0);
-                    } else if (next < 0 || next >= TotalFrames) {
-                        PlayheadFrame = Math.Clamp(next, 0, TotalFrames - 1);
-                        PlayheadAdvanced?.Invoke(PlayheadFrame);
-                        Playing = false;
-                    } else {
-                        PlayheadFrame = next;
-                        PlayheadAdvanced?.Invoke(next);
-                    }
+                    var (next, wrapped, stop) = TimelineMath.AdvancePlayhead(
+                        PlayheadFrame, step, TotalFrames,
+                        Volatile.Read(ref loopStart), Volatile.Read(ref loopEnd));
+                    PlayheadFrame = next;
+                    PlayheadAdvanced?.Invoke(next);
+                    if (wrapped) PlayheadLooped?.Invoke(next);
+                    if (stop) Playing = false;
                 }
                 if (CoreApi.palmier_engine_render_frame(engine, PlayheadFrame) == 0) {
                     StalledFrames++;

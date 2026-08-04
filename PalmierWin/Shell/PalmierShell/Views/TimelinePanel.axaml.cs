@@ -11,9 +11,41 @@ public partial class TimelinePanel : UserControl {
         UpdateToolButtons(TimelineTool.Select);
         DataContextChanged += (_, _) => {
             UpdateSnapButton();
-            if (Vm is { } vm) vm.PreferencesApplied += UpdateSnapButton;
+            if (Vm is { } vm) {
+                vm.PreferencesApplied += UpdateSnapButton;
+                vm.Timeline.PropertyChanged += OnTimelinePropertyChanged;
+                UpdateLoopButtons();
+            }
         };
     }
+
+    /// Tool and loop changes from outside the toolbar (Escape, Ctrl+I/O)
+    /// still light the right buttons.
+    void OnTimelinePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        if (Vm is null) return;
+        if (e.PropertyName == nameof(TimelineViewModel.Tool)) UpdateToolButtons(Vm.Timeline.Tool);
+        if (e.PropertyName is nameof(TimelineViewModel.LoopStart) or nameof(TimelineViewModel.LoopEnd))
+            UpdateLoopButtons();
+    }
+
+    void OnLoopStart(object? sender, RoutedEventArgs e) {
+        Vm?.Timeline.MarkLoopStart();
+        UpdateLoopButtons();
+    }
+
+    void OnLoopEnd(object? sender, RoutedEventArgs e) {
+        Vm?.Timeline.MarkLoopEnd();
+        UpdateLoopButtons();
+    }
+
+    void UpdateLoopButtons() {
+        if (Vm is null) return;
+        LoopStartButton.Background = Vm.Timeline.LoopStart is not null ? ActiveToolBrush : InactiveToolBrush;
+        LoopEndButton.Background = Vm.Timeline.LoopEnd is not null ? ActiveToolBrush : InactiveToolBrush;
+    }
+
+    /// Escape spends itself on an armed gesture before it means "select tool".
+    public bool CancelTimelineGesture() => Timeline.CancelTimelineGesture();
 
     void OnAddTextClip(object? sender, RoutedEventArgs e) => Vm?.AddTextClipAtPlayhead();
 

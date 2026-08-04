@@ -15,19 +15,17 @@ public sealed class TimelineView : Control {
     /// Row height follows the view model's density setting: upstream fits
     /// roughly eight tracks where the roomy default fits three.
     double TrackHeight => vm?.CompactRows == true ? 28 : 50;
-    const double HeaderWidth = 100;
+    internal const double HeaderWidth = 100;
     const double ClipCornerRadius = 4;
-    const double MinPixelsPerFrame = 0.5;
-    const double MaxPixelsPerFrame = 16;
 
-    static readonly Color SurfaceColor = Color.Parse("#161616");
-    static readonly Color RaisedColor = Color.Parse("#1E1E1E");
-    static readonly Color BorderColor = Color.Parse("#29FFFFFF");
-    static Color TimecodeColor => Accent.Current;
-    static readonly Color PlayheadColor = Color.Parse("#E54F4F");
-    static readonly Color VideoClipColor = Color.Parse("#1D5878");
-    static readonly Color AudioClipColor = Color.Parse("#2E7765");
-    static readonly Color TextClipColor = Color.Parse("#715486");
+    internal static readonly Color SurfaceColor = Color.Parse("#161616");
+    internal static readonly Color RaisedColor = Color.Parse("#1E1E1E");
+    internal static readonly Color BorderColor = Color.Parse("#29FFFFFF");
+    internal static Color TimecodeColor => Accent.Current;
+    internal static readonly Color PlayheadColor = Color.Parse("#E54F4F");
+    internal static readonly Color VideoClipColor = Color.Parse("#1D5878");
+    internal static readonly Color AudioClipColor = Color.Parse("#2E7765");
+    internal static readonly Color TextClipColor = Color.Parse("#715486");
 
     static readonly Typeface LabelTypeface = new("Inter");
 
@@ -163,6 +161,24 @@ public sealed class TimelineView : Control {
                 ctx.DrawLine(bracket, new Point(x1, 0), new Point(x1, RulerHeight));
                 ctx.DrawLine(bracket, new Point(x1 - 5, 2), new Point(x1, 2));
             }
+        }
+
+        // The loop range: accent-tinted wash and a solid bar across the ruler
+        // top, so it never reads as the delete range's white wash.
+        if (vm.LoopStart is not null || vm.LoopEnd is not null) {
+            double lx0 = vm.LoopStart is { } ls ? FrameToX(ls) : HeaderWidth;
+            double lx1 = vm.LoopEnd is { } le ? FrameToX(le) : bounds.Width;
+            var accent = new SolidColorBrush(TimecodeColor);
+            if (vm.HasLoop && lx1 > Math.Max(HeaderWidth, lx0)) {
+                double left = Math.Max(HeaderWidth, lx0);
+                ctx.FillRectangle(AccentWash(0x22), new Rect(left, 0, lx1 - left, bounds.Height));
+                ctx.FillRectangle(accent, new Rect(left, 0, lx1 - left, 3));
+            }
+            var tick = new Pen(accent, 2);
+            if (vm.LoopStart is not null && lx0 >= HeaderWidth)
+                ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, RulerHeight));
+            if (vm.LoopEnd is not null && lx1 >= HeaderWidth)
+                ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, RulerHeight));
         }
 
         if (snapGuideFrame is { } snapFrame) {
@@ -354,6 +370,11 @@ public sealed class TimelineView : Control {
     static readonly SolidColorBrush FadeShadeBrush = new(Color.Parse("#59000000"));
     static readonly SolidColorBrush RangeWashBrush = new(Color.Parse("#1FFFFFFF"));
 
+    /// Accent-coloured wash at `alpha`, rebuilt per paint so it follows the
+    /// accent setting.
+    static SolidColorBrush AccentWash(byte alpha) =>
+        new(Color.FromArgb(alpha, Accent.Current.R, Accent.Current.G, Accent.Current.B));
+
     /// Fade ramps render as shaded wedges from the clip corner to the ramp end.
     // MARK: On-clip audio controls
 
@@ -503,8 +524,10 @@ public sealed class TimelineView : Control {
 
     static readonly SolidColorBrush WaveformBrush = new(Color.Parse("#9EFFFFFF"));
 
-    /// Draws min/max column pairs across the rect, windowed to the clip's
+    /// Draws dB-mapped peak bars across the rect, windowed to the clip's
     /// trimmed source range so a trimmed/split clip shows its actual audio.
+    /// Each pixel peak-detects across the buckets under it, like upstream, so
+    /// loud transients survive and silence stays a flat line.
     void RenderWaveform(DrawingContext ctx, Rect rect, TimelineViewModel.WaveformData waveform, ClipState clip) {
         using var clipRegion = ctx.PushClip(rect);
         int columns = waveform.MinMax.Length / 2;
@@ -518,13 +541,17 @@ public sealed class TimelineView : Control {
         double halfH = rect.Height / 2 - 1;
         var pen = new Pen(WaveformBrush);
         int steps = Math.Max(1, (int)rect.Width);
+        double span = (windowEnd - windowStart) * columns;
         for (int px = 0; px < steps; px++) {
-            double frac = windowStart + (windowEnd - windowStart) * px / steps;
-            int col = Math.Min((int)(frac * columns), columns - 1);
-            double lo = Math.Clamp(waveform.MinMax[col * 2] * waveform.Gain, -1, 1);
-            double hi = Math.Clamp(waveform.MinMax[col * 2 + 1] * waveform.Gain, -1, 1);
+            int b0 = Math.Min((int)(windowStart * columns + span * px / steps), columns - 1);
+            int b1 = Math.Min(Math.Max(b0 + 1, (int)(windowStart * columns + span * (px + 1) / steps)), columns);
+            float peak = 0;
+            for (int b = b0; b < b1; b++)
+                peak = Math.Max(peak, Math.Max(Math.Abs(waveform.MinMax[b * 2]),
+                                               Math.Abs(waveform.MinMax[b * 2 + 1])));
+            double h = TimelineMath.WaveformLevel(peak) * halfH;
             double x = rect.X + px + 0.5;
-            ctx.DrawLine(pen, new Point(x, midY - hi * halfH), new Point(x, midY - lo * halfH));
+            ctx.DrawLine(pen, new Point(x, midY - h), new Point(x, midY + h));
         }
     }
 
@@ -545,6 +572,13 @@ public sealed class TimelineView : Control {
             : System.IO.Path.GetFileNameWithoutExtension(clip.MediaRef);
 
     static string FormatTimecode(int frame) => Timecode.Format(frame, TimelineViewModel.TimelineFps);
+
+    protected override void OnSizeChanged(SizeChangedEventArgs e) {
+        base.OnSizeChanged(e);
+        // The zoom anchor and the overview strip need to know how much of the
+        // timeline one screen holds.
+        if (vm is not null) vm.ViewportWidth = Math.Max(1, e.NewSize.Width - HeaderWidth);
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
         base.OnPointerPressed(e);
@@ -1065,6 +1099,14 @@ public sealed class TimelineView : Control {
         if (DisarmGesture()) InvalidateVisual();
     }
 
+    /// Escape path: drops any armed pointer gesture without committing it.
+    /// Returns whether one was armed, so the caller knows Escape was spent.
+    public bool CancelTimelineGesture() {
+        bool armed = DisarmGesture();
+        if (armed) InvalidateVisual();
+        return armed;
+    }
+
     /// Clears every armed gesture without committing it. Returns whether
     /// anything was armed, and is safe to call twice — the release path calls
     /// it, then Avalonia raises capture-lost for the same gesture.
@@ -1100,7 +1142,8 @@ public sealed class TimelineView : Control {
             var p = e.GetPosition(this);
             double frameAtCursor = (p.X - HeaderWidth + vm.ScrollOffsetX) / vm.PixelsPerFrame;
             double factor = e.Delta.Y > 0 ? 1.2 : 1 / 1.2;
-            double next = Math.Clamp(vm.PixelsPerFrame * factor, MinPixelsPerFrame, MaxPixelsPerFrame);
+            double next = Math.Clamp(vm.PixelsPerFrame * factor,
+                TimelineMath.MinPixelsPerFrame, TimelineMath.MaxPixelsPerFrame);
             vm.PixelsPerFrame = next;
             vm.ScrollOffsetX = Math.Max(0, frameAtCursor * next - (p.X - HeaderWidth));
         } else {

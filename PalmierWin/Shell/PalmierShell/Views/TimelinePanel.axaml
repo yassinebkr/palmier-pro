@@ -80,6 +80,14 @@
           <Button x:Name="BladeToolButton" Click="OnBladeTool">
             <Path Data="M 3,0 L 9,7.5 M 11,0 L 5,7.5 M 2,10.2 A 1.9,1.9 0 1 0 5.8,10.2 A 1.9,1.9 0 1 0 2,10.2 M 8.2,10.2 A 1.9,1.9 0 1 0 12,10.2 A 1.9,1.9 0 1 0 8.2,10.2"/>
           </Button>
+          <Button x:Name="LoopStartButton" Click="OnLoopStart"
+                  ToolTip.Tip="Loop start at the playhead (Ctrl+I)">
+            <Path Data="M 6,1 H 2.5 V 11 H 6"/>
+          </Button>
+          <Button x:Name="LoopEndButton" Click="OnLoopEnd"
+                  ToolTip.Tip="Loop end at the playhead (Ctrl+O)">
+            <Path Data="M 4,1 H 7.5 V 11 H 4"/>
+          </Button>
           <Button x:Name="TextClipButton" Click="OnAddTextClip" ToolTip.Tip="Add text clip">
             <Path Data="M 1,1 H 11 M 6,1 V 11"/>
           </Button>
@@ -101,10 +109,13 @@
                 Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1.4"
                 StrokeLineCap="Round" VerticalAlignment="Center"/>
           <Slider Width="140" Minimum="0.5" Maximum="16" VerticalAlignment="Center"
-                  Value="{Binding Timeline.PixelsPerFrame, Mode=TwoWay}"/>
+                  Value="{Binding Timeline.ZoomSlider, Mode=TwoWay}"/>
         </StackPanel>
       </Grid>
     </Border>
-    <views:TimelineView Grid.Row="2" x:Name="Timeline" DataContext="{Binding Timeline}"/>
+    <Grid Grid.Row="2" RowDefinitions="26,*">
+      <views:TimelineOverview x:Name="Overview" DataContext="{Binding Timeline}"/>
+      <views:TimelineView Grid.Row="1" x:Name="Timeline" DataContext="{Binding Timeline}"/>
+    </Grid>
   </Grid>
 </UserControl>

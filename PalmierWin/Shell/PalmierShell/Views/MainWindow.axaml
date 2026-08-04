@@ -264,7 +264,7 @@
     <GridSplitter Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="7" Background="{StaticResource ThemeBaseBrush}" ResizeDirection="Rows"/>
     <!-- Timeline (bottom, spans all columns) -->
     <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="7" Background="{StaticResource ThemeSurfaceBrush}">
-      <views:TimelinePanel DataContext="{Binding}"/>
+      <views:TimelinePanel x:Name="TimelinePanelHost" DataContext="{Binding}"/>
     </Border>
   </Grid>
 </Window>
