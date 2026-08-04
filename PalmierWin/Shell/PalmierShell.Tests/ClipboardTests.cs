@@ -73,18 +73,23 @@ public class ClipboardTests {
     }
 
     [Fact]
-    public void PasteOntoAnOccupiedSpanRefusesAtomically() {
+    public void PasteOntoAnOccupiedSpanNudgesRightToFirstFreePosition() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
             string a = CoreApi.AddClip(project, TestMediaPath("testav.mp4"), 30)!;
             var ids = State(project).Tracks.SelectMany(t => t.Clips).Select(c => c.Id).ToList();
             string payload = CoreApi.CopyClips(project, ids)!;
 
-            // Pasting over the originals overlaps on both tracks: refused, and
-            // nothing was half-pasted.
-            Assert.Equal(0, CoreApi.palmier_timeline_paste(project, payload, 10));
-            Assert.Equal(2, State(project).Tracks.SelectMany(t => t.Clips).Count());
+            // Pasting at 10 overlaps the originals (0..30): the whole pair
+            // nudges right to the first free position (30..60), linked.
+            Assert.Equal(2, CoreApi.palmier_timeline_paste(project, payload, 10));
+
+            var clips = State(project).Tracks.SelectMany(t => t.Clips).ToList();
+            Assert.Equal(4, clips.Count);
             Assert.NotNull(State(project).FindClip(a));
+            var pasted = clips.Where(c => c.StartFrame == 30 && c.Id != a).ToList();
+            Assert.Equal(2, pasted.Count);
+            Assert.Equal(pasted[0].LinkGroupId, pasted[1].LinkGroupId);
         } finally {
             CoreApi.palmier_project_destroy(project);
         }

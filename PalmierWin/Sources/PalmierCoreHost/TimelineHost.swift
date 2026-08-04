@@ -1611,9 +1611,10 @@ public func palmierTimelineCopyClips(_ handle: UnsafeMutableRawPointer?,
 /// Pastes a copy payload with its earliest clip at `atFrame`, preserving the
 /// clips' relative offsets and tracks. Every pasted clip gets a fresh id;
 /// link groups are regenerated so pasted pairs stay linked to each other,
-/// never to their originals. Atomic: if any clip's track is gone or its new
-/// span would overlap an existing clip, nothing is pasted (0). Returns the
-/// number of clips pasted.
+/// never to their originals. If `atFrame` is occupied, the whole paste is
+/// nudged right to the first free position on its tracks (editors paste into
+/// traffic, they don't paste errors). Atomic refusal only when a copied clip's
+/// track no longer exists. Returns the number of clips pasted.
 @_cdecl("palmier_timeline_paste")
 public func palmierTimelinePaste(_ handle: UnsafeMutableRawPointer?,
                                  _ payload: UnsafePointer<CChar>?, _ atFrame: Int32) -> Int32 {
@@ -1638,16 +1639,23 @@ public func palmierTimelinePaste(_ handle: UnsafeMutableRawPointer?,
                 if groupMap[group] == nil { groupMap[group] = UUID().uuidString }
                 clip.linkGroupId = groupMap[group]
             }
-            // Overlap check against existing clips and the already-planned
-            // pastes on the same track.
-            let blocked = timeline.tracks[trackIndex].clips + landed
-                .filter { $0.trackIndex == trackIndex }.map(\.clip)
-            for other in blocked
-            where other.startFrame < clip.endFrame && other.endFrame > clip.startFrame {
-                _ = other
-                return 0
-            }
             landed.append((trackIndex, clip))
+        }
+        // Nudge the whole group right until nothing collides. Each pass pushes
+        // past at least one blocker, so this converges well under the cap.
+        var guard_ = 0
+        scan: while guard_ < 1000 {
+            guard_ += 1
+            for i in landed.indices {
+                let clip = landed[i].clip
+                for other in timeline.tracks[landed[i].trackIndex].clips
+                where other.startFrame < clip.endFrame && other.endFrame > clip.startFrame {
+                    let push = other.endFrame - clip.startFrame
+                    for j in landed.indices { landed[j].clip.startFrame += push }
+                    continue scan
+                }
+            }
+            break
         }
         for (trackIndex, clip) in landed {
             timeline.tracks[trackIndex].clips.append(clip)
