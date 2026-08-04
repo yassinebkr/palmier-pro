@@ -8,6 +8,22 @@ namespace PalmierShell.Core;
 public static partial class CoreApi {
     const string Dll = "PalmierCoreHost.dll";
 
+    /// Probed before the first real P/Invoke so a missing PalmierCoreHost.dll
+    /// (or a missing Swift/FFmpeg dependency) is an actionable startup message
+    /// instead of a DllNotFoundException mid-constructor.
+    public static bool TryLoadNativeHost() => TryLoadLibrary(Dll);
+
+    internal static bool TryLoadLibrary(string name) {
+        try {
+            // The handle is deliberately not freed: unloading a Swift runtime
+            // host and reloading it on first P/Invoke leaves the runtime in a
+            // broken state — the app would hang before its window appears.
+            return NativeLibrary.TryLoad(name, out _);
+        } catch {
+            return false;
+        }
+    }
+
     [LibraryImport(Dll)] public static partial IntPtr palmier_engine_create(IntPtr hwnd);
     [LibraryImport(Dll)] public static partial int palmier_engine_render_frame(IntPtr engine, int frame);
     [LibraryImport(Dll)] public static partial void palmier_engine_destroy(IntPtr engine);

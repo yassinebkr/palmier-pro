@@ -571,6 +571,12 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         }
     }
 
+    /// App shutdown: cancel every in-flight job so no download or remote
+    /// polling continues after the window is gone.
+    public void CancelAll() {
+        foreach (var job in Jobs.ToArray()) job.Cancel();
+    }
+
     [RelayCommand]
     void DismissJob(GenerationJobViewModel? job) {
         if (job is not null) Jobs.Remove(job);

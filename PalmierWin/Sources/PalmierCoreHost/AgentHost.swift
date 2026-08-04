@@ -95,12 +95,14 @@ final class AgentContext: @unchecked Sendable {
 public func palmierAgentCreate(_ projectHandle: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
     guard let projectHandle else { return nil }
     let project = Unmanaged<ProjectContext>.fromOpaque(projectHandle).takeUnretainedValue()
-    return Unmanaged.passRetained(AgentContext(project: project)).toOpaque()
+    let handle = Unmanaged.passRetained(AgentContext(project: project)).toOpaque()
+    HandleRegistry.shared.register(handle)
+    return handle
 }
 
 @_cdecl("palmier_agent_destroy")
 public func palmierAgentDestroy(_ handle: UnsafeMutableRawPointer?) {
-    guard let handle else { return }
+    guard let handle, HandleRegistry.shared.unregister(handle) else { return }
     Unmanaged<AgentContext>.fromOpaque(handle).release()
 }
 

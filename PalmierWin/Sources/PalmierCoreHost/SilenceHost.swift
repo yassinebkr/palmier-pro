@@ -29,7 +29,8 @@ public func palmierDetectSilence(_ path: UnsafePointer<CChar>?,
                                  _ bufSize: Int32) -> Int32 {
     guard let path, thresholdDb.isFinite, thresholdDb >= -96, thresholdDb <= 0,
           minSilenceMs >= 0, paddingMs >= 0 else { return 0 }
-    guard let decoder = try? FFmpegAudioDecoder(path: String(cString: path)) else { return 0 }
+    guard let mediaPath = nonEmptyPath(path),
+          let decoder = try? FFmpegAudioDecoder(path: mediaPath) else { return 0 }
 
     let threshold = Float(pow(10.0, thresholdDb / 20.0))
     var silentWindows: [Bool] = []

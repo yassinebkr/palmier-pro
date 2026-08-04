@@ -947,7 +947,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     void PerformRedo() => Undo.Redo();
     bool CanRedo => Undo.CanRedo;
 
+    int disposed;
+
+    /// Shutdown order matters: stop the agent poller before its handle dies,
+    /// stop the render loop before the project it composites dies. Called
+    /// from the window's Closed event; safe to call twice.
     public void Dispose() {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+        Agent.Shutdown();
+        Media.Generate.CancelAll();
+        engine?.Dispose();
         if (agentHandle != IntPtr.Zero) {
             CoreApi.palmier_agent_destroy(agentHandle);
             agentHandle = IntPtr.Zero;

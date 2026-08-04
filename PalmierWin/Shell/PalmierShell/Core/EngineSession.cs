@@ -127,7 +127,13 @@ public sealed class EngineSession : IDisposable {
         }
     }
 
+    int disposed;
+
+    /// Idempotent: both the window teardown and the view model can end up
+    /// disposing the session, and a second palmier_engine_destroy on the same
+    /// handle is a use-after-free.
     public void Dispose() {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         cts.Cancel();
         // Long enough to outlast a frame stuck on the engine's own GPU timeout:
         // destroying the engine while the loop is still inside it is a crash on

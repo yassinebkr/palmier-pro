@@ -24,9 +24,8 @@ import PalmierCore
 @_cdecl("palmier_export_fcpxml")
 public func palmierExportFcpxml(_ projectHandle: UnsafeMutableRawPointer?,
                                 _ path: UnsafePointer<CChar>?) -> Int32 {
-    guard let projectHandle, let path else { return 0 }
+    guard let projectHandle, let outputPath = nonEmptyPath(path) else { return 0 }
     let project = Unmanaged<ProjectContext>.fromOpaque(projectHandle).takeUnretainedValue()
-    let outputPath = String(cString: path)
     let timeline = project.snapshot()
     guard timeline.totalFrames > 0 else { return 0 }
     let size = project.renderSize
