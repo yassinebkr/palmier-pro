@@ -82,9 +82,17 @@
               <TextBlock Text="Export" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <Border Width="22" Height="22" CornerRadius="11" Background="#7A5CC5">
-            <TextBlock Text="Y" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
+          <Button Classes="icon" ToolTip.Tip="About and settings">
+            <Border Width="22" Height="22" CornerRadius="11" Background="#7A5CC5">
+              <TextBlock Text="Y" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <Button.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="Settings&#x2026;" Click="OnSettingsClick"/>
+                <MenuItem Header="About PalmierWin" Click="OnAboutClick"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
         </StackPanel>
       </Grid>
       </DockPanel>
