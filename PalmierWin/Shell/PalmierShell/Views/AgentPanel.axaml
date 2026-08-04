@@ -73,7 +73,7 @@
                 <!-- Error, with a retry that reuses the failed turn -->
                 <StackPanel Grid.Column="0" IsVisible="{Binding IsError}" Spacing="4">
                   <SelectableTextBlock Text="{Binding Text}" FontSize="11"
-                                       TextWrapping="Wrap" Foreground="#E54F4F"/>
+                                       TextWrapping="Wrap" Foreground="{StaticResource ThemeErrorBrush}"/>
                   <Button Content="Retry" FontSize="11" Padding="8,2" HorizontalAlignment="Left"
                           IsVisible="{Binding CanRetry}"
                           Command="{Binding $parent[ItemsControl].((vm:AgentViewModel)DataContext).RetryCommand}"
@@ -142,10 +142,10 @@
           <views:ModelBox Grid.Column="0" ItemsSource="{Binding Models}" MaxWidth="140"
                           Text="{Binding SelectedModel, Mode=TwoWay}" HorizontalAlignment="Left"
                           VerticalAlignment="Center" ToolTip.Tip="{Binding SelectedModel}"/>
-          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="#3FB950"
+          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="{StaticResource ThemeSuccessBrush}"
                    VerticalAlignment="Center"
                    ToolTip.Tip="API key set" IsVisible="{Binding HasApiKey}"/>
-          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="#E54F4F"
+          <Ellipse Grid.Column="1" Width="6" Height="6" Margin="8,0" Fill="{StaticResource ThemeErrorBrush}"
                    VerticalAlignment="Center"
                    ToolTip.Tip="No API key — set one in Settings"
                    IsVisible="{Binding !HasApiKey}"/>

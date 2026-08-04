@@ -186,7 +186,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     /// the UI thread; applied once it returns.
     async Task ApplyPreferencesAsync() {
         var settings = await Task.Run(SettingsStore.Load);
-        Accent.Apply(settings.Accent);
         Timeline.SnapEnabled = settings.SnapEnabled;
         PreferencesApplied?.Invoke();
     }

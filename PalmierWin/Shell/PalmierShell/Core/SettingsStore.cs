@@ -15,9 +15,6 @@ public sealed record AppSettings(string Provider, string Model) {
     public IReadOnlyDictionary<string, string> Models { get; init; } =
         new Dictionary<string, string>();
 
-    /// Accent colour as #RRGGBB; empty means the built-in amber.
-    public string Accent { get; init; } = "";
-
     public bool SnapEnabled { get; init; } = true;
 
     public string KeyFor(string provider) => Keys.GetValueOrDefault(provider, "");
@@ -55,7 +52,6 @@ public static class SettingsStore {
     sealed record Persisted(string Provider, string Model, string ApiKeyProtected) {
         public Dictionary<string, string> KeysProtected { get; init; } = new();
         public Dictionary<string, string> Models { get; init; } = new();
-        public string Accent { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
     }
 
@@ -79,7 +75,6 @@ public static class SettingsStore {
             return new AppSettings(persisted.Provider, persisted.Model) {
                 Keys = keys,
                 Models = new Dictionary<string, string>(persisted.Models),
-                Accent = persisted.Accent,
                 SnapEnabled = persisted.SnapEnabled,
             };
         } catch {
@@ -102,7 +97,6 @@ public static class SettingsStore {
             new Persisted(settings.Provider, settings.Model, "") {
                 KeysProtected = encrypted,
                 Models = new Dictionary<string, string>(settings.Models),
-                Accent = settings.Accent,
                 SnapEnabled = settings.SnapEnabled,
             }));
     }
