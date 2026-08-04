@@ -32,13 +32,13 @@
     <TextBlock x:Name="InfoText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
     <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <TextBlock Text="Queue keeps jobs running in the background." FontSize="10"
-                 VerticalAlignment="Center"
-                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
       <Button x:Name="CloseButton" Content="Close" Click="OnClose"/>
       <Button x:Name="QueueButton" Content="Queue" Click="OnQueue"/>
       <Button x:Name="ExportButton" Content="Export Now" Click="OnExportNow" Classes="primary"/>
     </StackPanel>
+    <TextBlock Text="Queue keeps jobs running in the background." FontSize="10"
+               HorizontalAlignment="Right"
+               Foreground="{StaticResource ThemeTextMutedBrush}"/>
     <StackPanel x:Name="JobsPanel" Spacing="6"/>
   </StackPanel>
   </StackPanel>
