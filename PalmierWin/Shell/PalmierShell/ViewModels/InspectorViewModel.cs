@@ -362,12 +362,47 @@ public sealed partial class InspectorViewModel : ObservableObject {
         }
     }
 
+    /// macOS EffectRegistry param ranges. Free-text fields can type anything;
+    /// out-of-range values produce degenerate output (e.g. whites > 1.25 drives
+    /// the levels kernel's white point negative → the frame goes pure white).
+    static readonly Dictionary<string, (double Min, double Max)> EffectParamRanges = new() {
+        ["color.blacksWhites:blacks"] = (-1, 1),
+        ["color.blacksWhites:whites"] = (-1, 1),
+        ["color.highlightsShadows:highlights"] = (-1, 1),
+        ["color.highlightsShadows:shadows"] = (-1, 1),
+        ["detail.clarity:clarity"] = (-1, 1),
+        ["detail.clarity:dehaze"] = (-1, 1),
+        ["stylize.vignette:amount"] = (-1, 1),
+        ["stylize.vignette:midpoint"] = (0, 1),
+        ["stylize.vignette:roundness"] = (-1, 1),
+        ["stylize.vignette:feather"] = (0, 1),
+        ["stylize.grain:amount"] = (0, 1),
+        ["stylize.grain:size"] = (0.5, 4),
+        ["stylize.glow:intensity"] = (0, 1),
+        ["stylize.glow:radius"] = (0, 100),
+        ["stylize.glow:threshold"] = (0, 1),
+        ["stylize.glow:warmth"] = (0, 1),
+        ["key.chroma:keyColor.r"] = (0, 1),
+        ["key.chroma:keyColor.g"] = (0, 1),
+        ["key.chroma:keyColor.b"] = (0, 1),
+        ["key.chroma:threshold"] = (0, 1),
+        ["key.chroma:spill"] = (0, 1),
+    };
+
+    /// Clamps effect params to their EffectRegistry ranges in place.
+    public static void ClampEffectParams(string type, Dictionary<string, object> values) {
+        foreach (var key in values.Keys.ToList())
+            if (values[key] is double d && EffectParamRanges.TryGetValue($"{type}:{key}", out var range))
+                values[key] = Math.Clamp(d, range.Min, range.Max);
+    }
+
     /// Upserts one effect, or removes it when `values` is null. Removal of an
     /// effect that is not on the clip is a quiet no-op — refreshing a default
     /// field must not spam refusals.
     void CommitEffect(string name, string type, Dictionary<string, object>? values) {
         if (refreshing || timeline.SelectedClipId is not { } clipId) return;
         if (values is null && timeline.SelectedClip?.EffectOf(type) is null) return;
+        if (values is not null) ClampEffectParams(type, values);
         string json = values is null
             ? "{}"
             : System.Text.Json.JsonSerializer.Serialize(values);
