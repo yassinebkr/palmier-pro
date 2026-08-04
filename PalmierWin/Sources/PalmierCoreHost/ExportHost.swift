@@ -66,9 +66,8 @@ final class ExportContext: @unchecked Sendable {
 @_cdecl("palmier_export_start")
 public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
                                _ path: UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? {
-    guard let projectHandle, let path else { return nil }
+    guard let projectHandle, let outputPath = nonEmptyPath(path) else { return nil }
     let project = Unmanaged<ProjectContext>.fromOpaque(projectHandle).takeUnretainedValue()
-    let outputPath = String(cString: path)
     let timeline = project.snapshot()
     guard timeline.totalFrames > 0 else { return nil }
 
@@ -81,7 +80,9 @@ public func palmierExportStart(_ projectHandle: UnsafeMutableRawPointer?,
     }
     thread.name = "palmier-export"
     thread.start()
-    return Unmanaged.passRetained(ctx).toOpaque()
+    let handle = Unmanaged.passRetained(ctx).toOpaque()
+    HandleRegistry.shared.register(handle)
+    return handle
 }
 
 /// Progress: 0–100 while running, 101 when finished successfully, -1 on
@@ -131,7 +132,7 @@ public func palmierExportError(_ handle: UnsafeMutableRawPointer?,
 
 @_cdecl("palmier_export_destroy")
 public func palmierExportDestroy(_ handle: UnsafeMutableRawPointer?) {
-    guard let handle else { return }
+    guard let handle, HandleRegistry.shared.unregister(handle) else { return }
     Unmanaged<ExportContext>.fromOpaque(handle).release()
 }
 

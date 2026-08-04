@@ -228,12 +228,14 @@ struct ProjectSnapshot: Codable {
 /// Creates an empty project (one video + one audio track). Never NULL.
 @_cdecl("palmier_project_create")
 public func palmierProjectCreate() -> UnsafeMutableRawPointer {
-    Unmanaged.passRetained(ProjectContext()).toOpaque()
+    let handle = Unmanaged.passRetained(ProjectContext()).toOpaque()
+    HandleRegistry.shared.register(handle)
+    return handle
 }
 
 @_cdecl("palmier_project_destroy")
 public func palmierProjectDestroy(_ handle: UnsafeMutableRawPointer?) {
-    guard let handle else { return }
+    guard let handle, HandleRegistry.shared.unregister(handle) else { return }
     let project = Unmanaged<ProjectContext>.fromOpaque(handle).takeUnretainedValue()
     project.shutdownCapture()
     Unmanaged<ProjectContext>.fromOpaque(handle).release()
@@ -373,8 +375,7 @@ public func palmierProjectLoadJson(_ handle: UnsafeMutableRawPointer?,
 @_cdecl("palmier_project_set_preview_source")
 public func palmierProjectSetPreviewSource(_ handle: UnsafeMutableRawPointer?,
                                            _ path: UnsafePointer<CChar>?) -> Int32 {
-    guard let ctx = projectContext(handle), let path else { return 0 }
-    let mediaPath = String(cString: path)
+    guard let ctx = projectContext(handle), let mediaPath = nonEmptyPath(path) else { return 0 }
     guard let frames = sourceDurationFrames(path: mediaPath), frames > 0 else { return 0 }
 
     var source = Timeline(name: "Source")
@@ -415,8 +416,7 @@ public func palmierProjectTimelineName(_ handle: UnsafeMutableRawPointer?,
 @_cdecl("palmier_probe_media")
 public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
                               _ buf: UnsafeMutablePointer<CChar>?, _ bufSize: Int32) -> Int32 {
-    guard let path, let buf, bufSize > 0 else { return 0 }
-    let swiftPath = String(cString: path)
+    guard let path, let buf, bufSize > 0, let swiftPath = nonEmptyPath(path) else { return 0 }
 
     var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
     guard swiftPath.withCString({ avformat_open_input(&fmtCtx, $0, nil, nil) }) == 0, let fmt = fmtCtx else { return 0 }
@@ -478,8 +478,8 @@ private func addClip(_ handle: UnsafeMutableRawPointer?,
                      _ mediaPath: UnsafePointer<CChar>?, _ durationFrames: Int32,
                      startFrame: Int?,
                      _ idBuf: UnsafeMutablePointer<CChar>?, _ idBufSize: Int32) -> Int32 {
-    guard let ctx = projectContext(handle), let mediaPath, let idBuf, durationFrames > 0 else { return 0 }
-    let path = String(cString: mediaPath)
+    guard let ctx = projectContext(handle), let path = nonEmptyPath(mediaPath),
+          let idBuf, durationFrames > 0 else { return 0 }
     let hasAudio = FFmpegAudioDecoder.hasAudioStream(path: path)
     var clip = Clip(mediaRef: path, startFrame: 0, durationFrames: Int(durationFrames))
     guard writeCString(clip.id, into: idBuf, size: idBufSize) == 1 else { return 0 }

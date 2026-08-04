@@ -10,7 +10,7 @@ public func palmierWaveform(_ path: UnsafePointer<CChar>?,
                             _ buf: UnsafeMutablePointer<Float>?, _ columns: Int32) -> Int32 {
     guard let path, let buf, columns > 0 else { return 0 }
     let swiftPath = String(cString: path)
-    guard let decoder = try? FFmpegAudioDecoder(path: swiftPath) else { return 0 }
+    guard !swiftPath.isEmpty, let decoder = try? FFmpegAudioDecoder(path: swiftPath) else { return 0 }
 
     let channels = FFmpegAudioDecoder.channels
     let chunkFrames = 4096

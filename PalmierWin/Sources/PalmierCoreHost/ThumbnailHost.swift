@@ -28,7 +28,7 @@ public func palmierExtractFrame(_ path: UnsafePointer<CChar>?, _ timelineFrame: 
                                 _ buf: UnsafeMutablePointer<UInt8>?, _ bufSize: Int32) -> Int32 {
     guard let path else { return 0 }
     let swiftPath = String(cString: path)
-    guard let decoder = try? FFmpegDecoder(path: swiftPath) else { return 0 }
+    guard !swiftPath.isEmpty, let decoder = try? FFmpegDecoder(path: swiftPath) else { return 0 }
     let width = decoder.info.width, height = decoder.info.height
     guard width > 0, height > 0 else { return 0 }
     let needed = width * height * 4
@@ -62,7 +62,7 @@ public func palmierThumbnails(_ path: UnsafePointer<CChar>?,
     let tileBytes = tileW * tileH * 4
     guard Int64(bufSize) >= Int64(tileBytes) * Int64(count) else { return 0 }
     let swiftPath = String(cString: path)
-    guard let decoder = try? FFmpegDecoder(path: swiftPath) else { return 0 }
+    guard !swiftPath.isEmpty, let decoder = try? FFmpegDecoder(path: swiftPath) else { return 0 }
     let srcW = decoder.info.width, srcH = decoder.info.height
     guard srcW > 0, srcH > 0 else { return 0 }
 

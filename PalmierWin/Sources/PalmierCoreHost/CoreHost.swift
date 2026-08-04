@@ -147,7 +147,9 @@ public func palmierEngineCreate(_ hwnd: UnsafeMutableRawPointer?) -> UnsafeMutab
                                           window: window, surface: surface) else { return nil }
     let ctx = EngineContext(instance: instance, device: device, window: window,
                             surface: surface, swapchain: swapchain)
-    return Unmanaged.passRetained(ctx).toOpaque()
+    let handle = Unmanaged.passRetained(ctx).toOpaque()
+    HandleRegistry.shared.register(handle)
+    return handle
 }
 
 /// Renders one frame and presents. With a project attached this composites
@@ -261,9 +263,10 @@ public func palmierEngineRenderFrame(_ handle: UnsafeMutableRawPointer?, _ frame
 
 /// Releases the engine handle created by palmier_engine_create. The context's
 /// deinit tears down swapchain → device; the instance goes last, here.
+/// A second destroy on the same handle is a no-op, not a use-after-free.
 @_cdecl("palmier_engine_destroy")
 public func palmierEngineDestroy(_ handle: UnsafeMutableRawPointer?) {
-    guard let handle else { return }
+    guard let handle, HandleRegistry.shared.unregister(handle) else { return }
     let instance = Unmanaged<EngineContext>.fromOpaque(handle).takeUnretainedValue().instance
     Unmanaged<EngineContext>.fromOpaque(handle).release()
     Vulkan.destroyInstance(instance)

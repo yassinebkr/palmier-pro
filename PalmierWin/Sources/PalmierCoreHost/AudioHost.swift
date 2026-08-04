@@ -54,12 +54,14 @@ public func palmierAudioCreate(_ projectHandle: UnsafeMutableRawPointer?) -> Uns
     guard let engine = WinAudioEngine() else { return nil }
     let ctx = AudioContext(engine: engine, project: project)
     ctx.syncIfNeeded()
-    return Unmanaged.passRetained(ctx).toOpaque()
+    let handle = Unmanaged.passRetained(ctx).toOpaque()
+    HandleRegistry.shared.register(handle)
+    return handle
 }
 
 @_cdecl("palmier_audio_destroy")
 public func palmierAudioDestroy(_ handle: UnsafeMutableRawPointer?) {
-    guard let handle else { return }
+    guard let handle, HandleRegistry.shared.unregister(handle) else { return }
     Unmanaged<AudioContext>.fromOpaque(handle).release()
 }
 
