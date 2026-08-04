@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WordTiming: Codable, Sendable, Equatable {
+public struct WordTiming: Codable, Sendable, Equatable, Hashable {
     public var text: String
     public var startFrame: Int
     public var endFrame: Int
