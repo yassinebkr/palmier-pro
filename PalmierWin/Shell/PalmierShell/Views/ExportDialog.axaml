@@ -19,6 +19,7 @@
     </DockPanel>
   </Border>
   <StackPanel Margin="16" Spacing="10">
+    <TextBlock Text="Format" FontSize="11" Foreground="{StaticResource ThemeTextMutedBrush}"/>
     <ComboBox x:Name="FormatBox" SelectedIndex="0" HorizontalAlignment="Stretch"
               SelectionChanged="OnFormatChanged">
       <ComboBoxItem>MP4 video (H.264)</ComboBoxItem>
@@ -31,6 +32,9 @@
     <TextBlock x:Name="InfoText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
     <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <TextBlock Text="Queue keeps jobs running in the background." FontSize="10"
+                 VerticalAlignment="Center"
+                 Foreground="{StaticResource ThemeTextMutedBrush}"/>
       <Button x:Name="CloseButton" Content="Close" Click="OnClose"/>
       <Button x:Name="QueueButton" Content="Queue" Click="OnQueue"/>
       <Button x:Name="ExportButton" Content="Export Now" Click="OnExportNow"

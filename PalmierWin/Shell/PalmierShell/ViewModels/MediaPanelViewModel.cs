@@ -225,6 +225,18 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
     /// Raised when the user requests adding a media item to the timeline.
     public event Action<MediaItemViewModel>? AddToTimelineRequested;
 
+    /// Raised for "Remove from Library" (context menu / Delete key). The
+    /// owner confirms and removes any timeline clips first.
+    public event Action<MediaItemViewModel>? RemoveItemRequested;
+    public void RequestRemove(MediaItemViewModel item) => RemoveItemRequested?.Invoke(item);
+
+    /// Drops the item from the library. Not undoable — neither is import.
+    public void RemoveItem(MediaItemViewModel item) {
+        if (!Items.Remove(item)) return;
+        if (SelectedItem == item) SelectedItem = null;
+        NotifyGroups();
+    }
+
     /// Supplied by the view so the command can open the file picker.
     public Func<IStorageProvider>? StorageProviderSource { get; set; }
 

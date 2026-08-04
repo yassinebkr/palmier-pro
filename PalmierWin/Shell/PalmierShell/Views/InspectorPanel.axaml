@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:PalmierShell.ViewModels"
+             xmlns:views="clr-namespace:PalmierShell.Views"
              x:Class="PalmierShell.Views.InspectorPanel"
              x:DataType="vm:InspectorViewModel">
   <UserControl.Styles>
@@ -42,6 +43,49 @@
     <Style Selector="Button.key:pointerover">
       <Setter Property="Opacity" Value="1"/>
     </Style>
+    <!-- Accordion section: header row + chevron over a hairline, no box
+         chrome. All collapsed except the primary section of each mode. -->
+    <Style Selector="Expander.section">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <StackPanel Margin="0,6,0,0">
+            <ToggleButton IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                          Background="Transparent" BorderThickness="0" Padding="0,2"
+                          HorizontalContentAlignment="Stretch" Cursor="Hand">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{TemplateBinding Header}" FontSize="10" VerticalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                <Path Grid.Column="1" Classes="chev" Data="M 0,0 L 5,4 L 0,8 Z" Stretch="Uniform"
+                      Width="6" Height="8" Margin="6,0,0,0" VerticalAlignment="Center"
+                      Fill="{StaticResource ThemeTextMutedBrush}">
+                  <Path.RenderTransform>
+                    <RotateTransform Angle="0"/>
+                  </Path.RenderTransform>
+                  <Path.Transitions>
+                    <Transitions>
+                      <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12"/>
+                    </Transitions>
+                  </Path.Transitions>
+                </Path>
+              </Grid>
+            </ToggleButton>
+            <Border Height="1" Background="{StaticResource ThemeBorderBrush}" Margin="0,2,0,0"/>
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              IsVisible="{TemplateBinding IsExpanded}"
+                              Margin="0,4,0,2"/>
+          </StackPanel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Expander.section /template/ ToggleButton:checked Path.chev">
+      <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+    </Style>
+    <Style Selector="Expander.section /template/ ToggleButton:checked">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Expander.section /template/ ToggleButton:pointerover">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
   </UserControl.Styles>
   <ScrollViewer>
     <StackPanel Margin="12,8">
@@ -49,215 +93,250 @@
                  Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
       <!-- Nothing selected: fall back to the project/sequence summary. -->
       <StackPanel IsVisible="{Binding NothingSelected}">
-        <TextBlock Classes="section" Text="PROJECT"/>
-        <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto">
-          <Grid.Styles>
-            <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
-          </Grid.Styles>
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Name"/>
-          <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="Untitled Project"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Duration"/>
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding ProjectDuration}"
-                     FontFamily="Consolas"/>
-        </Grid>
-        <TextBlock Classes="section" Text="SETTINGS"/>
-        <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto">
-          <Grid.Styles>
-            <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
-          </Grid.Styles>
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Resolution"/>
-          <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="{Binding ProjectResolution}"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Frame Rate"/>
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding ProjectFrameRate}"/>
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Aspect Ratio"/>
-          <TextBlock Grid.Row="2" Grid.Column="1" Classes="field" Text="{Binding ProjectAspect}"/>
-        </Grid>
+        <Expander Classes="section" Header="PROJECT" IsExpanded="True">
+          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto">
+            <Grid.Styles>
+              <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
+            </Grid.Styles>
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Name"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="Untitled Project"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Duration"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding ProjectDuration}"
+                       FontFamily="Consolas"/>
+          </Grid>
+        </Expander>
+        <Expander Classes="section" Header="SETTINGS">
+          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto">
+            <Grid.Styles>
+              <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
+            </Grid.Styles>
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Resolution"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="{Binding ProjectResolution}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Frame Rate"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding ProjectFrameRate}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Aspect Ratio"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="field" Text="{Binding ProjectAspect}"/>
+          </Grid>
+        </Expander>
       </StackPanel>
       <StackPanel IsVisible="{Binding HasMediaSelection}">
         <TextBlock Text="{Binding MediaName}" FontSize="13" Margin="0,8,0,0"/>
-        <TextBlock Classes="section" Text="DETAILS"/>
-        <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-          <Grid.Styles>
-            <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
-          </Grid.Styles>
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Type"/>
-          <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="Video"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Resolution"/>
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding MediaResolution}"/>
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="FPS"/>
-          <TextBlock Grid.Row="2" Grid.Column="1" Classes="field" Text="{Binding MediaFps}"/>
-          <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Duration"/>
-          <TextBlock Grid.Row="3" Grid.Column="1" Classes="field" Text="{Binding MediaDuration}"/>
-          <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Path"/>
-          <TextBlock Grid.Row="4" Grid.Column="1" Classes="field" Text="{Binding MediaPath}"
-                     TextWrapping="Wrap" FontSize="10"/>
-        </Grid>
+        <Expander Classes="section" Header="DETAILS" IsExpanded="True">
+          <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+            <Grid.Styles>
+              <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
+            </Grid.Styles>
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Type"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="Video"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Resolution"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding MediaResolution}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="FPS"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="field" Text="{Binding MediaFps}"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Duration"/>
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="field" Text="{Binding MediaDuration}"/>
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Path"/>
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="field" Text="{Binding MediaPath}"
+                       TextWrapping="Wrap" FontSize="10"/>
+          </Grid>
+        </Expander>
       </StackPanel>
       <!-- Provenance: what generated this clip, and the stills it came from. -->
       <StackPanel IsVisible="{Binding IsGenerated}">
-        <TextBlock Classes="section" Text="GENERATED"/>
-        <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Provider"/>
-          <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="{Binding GenerationProvider}"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Model"/>
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding GenerationModel}"
-                     TextWrapping="Wrap"/>
-        </Grid>
-        <TextBlock Classes="section" Text="PROMPT"/>
-        <SelectableTextBlock Text="{Binding GenerationPrompt}" FontSize="11" TextWrapping="Wrap"
-                             Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
-        <Grid ColumnDefinitions="*,*" ColumnSpacing="6" Margin="0,8,0,0">
-          <Image Grid.Column="0" Source="{Binding GenerationFirstFrame}" Height="54"
-                 Stretch="UniformToFill"/>
-          <Image Grid.Column="1" Source="{Binding GenerationLastFrame}" Height="54"
-                 Stretch="UniformToFill"/>
-        </Grid>
+        <Expander Classes="section" Header="GENERATED">
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Provider"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="field" Text="{Binding GenerationProvider}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Model"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="field" Text="{Binding GenerationModel}"
+                       TextWrapping="Wrap"/>
+          </Grid>
+        </Expander>
+        <Expander Classes="section" Header="PROMPT">
+          <StackPanel>
+            <SelectableTextBlock Text="{Binding GenerationPrompt}" FontSize="11" TextWrapping="Wrap"
+                                 Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="6" Margin="0,8,0,0">
+              <Image Grid.Column="0" Source="{Binding GenerationFirstFrame}" Height="54"
+                     Stretch="UniformToFill"/>
+              <Image Grid.Column="1" Source="{Binding GenerationLastFrame}" Height="54"
+                     Stretch="UniformToFill"/>
+            </Grid>
+          </StackPanel>
+        </Expander>
       </StackPanel>
       <StackPanel IsVisible="{Binding HasSelection}">
         <TextBlock Text="{Binding ClipName}" FontSize="13" Margin="0,8,0,0"/>
 
         <StackPanel IsVisible="{Binding IsTextClip}">
-          <TextBlock Classes="section" Text="TEXT"/>
-          <TextBox Classes="value" Text="{Binding TextContent}" AcceptsReturn="False"/>
-          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" Margin="0,4,0,0">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Size"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding TextFontSize}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding TextColorHex}"
-                     Watermark="#RRGGBB"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Align"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding TextAlignment}"
-                     Watermark="left / center / right"/>
-          </Grid>
+          <Expander Classes="section" Header="TEXT" IsExpanded="True">
+            <StackPanel>
+              <TextBox Classes="value" Text="{Binding TextContent}" AcceptsReturn="False"/>
+              <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" Margin="0,4,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Size"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding TextFontSize}"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding TextColorHex}"
+                         Watermark="#RRGGBB"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Align"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding TextAlignment}"
+                         Watermark="left / center / right"/>
+              </Grid>
+            </StackPanel>
+          </Expander>
         </StackPanel>
 
-        <TextBlock Classes="section" Text="TRANSFORM"/>
-        <!-- Each animatable row carries its own keyframe diamond, so it is
-             always clear which property gets a key. -->
-        <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Center X"/>
-          <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding CenterX}"/>
-          <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Center Y"/>
-          <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding CenterY}"/>
-          <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Width"/>
-          <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ScaleWidth}"/>
-          <Button Grid.Row="2" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
-          <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Height"/>
-          <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ScaleHeight}"/>
-          <Button Grid.Row="3" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
-          <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Rotation"/>
-          <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Rotation}"/>
-          <Button Grid.Row="4" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe rotation at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="rotation"/>
-        </Grid>
+        <Expander Classes="section" Header="TRANSFORM" IsExpanded="True">
+          <!-- Each animatable row carries its own keyframe diamond, so it is
+               always clear which property gets a key. -->
+          <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Center X"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding CenterX}"/>
+            <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Center Y"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding CenterY}"/>
+            <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe position at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="position"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Width"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ScaleWidth}"/>
+            <Button Grid.Row="2" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Height"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ScaleHeight}"/>
+            <Button Grid.Row="3" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe scale at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="scale"/>
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Rotation"/>
+            <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Rotation}"/>
+            <Button Grid.Row="4" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe rotation at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="rotation"/>
+          </Grid>
+        </Expander>
 
-        <TextBlock Classes="section" Text="PLAYBACK"/>
-        <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto">
-          <TextBlock Grid.Column="0" Classes="field" Text="Speed"/>
-          <TextBox Grid.Column="1" Classes="value" Text="{Binding Speed}"/>
-        </Grid>
+        <Expander Classes="section" Header="PLAYBACK">
+          <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto">
+            <TextBlock Grid.Column="0" Classes="field" Text="Speed"/>
+            <TextBox Grid.Column="1" Classes="value" Text="{Binding Speed}"/>
+          </Grid>
+        </Expander>
 
-        <TextBlock Classes="section" Text="LEVELS"/>
-        <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Volume"/>
-          <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VolumeDb}"/>
-          <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe volume at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="volume"/>
-          <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Opacity"/>
-          <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Opacity}"/>
-          <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe opacity at the playhead"
-                  Command="{Binding AddKeyframeCommand}" CommandParameter="opacity"/>
-          <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Fade In"/>
-          <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding FadeInSeconds}"/>
-          <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Fade Out"/>
-          <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding FadeOutSeconds}"/>
-        </Grid>
+        <Expander Classes="section" Header="LEVELS">
+          <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Volume"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VolumeDb}"/>
+            <Button Grid.Row="0" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe volume at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="volume"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Opacity"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Opacity}"/>
+            <Button Grid.Row="1" Grid.Column="2" Classes="key" ToolTip.Tip="Keyframe opacity at the playhead"
+                    Command="{Binding AddKeyframeCommand}" CommandParameter="opacity"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Fade In"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding FadeInSeconds}"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Fade Out"/>
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding FadeOutSeconds}"/>
+          </Grid>
+        </Expander>
 
         <!-- The engine's grading stack. Zero = off; committing a default
              removes the effect rather than storing a no-op. -->
         <StackPanel IsVisible="{Binding IsVideoClip}">
-          <TextBlock Classes="section" Text="ADJUST"/>
-          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
-                ColumnSpacing="0" RowSpacing="2">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Blacks"
-                       ToolTip.Tip="-1 to 1"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Blacks}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Whites"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Whites}"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Highlights"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Highlights}"/>
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Shadows"/>
-            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding Shadows}"/>
-            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Clarity"/>
-            <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Clarity}"/>
-            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field" Text="Dehaze"/>
-            <TextBox Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Dehaze}"/>
-          </Grid>
+          <Expander Classes="section" Header="ADJUST">
+            <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                  ColumnSpacing="0" RowSpacing="2">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Blacks"
+                         ToolTip.Tip="-1 to 1"/>
+              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding Blacks}"/>
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Whites"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding Whites}"/>
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Highlights"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding Highlights}"/>
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Shadows"/>
+              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding Shadows}"/>
+              <TextBlock Grid.Row="4" Grid.Column="0" Classes="field" Text="Clarity"/>
+              <TextBox Grid.Row="4" Grid.Column="1" Classes="value" Text="{Binding Clarity}"/>
+              <TextBlock Grid.Row="5" Grid.Column="0" Classes="field" Text="Dehaze"/>
+              <TextBox Grid.Row="5" Grid.Column="1" Classes="value" Text="{Binding Dehaze}"/>
+            </Grid>
+          </Expander>
 
-          <TextBlock Classes="section" Text="EFFECTS"/>
-          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Vignette"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VignetteAmount}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Grain"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GrainAmount}"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Glow"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GlowIntensity}"/>
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Invert"/>
-            <CheckBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Center"
-                      IsChecked="{Binding InvertEnabled, Mode=TwoWay}"/>
-          </Grid>
+          <Expander Classes="section" Header="EFFECTS">
+            <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Vignette"/>
+              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding VignetteAmount}"/>
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Grain"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GrainAmount}"/>
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Glow"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GlowIntensity}"/>
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Invert"/>
+              <CheckBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Center"
+                        IsChecked="{Binding InvertEnabled, Mode=TwoWay}"/>
+            </Grid>
+          </Expander>
 
-          <TextBlock Classes="section" Text="COLOR WHEELS"/>
-          <Grid ColumnDefinitions="82,*,*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="2" ColumnSpacing="4">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Lift"
-                       ToolTip.Tip="R G B, -1 to 1"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding LiftR}"/>
-            <TextBox Grid.Row="0" Grid.Column="2" Classes="value" Text="{Binding LiftG}"/>
-            <TextBox Grid.Row="0" Grid.Column="3" Classes="value" Text="{Binding LiftB}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Gain"
-                       ToolTip.Tip="R G B, 1 = neutral"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding GainR}"/>
-            <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding GainG}"/>
-            <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding GainB}"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Gamma"
-                       ToolTip.Tip="R G B, 1 = neutral"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding GammaR}"/>
-            <TextBox Grid.Row="2" Grid.Column="2" Classes="value" Text="{Binding GammaG}"/>
-            <TextBox Grid.Row="2" Grid.Column="3" Classes="value" Text="{Binding GammaB}"/>
-          </Grid>
+          <!-- One wheel per channel group; a drag commits once on release.
+               Double-tap a wheel to reset it. -->
+          <Expander Classes="section" Header="COLOR WHEELS">
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8" Margin="0,4,0,0">
+              <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Text="LIFT" FontSize="9" HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                <views:ColorWheel x:Name="LiftWheel" Height="78"
+                                  Changed="OnWheelChanged" Committed="OnWheelCommitted"
+                                  ToolTip.Tip="Drag to tint the shadows; double-tap to reset"/>
+                <TextBlock Text="{Binding LiftReadout}" FontSize="9" FontFamily="Consolas"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="2">
+                <TextBlock Text="GAIN" FontSize="9" HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                <views:ColorWheel x:Name="GainWheel" Height="78"
+                                  Changed="OnWheelChanged" Committed="OnWheelCommitted"
+                                  ToolTip.Tip="Drag to tint the highlights; double-tap to reset"/>
+                <TextBlock Text="{Binding GainReadout}" FontSize="9" FontFamily="Consolas"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              </StackPanel>
+              <StackPanel Grid.Column="2" Spacing="2">
+                <TextBlock Text="GAMMA" FontSize="9" HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                <views:ColorWheel x:Name="GammaWheel" Height="78"
+                                  Changed="OnWheelChanged" Committed="OnWheelCommitted"
+                                  ToolTip.Tip="Drag to tint the midtones; double-tap to reset"/>
+                <TextBlock Text="{Binding GammaReadout}" FontSize="9" FontFamily="Consolas"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
+              </StackPanel>
+            </Grid>
+          </Expander>
 
-          <TextBlock Classes="section" Text="CHROMA KEY"/>
-          <Grid ColumnDefinitions="82,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2" ColumnSpacing="4">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Key"/>
-            <CheckBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Content="Enable"
-                      FontSize="11" IsChecked="{Binding ChromaKeyEnabled, Mode=TwoWay}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"
-                       ToolTip.Tip="R G B, 0 to 1"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding ChromaKeyR}"/>
-            <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding ChromaKeyG}"/>
-            <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding ChromaKeyB}"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Threshold"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ChromaThreshold}"/>
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Spill"/>
-            <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ChromaSpill}"/>
-          </Grid>
+          <Expander Classes="section" Header="CHROMA KEY">
+            <Grid ColumnDefinitions="82,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2" ColumnSpacing="4">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="Key"/>
+              <CheckBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Content="Enable"
+                        FontSize="11" IsChecked="{Binding ChromaKeyEnabled, Mode=TwoWay}"/>
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Color"
+                         ToolTip.Tip="R G B, 0 to 1"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding ChromaKeyR}"/>
+              <TextBox Grid.Row="1" Grid.Column="2" Classes="value" Text="{Binding ChromaKeyG}"/>
+              <TextBox Grid.Row="1" Grid.Column="3" Classes="value" Text="{Binding ChromaKeyB}"/>
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="field" Text="Threshold"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Classes="value" Text="{Binding ChromaThreshold}"/>
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="field" Text="Spill"/>
+              <TextBox Grid.Row="3" Grid.Column="1" Classes="value" Text="{Binding ChromaSpill}"/>
+            </Grid>
+          </Expander>
 
-          <TextBlock Classes="section" Text="LUT"/>
-          <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto" RowSpacing="2">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="File"/>
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding LutPath}"
-                     Watermark="No LUT" IsReadOnly="True"/>
-            <Button Grid.Row="0" Grid.Column="2" Content="…" Padding="8,2" Margin="4,0,0,0"
-                    Click="OnChooseLut" ToolTip.Tip="Choose a .cube LUT"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Intensity"/>
-            <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding LutIntensity}"/>
-          </Grid>
+          <Expander Classes="section" Header="LUT">
+            <Grid ColumnDefinitions="82,*,Auto" RowDefinitions="Auto,Auto" RowSpacing="2">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="field" Text="File"/>
+              <TextBox Grid.Row="0" Grid.Column="1" Classes="value" Text="{Binding LutPath}"
+                       Watermark="No LUT" IsReadOnly="True"/>
+              <Button Grid.Row="0" Grid.Column="2" Content="…" Padding="8,2" Margin="4,0,0,0"
+                      Click="OnChooseLut" ToolTip.Tip="Choose a .cube LUT"/>
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="field" Text="Intensity"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Classes="value" Text="{Binding LutIntensity}"/>
+            </Grid>
+          </Expander>
         </StackPanel>
       </StackPanel>
     </StackPanel>

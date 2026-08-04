@@ -10,7 +10,7 @@
       <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
     </Style>
   </UserControl.Styles>
-  <Grid RowDefinitions="Auto,Auto,*">
+  <Grid RowDefinitions="Auto,Auto,*" KeyDown="OnPanelKeyDown">
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,8,8,4">
       <Button Content="+ Import" Command="{Binding ImportCommand}"/>
       <Button Content="Generate" Command="{Binding Generate.ToggleOpenCommand}"/>
@@ -133,7 +133,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:MediaItemViewModel">
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="6,1" Height="26"
-                          Background="Transparent"
+                          Background="Transparent" Focusable="True"
                           DoubleTapped="OnItemDoubleTapped"
                           PointerPressed="OnItemPointerPressed"
                           PointerReleased="OnItemPointerReleased"
@@ -167,7 +167,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:MediaItemViewModel">
-            <StackPanel Classes="mediaItem" Margin="4" Spacing="2"
+            <StackPanel Classes="mediaItem" Margin="4" Spacing="2" Focusable="True"
                         Width="{Binding $parent[UserControl].((vm:MediaPanelViewModel)DataContext).TileWidth}"
                         Background="Transparent"
                         DoubleTapped="OnItemDoubleTapped"

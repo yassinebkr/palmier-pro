@@ -116,6 +116,28 @@ public class ClipEffectTests {
         }
     }
 
+    /// The shell's wheel mapping end to end: a full cyan drag on Gain halves
+    /// the red channel, so the red band must visibly dim.
+    [Fact]
+    public void WheelDragParamsReachTheCompositedPixels() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string id = CoreApi.AddClip(project, TestMediaPath("colorbands24.mp4"), 60)!;
+            var before = ChannelMeans(Capture(project, 10));
+            Assert.True(before.R > 150, $"fixture: red band mean R was {before.R}");
+            var (r, g, b) = ColorWheelMath.ToParams(ColorWheelMath.WheelKind.Gain, -1, 0, 0);
+            string json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object> {
+                ["gain.r"] = r, ["gain.g"] = g, ["gain.b"] = b });
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id, "color.wheels", json));
+            var after = ChannelMeans(Capture(project, 10));
+            Assert.True(after.R < before.R * 0.75, $"cyan drag left R at {after.R} (was {before.R})");
+            Assert.True(Math.Abs(after.G - before.G * 1.25) < 12,
+                $"G off its 1.25 gain: {before.G} -> {after.G}");
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
     /// Keying the red band's colour makes those pixels transparent. Effects
     /// run on the composited frame (per-layer keying comes with per-layer
     /// effects), so the key shows in the readback's alpha, not the RGB.

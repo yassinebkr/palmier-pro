@@ -187,8 +187,9 @@ public partial class MainWindow : Window {
             area.Y + (area.Height - bounds.Height) / 2);
     }
 
-    /// Dev convenience: `PalmierShell.exe [--add-to-timeline] <files…>`
-    /// imports the files (and optionally appends them to the timeline).
+    /// Dev convenience: `PalmierShell.exe [--add-to-timeline] [--select-first-clip]
+    /// <files…>` imports the files (and optionally appends them to the
+    /// timeline and selects the first clip).
     async void OnOpened(object? sender, EventArgs e) {
         RecentreIfOffScreen();
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
@@ -198,6 +199,8 @@ public partial class MainWindow : Window {
             if (addToTimeline && viewModel.Media.Items.LastOrDefault() is { } item)
                 viewModel.Media.AddToTimelineCommand.Execute(item);
         }
+        if (args.Contains("--select-first-clip") && viewModel.Timeline.State is { } state)
+            viewModel.Timeline.SelectOnly(state.Tracks.SelectMany(t => t.Clips).FirstOrDefault()?.Id);
     }
 
     void OnViewerTabClose(object? sender, PointerPressedEventArgs e) {
