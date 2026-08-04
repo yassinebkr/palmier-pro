@@ -47,6 +47,24 @@ public static class TimelineMath {
         return Math.Clamp((db + 50f) / 50f, 0f, 1f);
     }
 
+    /// Where forward playback should start given a set loop: a playhead
+    /// parked outside the loop jumps to its start, one inside stays put.
+    public static int LoopEntryFrame(int playhead, int loopStart, int loopEnd) =>
+        loopStart >= 0 && loopEnd > loopStart && (playhead < loopStart || playhead >= loopEnd)
+            ? loopStart
+            : playhead;
+
+    /// Clamps a loop edge drag: start stays below end, end above start, at
+    /// least one frame of loop, inside the timeline.
+    public static int ClampLoopEdge(int edge, int frame, int? loopStart, int? loopEnd, int totalFrames) {
+        if (edge == 0) {
+            int max = loopEnd is { } e ? e - 1 : totalFrames;
+            return Math.Clamp(frame, 0, Math.Max(0, max));
+        }
+        int min = loopStart is { } s ? s + 1 : 1;
+        return Math.Clamp(frame, min, Math.Max(min, totalFrames));
+    }
+
     /// One playback tick. A set loop range wins when the tick crosses its end;
     /// otherwise normal play wraps to the start at the timeline's end while
     /// the shuttle clamps there and stops.
