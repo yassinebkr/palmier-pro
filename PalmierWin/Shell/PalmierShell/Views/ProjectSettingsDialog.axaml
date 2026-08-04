@@ -45,8 +45,7 @@
                Foreground="{StaticResource ThemeTimecodeBrush}"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
       <Button x:Name="CancelButton" Content="Cancel" Click="OnCancel"/>
-      <Button x:Name="ApplyButton" Content="Apply" Click="OnApply"
-              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+      <Button x:Name="ApplyButton" Content="Apply" Click="OnApply" Classes="primary"/>
     </StackPanel>
   </StackPanel>
   </StackPanel>

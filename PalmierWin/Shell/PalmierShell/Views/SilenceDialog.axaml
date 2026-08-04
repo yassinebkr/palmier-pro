@@ -38,7 +38,7 @@
       <Button x:Name="CancelButton" Content="Cancel" Click="OnCancel"/>
       <Button x:Name="DetectButton" Content="Detect" Click="OnDetect"/>
       <Button x:Name="ApplyButton" Content="Apply" Click="OnApply" IsEnabled="False"
-              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+              Classes="primary"/>
     </StackPanel>
   </StackPanel>
   </StackPanel>

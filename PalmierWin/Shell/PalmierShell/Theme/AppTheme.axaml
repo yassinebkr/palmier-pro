@@ -8,6 +8,10 @@
     <Color x:Key="ThemeTimecodeColor">#FFF29933</Color>
     <Color x:Key="ThemeErrorColor">#FFE54F4F</Color>
     <Color x:Key="ThemeSuccessColor">#FF4FB85F</Color>
+    <!-- The commit-button capsule: warm off-white with dark text, never the
+         accent. The accent is user-tunable; a primary action is not. -->
+    <Color x:Key="ThemePrimaryColor">#FFF5EFE4</Color>
+    <Color x:Key="ThemePrimaryTextColor">#FF1C1A17</Color>
     <Color x:Key="ThemeTrackVideoColor">#FF1D5878</Color>
     <Color x:Key="ThemeTrackAudioColor">#FF2E7765</Color>
     <Color x:Key="ThemeTrackTextColor">#FF715486</Color>
@@ -16,6 +20,11 @@
     <SolidColorBrush x:Key="ThemeRaisedBrush" Color="{StaticResource ThemeRaisedColor}"/>
     <SolidColorBrush x:Key="ThemeProminentBrush" Color="{StaticResource ThemeProminentColor}"/>
     <SolidColorBrush x:Key="ThemeTimecodeBrush" Color="{StaticResource ThemeTimecodeColor}"/>
+    <SolidColorBrush x:Key="ThemeErrorBrush" Color="{StaticResource ThemeErrorColor}"/>
+    <SolidColorBrush x:Key="ThemeSuccessBrush" Color="{StaticResource ThemeSuccessColor}"/>
+    <SolidColorBrush x:Key="ThemePrimaryBrush" Color="{StaticResource ThemePrimaryColor}"/>
+    <SolidColorBrush x:Key="ThemePrimaryTextBrush" Color="{StaticResource ThemePrimaryTextColor}"/>
+    <SolidColorBrush x:Key="ThemeFocusBrush" Color="#33FFFFFF"/>
     <SolidColorBrush x:Key="ThemeBorderBrush" Color="#29FFFFFF"/>
     <SolidColorBrush x:Key="ThemeTextBrush" Color="#FFFFFFFF"/>
     <SolidColorBrush x:Key="ThemeTextSecondaryBrush" Color="#CCFFFFFF"/>
@@ -24,6 +33,31 @@
     <SolidColorBrush x:Key="ThemeTrackVideoBrush" Color="{StaticResource ThemeTrackVideoColor}"/>
     <SolidColorBrush x:Key="ThemeTrackAudioBrush" Color="{StaticResource ThemeTrackAudioColor}"/>
     <SolidColorBrush x:Key="ThemeTrackTextBrush" Color="{StaticResource ThemeTrackTextColor}"/>
+    <!-- Fluent theme overrides: kill the bright default focus/hover borders. -->
+    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#33FFFFFF"/>
+    <!-- CheckBox: the checked state speaks the capsule language, not the
+         system accent. -->
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#F5EFE4"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#FCF8F0"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#DED5C2"/>
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#1C1A17"/>
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#1C1A17"/>
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#1C1A17"/>
+    <!-- ComboBox dropdown and focus: raised surface, hairline, no accent. -->
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF1E1E1E"/>
+    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundBorderBrushFocused" Color="#33FFFFFF"/>
+    <!-- Sliders: neutral track and thumb, never the system accent. -->
+    <SolidColorBrush x:Key="SliderTrackFill" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#29FFFFFF"/>
+    <SolidColorBrush x:Key="SliderTrackValueFill" Color="#73FFFFFF"/>
+    <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#8CFFFFFF"/>
+    <SolidColorBrush x:Key="SliderThumbBackground" Color="#FFD8D8D8"/>
+    <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFF5EFE4"/>
+    <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FFB9B9B9"/>
+    <!-- Text selection: a white wash, not the system accent. -->
+    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#40FFFFFF"/>
   </Styles.Resources>
   <Style Selector="Window">
     <Setter Property="Background" Value="{StaticResource ThemeBaseBrush}"/>
@@ -62,6 +96,89 @@
   </Style>
   <Style Selector="Button:disabled /template/ ContentPresenter">
     <Setter Property="Opacity" Value="0.45"/>
+  </Style>
+  <!-- Primary action: the warm off-white capsule with dark text. Reserved
+       for the one committing button in a dialog or footer. -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource ThemePrimaryBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource ThemePrimaryTextBrush}"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="14,5"/>
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#FFFCF8F0"/>
+  </Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="#FFDED5C2"/>
+  </Style>
+  <!-- Focus reads as a hairline, never the Fluent accent ring. -->
+  <Style Selector=":is(Control)">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border BorderBrush="{StaticResource ThemeFocusBrush}" BorderThickness="1"
+                CornerRadius="4" Margin="-3"/>
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <!-- Fields and combos: one raised surface, one hairline, one height. -->
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+  <Style Selector="ComboBoxItem">
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Margin" Value="2,0"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#0FFFFFFF"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="#14FFFFFF"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <!-- Dropdown surface: raised, hairline, 4px radius, at least as wide as
+       its combo (the template binds the popup's MinWidth to the control). -->
+  <Style Selector="ComboBox /template/ Border#PopupBorder">
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <Style Selector="MenuFlyoutPresenter">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="MinWidth" Value="180"/>
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+  <Style Selector="MenuItem:pointerover">
+    <Setter Property="Background" Value="#0FFFFFFF"/>
+  </Style>
+  <Style Selector="FlyoutPresenter">
+    <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <!-- Plain sliders (zoom, prefs) stay slim; the scrub style below slims
+       the preview bar further. -->
+  <Style Selector="Slider /template/ Thumb">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+  </Style>
+  <Style Selector="ProgressBar">
+    <Setter Property="Background" Value="{StaticResource ThemeProminentBrush}"/>
   </Style>
   <!-- Icon buttons sit on a surface only a shade darker than the hover fill,
        so they need a lift of their own: a white wash plus a brighter glyph.

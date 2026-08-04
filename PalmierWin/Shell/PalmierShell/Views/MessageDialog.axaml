@@ -9,7 +9,7 @@
         ExtendClientAreaTitleBarHeightHint="-1"
         Background="{StaticResource ThemeSurfaceBrush}">
   <StackPanel>
-  <Border Height="30" Background="{StaticResource ThemeRaisedBrush}"
+  <Border Height="32" Background="{StaticResource ThemeRaisedBrush}"
           BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
           PointerPressed="OnTitleBarPressed">
     <DockPanel>

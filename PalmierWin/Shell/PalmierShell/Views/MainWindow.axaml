@@ -208,8 +208,8 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
             <StackPanel.Styles>
               <Style Selector="Button">
-                <Setter Property="Width" Value="34"/>
-                <Setter Property="Height" Value="26"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Height" Value="24"/>
                 <Setter Property="Padding" Value="0"/>
               </Style>
               <Style Selector="Path">

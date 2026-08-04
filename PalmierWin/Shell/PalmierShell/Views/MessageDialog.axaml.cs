@@ -61,10 +61,7 @@ public partial class MessageDialog : Window {
 
     void AddButton(string text, Choice choice, bool emphasised = false) {
         var button = new Button { Content = text, FontSize = 12, MinWidth = 76 };
-        if (emphasised) {
-            button.Background = (Avalonia.Media.IBrush?)this.FindResource("ThemeTimecodeBrush");
-            button.Foreground = Avalonia.Media.Brushes.Black;
-        }
+        if (emphasised) button.Classes.Add("primary");
         button.Click += (_, _) => {
             result = choice;
             Close();

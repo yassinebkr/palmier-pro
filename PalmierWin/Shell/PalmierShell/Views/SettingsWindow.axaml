@@ -42,8 +42,13 @@
                      Text="Used for the timecode, keyframes, snap guides, the active timeline tab, and export progress."/>
           <ItemsControl x:Name="AccentSwatches" Margin="0,10,0,0">
             <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8"/></ItemsPanelTemplate>
+              <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+              <Style Selector="Button">
+                <Setter Property="Margin" Value="0,0,8,8"/>
+              </Style>
+            </ItemsControl.Styles>
           </ItemsControl>
           <TextBlock Classes="section" Text="TIMELINE"/>
           <CheckBox x:Name="SnapDefault" FontSize="12" Content="Snap to clip edges and the playhead"/>
@@ -94,8 +99,7 @@
       <TextBlock x:Name="StatusText" FontSize="11" VerticalAlignment="Center"
                  Foreground="{StaticResource ThemeTextMutedBrush}"/>
       <Button Content="Close" Click="OnClose"/>
-      <Button Content="Save" Click="OnSave"
-              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+      <Button Content="Save" Click="OnSave" Classes="primary"/>
     </StackPanel>
   </Grid>
 </Window>

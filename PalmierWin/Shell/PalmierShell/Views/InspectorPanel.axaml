@@ -5,11 +5,6 @@
              x:Class="PalmierShell.Views.InspectorPanel"
              x:DataType="vm:InspectorViewModel">
   <UserControl.Styles>
-    <Style Selector="TextBlock.section">
-      <Setter Property="FontSize" Value="10"/>
-      <Setter Property="Foreground" Value="{StaticResource ThemeTextMutedBrush}"/>
-      <Setter Property="Margin" Value="0,12,0,4"/>
-    </Style>
     <Style Selector="TextBlock.field">
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Foreground" Value="{StaticResource ThemeTextTertiaryBrush}"/>
@@ -44,13 +39,17 @@
       <Setter Property="Opacity" Value="1"/>
     </Style>
     <!-- Accordion section: header row + chevron over a hairline, no box
-         chrome. All collapsed except the primary section of each mode. -->
+         chrome. All collapsed except the primary section of each mode.
+         The Fluent Expander theme left-aligns and min-widths the control —
+         section rows must stretch to the panel's full width instead. -->
     <Style Selector="Expander.section">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="MinWidth" Value="0"/>
       <Setter Property="Template">
         <ControlTemplate>
           <StackPanel Margin="0,6,0,0">
-            <ToggleButton IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
-                          Background="Transparent" BorderThickness="0" Padding="0,2"
+            <ToggleButton Classes="hdr" IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                          Background="Transparent" BorderThickness="0" Padding="6,2" Margin="-6,0,0,0"
                           HorizontalContentAlignment="Stretch" Cursor="Hand">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="{TemplateBinding Header}" FontSize="10" VerticalAlignment="Center"
@@ -86,15 +85,24 @@
     <Style Selector="Expander.section /template/ ToggleButton:pointerover">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
+    <!-- Hover feedback is a barely-there wash, not the button grey. -->
+    <Style Selector="ToggleButton.hdr:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#0FFFFFFF"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    <!-- Expanded must not read as a selected chip. -->
+    <Style Selector="ToggleButton.hdr:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
   </UserControl.Styles>
-  <ScrollViewer>
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="12,8">
       <TextBlock Text="Inspector" FontSize="12"
                  Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
       <!-- Nothing selected: fall back to the project/sequence summary. -->
       <StackPanel IsVisible="{Binding NothingSelected}">
         <Expander Classes="section" Header="PROJECT" IsExpanded="True">
-          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto">
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto">
             <Grid.Styles>
               <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
             </Grid.Styles>
@@ -106,7 +114,7 @@
           </Grid>
         </Expander>
         <Expander Classes="section" Header="SETTINGS">
-          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto">
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto">
             <Grid.Styles>
               <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
             </Grid.Styles>
@@ -122,7 +130,7 @@
       <StackPanel IsVisible="{Binding HasMediaSelection}">
         <TextBlock Text="{Binding MediaName}" FontSize="13" Margin="0,8,0,0"/>
         <Expander Classes="section" Header="DETAILS" IsExpanded="True">
-          <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+          <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
             <Grid.Styles>
               <Style Selector="TextBlock"><Setter Property="Margin" Value="0,2"/></Style>
             </Grid.Styles>

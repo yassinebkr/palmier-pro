@@ -7,13 +7,19 @@ namespace PalmierShell.Core;
 /// The one accent colour: timecode, playhead ruler marks, keyframes, snap
 /// guides, the active timeline tab, and export progress. XAML consumers bind
 /// `ThemeTimecodeBrush`; custom-drawn surfaces read `Current` and redraw on
-/// `Changed`.
+/// `Changed`. Primary-action buttons never follow it — they keep the warm
+/// off-white capsule.
 public static class Accent {
     public static readonly (string Name, string Hex)[] Choices = [
         ("Amber", "#F29933"),
+        ("Green", "#8FBF3F"),
+        ("Teal", "#3AB7A8"),
         ("Cyan", "#3AB7C6"),
+        ("Blue", "#5B8DEF"),
         ("Violet", "#8A6BD1"),
-        ("Lime", "#8FBF3F"),
+        ("Red", "#E0544F"),
+        ("Coral", "#EF7E5B"),
+        ("Warm White", "#F5EFE4"),
     ];
 
     public const string DefaultHex = "#F29933";

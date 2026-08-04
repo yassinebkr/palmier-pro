@@ -266,6 +266,7 @@
                   IsChecked="{Binding TwoTakes, Mode=TwoWay}"
                   ToolTip.Tip="Runs the same request twice in parallel so you can pick the better result. Doubles the cost."/>
         <Button Grid.Column="2" Content="Generate" FontSize="12" Padding="16,5"
+                Classes="primary"
                 Command="{Binding GenerateCommand}" IsEnabled="{Binding CanGenerate}"/>
       </Grid>
     </Border>

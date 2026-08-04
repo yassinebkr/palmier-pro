@@ -37,8 +37,7 @@
                  Foreground="{StaticResource ThemeTextMutedBrush}"/>
       <Button x:Name="CloseButton" Content="Close" Click="OnClose"/>
       <Button x:Name="QueueButton" Content="Queue" Click="OnQueue"/>
-      <Button x:Name="ExportButton" Content="Export Now" Click="OnExportNow"
-              Background="{StaticResource ThemeTimecodeBrush}" Foreground="#111111"/>
+      <Button x:Name="ExportButton" Content="Export Now" Click="OnExportNow" Classes="primary"/>
     </StackPanel>
     <StackPanel x:Name="JobsPanel" Spacing="6"/>
   </StackPanel>

@@ -76,7 +76,8 @@ public partial class SettingsWindow : Window {
     void BuildSwatches() {
         foreach (var (name, hex) in Accent.Choices) {
             var button = new Button {
-                Width = 60, Height = 32, Padding = new Avalonia.Thickness(0),
+                Width = 56, Height = 26, Padding = new Avalonia.Thickness(0),
+                CornerRadius = new Avalonia.CornerRadius(4),
                 Background = new SolidColorBrush(Color.Parse(hex)), Tag = hex,
             };
             ToolTip.SetTip(button, name);
