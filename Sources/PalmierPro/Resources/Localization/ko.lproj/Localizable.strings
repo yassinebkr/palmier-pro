@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "선택한 미디어 또는 전체 타임라인을 재생하는 미리보기 패널입니다.";
 "This model cannot cap the output at 60 FPS." = "이 모델은 출력을 60 FPS로 제한할 수 없습니다.";
 "This permanently removes %@." = "%@이(가) 영구적으로 제거됩니다.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "3분할";
 "Threshold" = "임계값";
 "Thumbnail Size" = "축소판 크기";

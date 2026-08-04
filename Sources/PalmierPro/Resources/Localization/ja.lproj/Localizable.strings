@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "これは選択したメディアまたはタイムライン全体を再生するプレビューパネルです。";
 "This model cannot cap the output at 60 FPS." = "このモデルでは出力を60 FPSに制限できません。";
 "This permanently removes %@." = "%@を完全に削除します。";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "3分割";
 "Threshold" = "しきい値";
 "Thumbnail Size" = "サムネイルサイズ";

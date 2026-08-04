@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Это панель предпросмотра для воспроизведения выбранного медиафайла или всего таймлайна.";
 "This model cannot cap the output at 60 FPS." = "Эта модель не может ограничить результат частотой 60 FPS.";
 "This permanently removes %@." = "Это безвозвратно удалит %@.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Три окна";
 "Threshold" = "Порог";
 "Thumbnail Size" = "Размер миниатюр";

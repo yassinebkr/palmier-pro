@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "这是预览面板，用于播放所选媒体或整个时间线。";
 "This model cannot cap the output at 60 FPS." = "此模型无法将输出限制为 60 FPS。";
 "This permanently removes %@." = "这将永久移除 %@。";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "三画面";
 "Threshold" = "阈值";
 "Thumbnail Size" = "缩略图大小";

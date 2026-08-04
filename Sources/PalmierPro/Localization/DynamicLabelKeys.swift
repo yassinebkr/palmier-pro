@@ -36,6 +36,7 @@ enum DynamicLabelKeys {
         L10n.key("Slide Up"),
         L10n.key("Soft Light"),
         L10n.key("Three-Up"),
+        L10n.key("Three-Stack"),
         L10n.key("Top / Bottom"),
         L10n.key("Typewriter"),
         L10n.key("UPPERCASE"),

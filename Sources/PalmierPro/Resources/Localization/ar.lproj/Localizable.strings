@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "هذه لوحة المعاينة لتشغيل الوسائط المحددة أو المخطط الزمني كاملاً.";
 "This model cannot cap the output at 60 FPS." = "لا يمكن لهذا النموذج تحديد سقف الإخراج عند ⁨60 FPS⁩.";
 "This permanently removes %@." = "يؤدي هذا إلى إزالة ⁨%@⁩ نهائيًا.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "عرض ثلاثي";
 "Threshold" = "الحد";
 "Thumbnail Size" = "حجم الصورة المصغرة";

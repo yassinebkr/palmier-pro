@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Bu, seçili medyayı veya tüm zaman eksenini oynatabileceğiniz önizleme panelinizdir.";
 "This model cannot cap the output at 60 FPS." = "Bu model çıktıyı 60 FPS ile sınırlayamaz.";
 "This permanently removes %@." = "Bu işlem %@ öğesini kalıcı olarak kaldırır.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Üçlü";
 "Threshold" = "Eşik";
 "Thumbnail Size" = "Küçük Resim Boyutu";

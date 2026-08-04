@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Đây là bảng xem trước để phát phương tiện đã chọn hoặc toàn bộ timeline.";
 "This model cannot cap the output at 60 FPS." = "Mô hình này không thể giới hạn đầu ra ở 60 FPS.";
 "This permanently removes %@." = "Thao tác này sẽ xóa vĩnh viễn %@.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Ba khung";
 "Threshold" = "Ngưỡng";
 "Thumbnail Size" = "Kích thước hình thu nhỏ";

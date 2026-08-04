@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Este é o painel de prévia para reproduzir uma mídia selecionada ou toda a linha do tempo.";
 "This model cannot cap the output at 60 FPS." = "Este modelo não pode limitar a saída a 60 FPS.";
 "This permanently removes %@." = "Isso remove %@ permanentemente.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Três painéis";
 "Threshold" = "Limite";
 "Thumbnail Size" = "Tamanho das miniaturas";

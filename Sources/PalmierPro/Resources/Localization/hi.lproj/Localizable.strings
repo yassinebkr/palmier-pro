@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "यह चयनित मीडिया या पूरी टाइमलाइन चलाने का प्रीव्यू पैनल है।";
 "This model cannot cap the output at 60 FPS." = "यह मॉडल आउटपुट को 60 FPS पर सीमित नहीं कर सकता।";
 "This permanently removes %@." = "यह %@ को स्थायी रूप से हटाता है।";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "तीन पैनल";
 "Threshold" = "थ्रेशोल्ड";
 "Thumbnail Size" = "थंबनेल आकार";
