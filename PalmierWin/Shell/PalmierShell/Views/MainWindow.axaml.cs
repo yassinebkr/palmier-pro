@@ -339,6 +339,15 @@ public partial class MainWindow : Window {
 
     void OnSettingsClick(object? sender, RoutedEventArgs e) => ShowSettings();
 
+    async void OnAboutClick(object? sender, RoutedEventArgs e) {
+        string version = typeof(App).Assembly.GetName().Version is { } v
+            ? $"{v.Major}.{v.Minor}.{v.Build}"
+            : "0.1.0";
+        await MessageDialog.AskAsync(this, $"PalmierWin {version}",
+            "A Windows-native AI video editor.\n\nBuilt on the open source Palmier Pro codebase (GPLv3).",
+            "OK");
+    }
+
     void OnProjectSettings(object? sender, RoutedEventArgs e) =>
         new ProjectSettingsDialog(viewModel).ShowDialog(this);
 
