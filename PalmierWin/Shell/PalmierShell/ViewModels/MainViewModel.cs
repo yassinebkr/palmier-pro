@@ -52,6 +52,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
                 Media.SelectedItem is not null)
                 Timeline.SelectedClipId = null;
         };
+        // The engine's render loop owns the wrap; it just needs to know.
+        Timeline.PropertyChanged += (_, e) => {
+            if (e.PropertyName is nameof(TimelineViewModel.LoopStart) or nameof(TimelineViewModel.LoopEnd))
+                engine?.SetLoop(Timeline.LoopStart, Timeline.LoopEnd);
+        };
         Undo.Changed += () => {
             PerformUndoCommand.NotifyCanExecuteChanged();
             PerformRedoCommand.NotifyCanExecuteChanged();
@@ -679,6 +684,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         engine = session;
         session.SetProject(Project);
         session.SetSelection(Timeline.SelectedClipId);
+        session.SetLoop(Timeline.LoopStart, Timeline.LoopEnd);
         session.PlayingChanged += (playing, frame) => {
             if (audio != IntPtr.Zero) CoreApi.palmier_audio_set_playing(audio, playing ? 1 : 0, frame);
         };

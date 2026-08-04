@@ -19,6 +19,11 @@ public sealed partial class TimelineViewModel : ObservableObject {
     [ObservableProperty] int playheadFrame;
     [ObservableProperty] double pixelsPerFrame = 4.0;
     [ObservableProperty] double scrollOffsetX;
+    /// Clip-area width in DIPs, reported by the view. Zoom anchoring and the
+    /// overview strip read it. Plain on purpose: it is written during layout
+    /// and read during paint, so a change notification would repaint
+    /// mid-render.
+    public double ViewportWidth { get; set; } = 1;
     [ObservableProperty] string? selectedClipId;
     [ObservableProperty] TimelineTool tool = TimelineTool.Select;
     [ObservableProperty] bool snapEnabled = true;
@@ -46,6 +51,23 @@ public sealed partial class TimelineViewModel : ObservableObject {
     }
 
     public bool IsSelected(string clipId) => SelectedClipIds.Contains(clipId);
+
+    /// The zoom slider's value. Setting it keeps the playhead at the same
+    /// screen position — or the view's centre when the playhead is scrolled
+    /// away — so zooming never reads as panning.
+    public double ZoomSlider {
+        get => PixelsPerFrame;
+        set {
+            double next = Math.Clamp(value, TimelineMath.MinPixelsPerFrame, TimelineMath.MaxPixelsPerFrame);
+            if (next == PixelsPerFrame) return;
+            ScrollOffsetX = TimelineMath.AnchoredZoomScroll(
+                PixelsPerFrame, next, ScrollOffsetX, ViewportWidth, PlayheadFrame);
+            PixelsPerFrame = next;
+        }
+    }
+
+    partial void OnPixelsPerFrameChanged(double value) =>
+        OnPropertyChanged(nameof(ZoomSlider));
 
     /// Selects everything from `clip` onward — its track only, or every
     /// track. The tool for "shift the whole back half of the edit".
@@ -234,6 +256,29 @@ public sealed partial class TimelineViewModel : ObservableObject {
         }
     }
 
+    /// Loop playback points, distinct from the I/O delete range: they only
+    /// steer the engine's wrap and draw in the accent colour. Each bracket
+    /// toggles — marking at the frame already marked clears that point.
+    [ObservableProperty] int? loopStart;
+    [ObservableProperty] int? loopEnd;
+
+    public bool HasLoop => LoopStart is { } s && LoopEnd is { } e && e > s;
+
+    /// [ : loop start at the playhead. A start past the current end drops the
+    /// end, mirroring how I restarts the delete range.
+    public void MarkLoopStart() {
+        LoopStart = LoopStart == PlayheadFrame ? null : PlayheadFrame;
+        if (LoopStart is { } s && LoopEnd is { } end && end <= s) LoopEnd = null;
+        OnPropertyChanged(nameof(HasLoop));
+    }
+
+    /// ] : loop end at the playhead (exclusive).
+    public void MarkLoopEnd() {
+        LoopEnd = LoopEnd == PlayheadFrame ? null : PlayheadFrame;
+        if (LoopEnd is { } e && LoopStart is { } start && start >= e) LoopStart = null;
+        OnPropertyChanged(nameof(HasLoop));
+    }
+
     /// Delete every property's keyframe at one clip diamond: (clipId, frame).
     /// The timeline's diamonds merge all animated properties, so deleting what
     /// the diamond shows means deleting across all of them.
@@ -287,33 +332,24 @@ public sealed partial class TimelineViewModel : ObservableObject {
         TrackToggleRequested?.Invoke(track.Id, track.Type == "audio",
             track.Type == "audio" ? !track.Muted : !track.Hidden);
 
-    public sealed record WaveformData(float[] MinMax, int SourceFrames) {
-        /// Peak-normalising display gain — quiet media still reads as a waveform,
-        /// silence stays flat. Bounded so noise floors don't fill the clip.
-        public float Gain { get; } = GainFor(MinMax);
-
-        static float GainFor(float[] minMax) {
-            float peak = 0;
-            foreach (float v in minMax) peak = Math.Max(peak, Math.Abs(v));
-            return peak < 0.02f ? 1 : Math.Min(8f, 0.95f / peak);
-        }
-    }
+    public sealed record WaveformData(float[] MinMax, int SourceFrames);
 
     readonly Dictionary<string, WaveformData?> waveforms = new();
 
-    /// Cached min/max waveform pairs (256 columns over the whole file) plus
-    /// the source length in timeline frames, loading async on first request.
-    /// Null while loading or when the file has no audio.
+    /// Cached min/max waveform pairs over the whole file plus the source
+    /// length in timeline frames, loading async on first request. Null while
+    /// loading or when the file has no audio. Column density follows
+    /// upstream's 200 a second, capped, so zooming in still resolves beats.
     public WaveformData? WaveformFor(string mediaPath) {
         if (waveforms.TryGetValue(mediaPath, out var wf)) return wf;
         waveforms[mediaPath] = null;
         _ = Task.Run(() => {
-            var wave = CoreApi.GetWaveform(mediaPath, 256);
-            if (wave is null) return;
             var probe = CoreApi.ProbeMedia(mediaPath);
-            int sourceFrames = probe is { Fps: > 0, TotalFrames: > 0 } p
-                ? Math.Max(1, (int)Math.Round(p.TotalFrames / p.Fps * TimelineFps))
-                : 0;
+            double seconds = probe is { Fps: > 0, TotalFrames: > 0 } p ? p.TotalFrames / p.Fps : 0;
+            int columns = seconds > 0 ? Math.Clamp((int)Math.Ceiling(seconds * 200), 256, 240_000) : 2048;
+            var wave = CoreApi.GetWaveform(mediaPath, columns);
+            if (wave is null) return;
+            int sourceFrames = seconds > 0 ? Math.Max(1, (int)Math.Round(seconds * TimelineFps)) : 0;
             Dispatcher.UIThread.Post(() => {
                 waveforms[mediaPath] = new WaveformData(wave, sourceFrames);
                 StateReloaded?.Invoke();
