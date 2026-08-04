@@ -76,6 +76,16 @@ public sealed partial class InspectorViewModel : ObservableObject {
     [ObservableProperty] string lutPath = "";
     [ObservableProperty] double lutIntensity = 1;
 
+    // Readouts under the wheels: the committed triplet, or the live gesture
+    // mid-drag. Not editable — the wheel is the editor.
+    [ObservableProperty] string liftReadout = "0.00  0.00  0.00";
+    [ObservableProperty] string gainReadout = "1.00  1.00  1.00";
+    [ObservableProperty] string gammaReadout = "1.00  1.00  1.00";
+
+    /// Fired at the end of Refresh so the wheel controls can re-place their
+    /// handles from the committed params.
+    public event Action? WheelsRefreshed;
+
     // Provenance for generated media: what made it, and from which stills.
     [ObservableProperty] bool isGenerated;
     [ObservableProperty] string generationModel = "";
@@ -172,8 +182,59 @@ public sealed partial class InspectorViewModel : ObservableObject {
             ChromaSpill = clip.EffectNumber("key.chroma", "spill", 0.5);
             LutPath = clip.EffectOf("color.lut")?.Text("path") ?? "";
             LutIntensity = clip.EffectNumber("color.lut", "intensity", 1);
+            UpdateWheelReadouts();
         } finally {
             refreshing = false;
+        }
+        WheelsRefreshed?.Invoke();
+    }
+
+    /// The gesture state that would reproduce the committed params — the
+    /// wheel controls pull this after every refresh.
+    public (double X, double Y, double Offset) WheelVector(ColorWheelMath.WheelKind kind) => kind switch {
+        ColorWheelMath.WheelKind.Lift => ColorWheelMath.ToVector(kind, LiftR, LiftG, LiftB),
+        ColorWheelMath.WheelKind.Gain => ColorWheelMath.ToVector(kind, GainR, GainG, GainB),
+        _ => ColorWheelMath.ToVector(kind, GammaR, GammaG, GammaB),
+    };
+
+    /// Live drag: only the readout moves; the commit waits for release.
+    public void PreviewWheel(ColorWheelMath.WheelKind kind, double x, double y, double offset) {
+        var (r, g, b) = ColorWheelMath.ToParams(kind, x, y, offset);
+        SetWheelReadout(kind, r, g, b);
+    }
+
+    /// Drag end: one undo entry for the whole gesture. The assignments run
+    /// under the refresh guard so their per-property hooks stay quiet and
+    /// CommitWheels below is the only intent.
+    public void CommitWheel(ColorWheelMath.WheelKind kind, double x, double y, double offset) {
+        if (timeline.SelectedClipId is null) return;
+        var (r, g, b) = ColorWheelMath.ToParams(kind, x, y, offset);
+        refreshing = true;
+        try {
+            switch (kind) {
+                case ColorWheelMath.WheelKind.Lift: LiftR = r; LiftG = g; LiftB = b; break;
+                case ColorWheelMath.WheelKind.Gain: GainR = r; GainG = g; GainB = b; break;
+                default: GammaR = r; GammaG = g; GammaB = b; break;
+            }
+        } finally {
+            refreshing = false;
+        }
+        CommitWheels();
+        SetWheelReadout(kind, r, g, b);
+    }
+
+    void UpdateWheelReadouts() {
+        SetWheelReadout(ColorWheelMath.WheelKind.Lift, LiftR, LiftG, LiftB);
+        SetWheelReadout(ColorWheelMath.WheelKind.Gain, GainR, GainG, GainB);
+        SetWheelReadout(ColorWheelMath.WheelKind.Gamma, GammaR, GammaG, GammaB);
+    }
+
+    void SetWheelReadout(ColorWheelMath.WheelKind kind, double r, double g, double b) {
+        string text = $"{r:0.00;-0.00}  {g:0.00;-0.00}  {b:0.00;-0.00}";
+        switch (kind) {
+            case ColorWheelMath.WheelKind.Lift: LiftReadout = text; break;
+            case ColorWheelMath.WheelKind.Gain: GainReadout = text; break;
+            default: GammaReadout = text; break;
         }
     }
 

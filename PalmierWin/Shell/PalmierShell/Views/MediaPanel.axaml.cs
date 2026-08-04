@@ -34,6 +34,8 @@ public partial class MediaPanel : UserControl {
         pressedItem = (sender as Control)?.DataContext as MediaItemViewModel;
         pressPoint = e.GetPosition(this);
         if (Vm is { } vm && pressedItem is { } item) vm.SelectedItem = item;
+        // Focus follows the click so the Delete key reaches the panel.
+        (sender as Control)?.Focus();
     }
 
     async void OnItemPointerMoved(object? sender, PointerEventArgs e) {
@@ -114,8 +116,22 @@ public partial class MediaPanel : UserControl {
         }
         move.IsEnabled = move.Items.Count > 0;
         flyout.Items.Add(move);
+        flyout.Items.Add(new Separator());
+        var remove = new MenuItem { Header = "Remove from Library" };
+        remove.Click += (_, _) => vm.RequestRemove(item);
+        flyout.Items.Add(remove);
         flyout.ShowAt((Control)sender!, true);
         e.Handled = true;
+    }
+
+    /// Delete key with the focus anywhere in the panel removes the selected
+    /// item; text boxes eat the key first when they are editing.
+    void OnPanelKeyDown(object? sender, KeyEventArgs e) {
+        if (e.Key is not (Key.Delete or Key.Back)) return;
+        if (Vm?.SelectedItem is { } item) {
+            Vm.RequestRemove(item);
+            e.Handled = true;
+        }
     }
 
     void OnItemPointerExited(object? sender, PointerEventArgs e) {

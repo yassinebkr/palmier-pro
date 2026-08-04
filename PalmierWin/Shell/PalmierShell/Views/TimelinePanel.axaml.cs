@@ -17,6 +17,10 @@ public partial class TimelinePanel : UserControl {
 
     void OnAddTextClip(object? sender, RoutedEventArgs e) => Vm?.AddTextClipAtPlayhead();
 
+    void OnRemoveSilence(object? sender, RoutedEventArgs e) {
+        if (Vm?.Timeline.SelectedClipId is { } id) Vm.Timeline.RequestRemoveSilence(id);
+    }
+
     static TimelineTab? TabOf(object? sender) => (sender as Control)?.DataContext as TimelineTab;
 
     void OnTabTapped(object? sender, TappedEventArgs e) {

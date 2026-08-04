@@ -333,6 +333,15 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public ClipState? SelectedClip => SelectedClipId is null ? null : State?.FindClip(SelectedClipId);
 
+    /// Gates the silence-removal toolbar button: video clips only.
+    public bool SelectedClipIsVideo => SelectedClip?.MediaType == "video";
+
+    partial void OnSelectedClipIdChanged(string? value) =>
+        OnPropertyChanged(nameof(SelectedClipIsVideo));
+
+    partial void OnStateChanged(TimelineState? value) =>
+        OnPropertyChanged(nameof(SelectedClipIsVideo));
+
     public void Reload() {
         State = TimelineState.Parse(CoreApi.GetTimelineJson(project));
         // Drop selections whose clips no longer exist (split, delete, undo).

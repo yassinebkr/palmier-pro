@@ -60,6 +60,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.StateReloaded += () => ProjectDirty = true;
         Media.Items.CollectionChanged += (_, _) => ProjectDirty = true;
         Media.AddToTimelineRequested += OnAddToTimeline;
+        Media.RemoveItemRequested += item => _ = RemoveMediaItemAsync(item);
         Timeline.BladeRequested += OnBlade;
         Timeline.TrackToggleRequested += OnTrackToggle;
         Timeline.MediaDropped += (path, frame) => {
@@ -635,6 +636,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         if (spans.Count == 0) return;
         Undo.Execute("Remove Silence", () => SilenceRemoval.Apply(Project, spans) > 0);
         Timeline.Reload();
+    }
+
+    /// Removes a library item. When the timeline still uses it, one undoable
+    /// intent removes those clips first; the library removal itself is not
+    /// undoable — import is not either.
+    async Task RemoveMediaItemAsync(MediaItemViewModel item) {
+        var clipIds = Timeline.State?.Tracks
+            .SelectMany(t => t.Clips)
+            .Where(c => c.MediaRef == item.Path)
+            .Select(c => c.Id).ToList() ?? [];
+        if (clipIds.Count > 0) {
+            if (DialogOwner?.Invoke() is not { } owner) return;
+            var choice = await Views.MessageDialog.AskAsync(owner, "Remove from Library",
+                $"{item.Name} is used by {clipIds.Count} clip(s) on the timeline. " +
+                "Removing it also removes those clips.",
+                "Remove", cancel: "Cancel");
+            if (choice != Views.MessageDialog.Choice.Primary) return;
+            Undo.Execute("Remove from Library",
+                () => clipIds.Count(id => CoreApi.palmier_timeline_remove_clip(Project, id) == 1) > 0);
+            Timeline.Reload();
+        }
+        Media.RemoveItem(item);
     }
 
     /// Asks for a new track name and commits it as one undo step. A cancelled
