@@ -1,0 +1,93 @@
+name: Release (Windows shell)
+
+# Builds the PalmierWin editor as a portable zip and publishes it as a GitHub
+# prerelease. Manual trigger with a version input; also runs on v*-win tags.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+  push:
+    tags: ["v*-win"]
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3-release
+          swift-build: 6.3-RELEASE
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Link PalmierCore into PalmierWin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path PalmierWin/Sources | Out-Null
+          $coreSrc = (Resolve-Path "Sources/PalmierCore").Path
+          New-Item -ItemType SymbolicLink -Path "PalmierWin/Sources/PalmierCore" -Value $coreSrc | Out-Null
+
+      - name: Fetch Windows media deps
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          ./fetch-deps.ps1
+          Pop-Location
+
+      - name: Build PalmierCoreHost (release)
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          swift build -c release --product PalmierCoreHost
+          Pop-Location
+
+      - name: Publish shell (self-contained win-x64)
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin/Shell
+          dotnet publish PalmierShell -c Release -r win-x64 --self-contained true -o publish
+          Pop-Location
+
+      - name: Stage the portable package
+        shell: pwsh
+        run: |
+          $stage = "PalmierWin/Shell/publish"
+          $release = "PalmierWin/.build/x86_64-unknown-windows-msvc/release"
+          Copy-Item "$release/PalmierCoreHost.dll" $stage
+          Copy-Item "PalmierWin/ThirdParty/ffmpeg/bin/*.dll" $stage
+          # Swift runtime DLLs: resolve from the installed toolchain layout
+          # ($root/Runtimes/<ver>/usr/bin next to Toolchains/<ver>/usr/bin/swift.exe).
+          $swift = (Get-Command swift.exe).Source
+          $toolchainsUsrBin = Split-Path $swift
+          $swiftRoot = Split-Path (Split-Path (Split-Path $toolchainsUsrBin))
+          $runtimes = Get-ChildItem "$swiftRoot/Runtimes" -Directory | Select-Object -First 1
+          Copy-Item "$($runtimes.FullName)/usr/bin/*.dll" $stage
+          Get-ChildItem $stage | Measure-Object | ForEach-Object { "staged $($_.Count) files" }
+
+      - name: Zip the package
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.version }}"
+          if ($env:GITHUB_REF_TYPE -eq "tag") { $ver = $env:GITHUB_REF_NAME -replace "^v","" -replace "-win$","" }
+          Compress-Archive -Path "PalmierWin/Shell/publish/*" -DestinationPath "PalmierWin-$ver-win-x64.zip" -Force
+          echo "VERSION=$ver" >> $env:GITHUB_ENV
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PalmierWin v${{ env.VERSION }} (Windows prerelease)
+          tag_name: v${{ env.VERSION }}-win
+          prerelease: true
+          files: PalmierWin-${{ env.VERSION }}-win-x64.zip
+          body: |
+            First public test build of PalmierWin for Windows x64.
+            Unzip anywhere and run `PalmierShell.exe`. Needs a Vulkan-capable GPU.
+            Crash reports land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report.
