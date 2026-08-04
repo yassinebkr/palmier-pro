@@ -39,8 +39,12 @@
       <Setter Property="Opacity" Value="1"/>
     </Style>
     <!-- Accordion section: header row + chevron over a hairline, no box
-         chrome. All collapsed except the primary section of each mode. -->
+         chrome. All collapsed except the primary section of each mode.
+         The Fluent Expander theme left-aligns and min-widths the control —
+         section rows must stretch to the panel's full width instead. -->
     <Style Selector="Expander.section">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="MinWidth" Value="0"/>
       <Setter Property="Template">
         <ControlTemplate>
           <StackPanel Margin="0,6,0,0">
@@ -91,7 +95,7 @@
       <Setter Property="Background" Value="Transparent"/>
     </Style>
   </UserControl.Styles>
-  <ScrollViewer>
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="12,8">
       <TextBlock Text="Inspector" FontSize="12"
                  Foreground="{StaticResource ThemeTextSecondaryBrush}"/>

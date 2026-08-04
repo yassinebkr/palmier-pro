@@ -9,6 +9,7 @@ namespace PalmierShell.Views;
 
 /// Appearance and AI preferences. Provider/model/key are saved through the
 /// agent view model so there is one path that also reconfigures the agent.
+/// Accent changes preview live and revert if the window closes unsaved.
 public partial class SettingsWindow : Window {
     /// Tells the user whether leaving the key box blank keeps a stored key.
     public static readonly Avalonia.Data.Converters.IValueConverter KeyWatermark =
@@ -16,11 +17,16 @@ public partial class SettingsWindow : Window {
             has => has ? "Key saved — type to replace" : "Paste your API key");
 
     readonly MainViewModel? main;
+    readonly List<Button> swatches = new();
+    readonly string accentOnOpen;
+    string accentHex;
+    bool saved;
 
     public SettingsWindow() : this(null!) { }  // XAML designer only
 
     public SettingsWindow(MainViewModel main, int tabIndex = 0) {
         this.main = main;
+        accentOnOpen = accentHex = HexOf(Accent.Current);
         InitializeComponent();
         if (main is null) return;
         Panes.SelectedIndex = tabIndex;
@@ -29,7 +35,9 @@ public partial class SettingsWindow : Window {
         // provider, key, and model state.
         DataContext = main.Agent;
         SnapDefault.IsChecked = main.Timeline.SnapEnabled;
+        BuildSwatches();
         BuildGenerationKeys();
+        Closed += (_, _) => { if (!saved) Accent.Apply(accentOnOpen); };
     }
 
     readonly Dictionary<string, TextBox> generationKeyBoxes = new();
@@ -63,6 +71,31 @@ public partial class SettingsWindow : Window {
         GenerationKeys.ItemsSource = rows;
     }
 
+    static string HexOf(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    void BuildSwatches() {
+        foreach (var (name, hex) in Accent.Choices) {
+            var button = new Button {
+                Width = 56, Height = 26, Padding = new Avalonia.Thickness(0),
+                CornerRadius = new Avalonia.CornerRadius(4),
+                Background = new SolidColorBrush(Color.Parse(hex)), Tag = hex,
+            };
+            ToolTip.SetTip(button, name);
+            button.Click += (_, _) => { accentHex = hex; Accent.Apply(hex); MarkSelected(); };
+            swatches.Add(button);
+        }
+        AccentSwatches.ItemsSource = swatches;
+        MarkSelected();
+    }
+
+    void MarkSelected() {
+        foreach (var button in swatches) {
+            bool selected = string.Equals((string)button.Tag!, accentHex, StringComparison.OrdinalIgnoreCase);
+            button.BorderBrush = Brushes.White;
+            button.BorderThickness = new Avalonia.Thickness(selected ? 2 : 0);
+        }
+    }
+
     async void OnSave(object? sender, RoutedEventArgs e) {
         if (main is null) return;
         bool snap = SnapDefault.IsChecked == true;
@@ -74,7 +107,7 @@ public partial class SettingsWindow : Window {
             .ToList();
 
         await Task.Run(() => SettingsStore.Update(s => {
-            var updated = s with { SnapEnabled = snap };
+            var updated = s with { Accent = accentHex, SnapEnabled = snap };
             foreach (var (provider, key) in generationKeys) updated = updated.WithKey(provider, key);
             return updated;
         }));
@@ -84,6 +117,7 @@ public partial class SettingsWindow : Window {
         }
         await main.Agent.SaveSettingsCommand.ExecuteAsync(null);
         await main.Media.Generate.RefreshKeyAsync();
+        saved = true;
         StatusText.Text = "Saved.";
     }
 

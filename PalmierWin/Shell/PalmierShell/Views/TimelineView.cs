@@ -23,7 +23,7 @@ public sealed class TimelineView : Control {
     static readonly Color SurfaceColor = Color.Parse("#161616");
     static readonly Color RaisedColor = Color.Parse("#1E1E1E");
     static readonly Color BorderColor = Color.Parse("#29FFFFFF");
-    static readonly Color TimecodeColor = Color.Parse("#F29933");
+    static Color TimecodeColor => Accent.Current;
     static readonly Color PlayheadColor = Color.Parse("#E54F4F");
     static readonly Color VideoClipColor = Color.Parse("#1D5878");
     static readonly Color AudioClipColor = Color.Parse("#2E7765");
@@ -90,6 +90,8 @@ public sealed class TimelineView : Control {
         ClipToBounds = true;
         Focusable = true;
         DataContextChanged += (_, _) => AttachViewModel(DataContext as TimelineViewModel);
+        Accent.Changed += InvalidateVisual;
+        DetachedFromVisualTree += (_, _) => Accent.Changed -= InvalidateVisual;
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);

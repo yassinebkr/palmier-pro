@@ -130,23 +130,46 @@
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="FontSize" Value="12"/>
   </Style>
+  <Style Selector="ComboBoxItem">
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Margin" Value="2,0"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
   <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource ThemeProminentBrush}"/>
+    <Setter Property="Background" Value="#0FFFFFFF"/>
+    <Setter Property="CornerRadius" Value="4"/>
   </Style>
   <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
-    <Setter Property="Background" Value="#1FFFFFFF"/>
+    <Setter Property="Background" Value="#14FFFFFF"/>
+    <Setter Property="CornerRadius" Value="4"/>
+  </Style>
+  <!-- Dropdown surface: raised, hairline, 4px radius, at least as wide as
+       its combo (the template binds the popup's MinWidth to the control). -->
+  <Style Selector="ComboBox /template/ Border#PopupBorder">
+    <Setter Property="CornerRadius" Value="4"/>
   </Style>
   <Style Selector="MenuFlyoutPresenter">
     <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
     <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="MinWidth" Value="180"/>
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+  <Style Selector="MenuItem:pointerover">
+    <Setter Property="Background" Value="#0FFFFFFF"/>
   </Style>
   <Style Selector="FlyoutPresenter">
     <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
     <Setter Property="BorderBrush" Value="{StaticResource ThemeBorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="CornerRadius" Value="4"/>
   </Style>
   <!-- Plain sliders (zoom, prefs) stay slim; the scrub style below slims
        the preview bar further. -->
