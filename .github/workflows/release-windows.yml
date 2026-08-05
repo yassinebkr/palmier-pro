@@ -111,13 +111,11 @@ jobs:
           prerelease: false
           make_latest: true
           files: |
-            PalmierWin/Shell/installer/output/PalmierWin-Setup-${{ env.VERSION }}.exe
             PalmierWin/Shell/installer/output/PalmierWin-Setup.exe
-            PalmierWin-${{ env.VERSION }}-win-x64.zip
           body: |
             Windows x64 build of PalmierWin.
 
-            Download `PalmierWin-Setup-${{ env.VERSION }}.exe` and run it — no admin needed.
-            The zip is the same build, unpackaged, for portable use. Needs a Vulkan-capable GPU.
+            Download `PalmierWin-Setup.exe` and run it — no admin needed.
+            Needs a Vulkan-capable GPU.
             Session and crash logs land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report
             (badge menu → Report a problem does it in one click).

@@ -215,3 +215,16 @@ public sealed class SessionLogTests : IDisposable {
         }
     }
 }
+
+public class UpdateCheckerAssetTests {
+    [Fact]
+    public void StableNamedInstallerIsAccepted() {
+        const string json = """
+[{"tag_name":"v0.2.0-win","body":"notes","prerelease":false,
+ "assets":[{"name":"PalmierWin-Setup.exe","browser_download_url":"https://example.com/PalmierWin-Setup.exe"}]}]
+""";
+        var info = UpdateChecker.SelectUpdate(json, new Version(0, 1, 0), AppSettings.Default,
+            new DateTimeOffset(2026, 8, 1, 12, 0, 0, TimeSpan.Zero));
+        Assert.Equal("https://example.com/PalmierWin-Setup.exe", info!.DownloadUrl);
+    }
+}

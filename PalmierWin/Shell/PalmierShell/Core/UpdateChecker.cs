@@ -102,7 +102,12 @@ public static class UpdateChecker {
         foreach (var asset in assets.EnumerateArray()) {
             if (!asset.TryGetProperty("name", out var name)) continue;
             string file = name.GetString() ?? "";
-            if (!file.Contains("-Setup-") || !file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            // The stable name is what releases ship now; the versioned
+            // "-Setup-<ver>.exe" variant is kept matching for older installs.
+            bool isInstaller = file.Equals("PalmierWin-Setup.exe", StringComparison.OrdinalIgnoreCase) ||
+                               (file.Contains("-Setup-") &&
+                                file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+            if (!isInstaller)
                 continue;
             if (asset.TryGetProperty("browser_download_url", out var urlProp) &&
                 urlProp.GetString() is { Length: > 0 } url)
