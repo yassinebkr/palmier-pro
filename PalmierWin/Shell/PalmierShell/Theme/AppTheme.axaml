@@ -8,9 +8,12 @@
     <Color x:Key="ThemeTimecodeColor">#FFF29933</Color>
     <Color x:Key="ThemeErrorColor">#FFE54F4F</Color>
     <Color x:Key="ThemeSuccessColor">#FF4FB85F</Color>
-    <!-- The commit-button capsule: warm off-white with dark text, never the
-         accent. The accent is user-tunable; a primary action is not. -->
-    <Color x:Key="ThemePrimaryColor">#FFF5EFE4</Color>
+    <!-- Primary action: the chosen accent with text that stays readable on
+         it, plus one shade up for hover and one down for pressed. Accent.Apply
+         rewrites these brushes in place when the accent changes. -->
+    <Color x:Key="ThemePrimaryColor">#FFF29933</Color>
+    <Color x:Key="ThemePrimaryHoverColor">#FFF4A54B</Color>
+    <Color x:Key="ThemePrimaryPressedColor">#FFD5872D</Color>
     <Color x:Key="ThemePrimaryTextColor">#FF1C1A17</Color>
     <Color x:Key="ThemeTrackVideoColor">#FF1D5878</Color>
     <Color x:Key="ThemeTrackAudioColor">#FF2E7765</Color>
@@ -23,6 +26,8 @@
     <SolidColorBrush x:Key="ThemeErrorBrush" Color="{StaticResource ThemeErrorColor}"/>
     <SolidColorBrush x:Key="ThemeSuccessBrush" Color="{StaticResource ThemeSuccessColor}"/>
     <SolidColorBrush x:Key="ThemePrimaryBrush" Color="{StaticResource ThemePrimaryColor}"/>
+    <SolidColorBrush x:Key="ThemePrimaryHoverBrush" Color="{StaticResource ThemePrimaryHoverColor}"/>
+    <SolidColorBrush x:Key="ThemePrimaryPressedBrush" Color="{StaticResource ThemePrimaryPressedColor}"/>
     <SolidColorBrush x:Key="ThemePrimaryTextBrush" Color="{StaticResource ThemePrimaryTextColor}"/>
     <SolidColorBrush x:Key="ThemeFocusBrush" Color="#33FFFFFF"/>
     <SolidColorBrush x:Key="ThemeBorderBrush" Color="#29FFFFFF"/>
@@ -56,6 +61,15 @@
     <SolidColorBrush x:Key="SliderThumbBackground" Color="#FFD8D8D8"/>
     <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFF5EFE4"/>
     <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FFB9B9B9"/>
+    <!-- The Fluent slider template hard-codes a 20px thumb between two fixed
+         15px rows, so in a slim toolbar band the thumb hangs below centre.
+         Slim it at the resource level — template local values beat style
+         setters, so a Thumb style cannot reach these. -->
+    <x:Double x:Key="SliderHorizontalThumbWidth">12</x:Double>
+    <x:Double x:Key="SliderHorizontalThumbHeight">12</x:Double>
+    <x:Double x:Key="SliderHorizontalHeight">12</x:Double>
+    <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+    <GridLength x:Key="SliderPostContentMargin">0</GridLength>
     <!-- Text selection: a white wash, not the system accent. -->
     <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#40FFFFFF"/>
   </Styles.Resources>
@@ -97,8 +111,8 @@
   <Style Selector="Button:disabled /template/ ContentPresenter">
     <Setter Property="Opacity" Value="0.45"/>
   </Style>
-  <!-- Primary action: the warm off-white capsule with dark text. Reserved
-       for the one committing button in a dialog or footer. -->
+  <!-- Primary action: the accent capsule with readable text. Reserved for
+       the one committing button in a dialog or footer. -->
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{StaticResource ThemePrimaryBrush}"/>
     <Setter Property="Foreground" Value="{StaticResource ThemePrimaryTextBrush}"/>
@@ -106,10 +120,10 @@
     <Setter Property="Padding" Value="14,5"/>
   </Style>
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="#FFFCF8F0"/>
+    <Setter Property="Background" Value="{StaticResource ThemePrimaryHoverBrush}"/>
   </Style>
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
-    <Setter Property="Background" Value="#FFDED5C2"/>
+    <Setter Property="Background" Value="{StaticResource ThemePrimaryPressedBrush}"/>
   </Style>
   <!-- Focus reads as a hairline, never the Fluent accent ring. -->
   <Style Selector=":is(Control)">
@@ -172,11 +186,8 @@
     <Setter Property="CornerRadius" Value="4"/>
   </Style>
   <!-- Plain sliders (zoom, prefs) stay slim; the scrub style below slims
-       the preview bar further. -->
-  <Style Selector="Slider /template/ Thumb">
-    <Setter Property="Width" Value="12"/>
-    <Setter Property="Height" Value="12"/>
-  </Style>
+       the preview bar further. Thumb size comes from the resource overrides
+       above — the Fluent template sets its own as local values. -->
   <Style Selector="ProgressBar">
     <Setter Property="Background" Value="{StaticResource ThemeProminentBrush}"/>
   </Style>
@@ -234,8 +245,6 @@
     <Setter Property="Height" Value="4"/>
   </Style>
   <Style Selector="Slider.scrub /template/ Thumb">
-    <Setter Property="Width" Value="10"/>
-    <Setter Property="Height" Value="10"/>
     <Setter Property="Opacity" Value="0"/>
     <Setter Property="Transitions">
       <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.12"/></Transitions>

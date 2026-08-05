@@ -18,6 +18,10 @@ public sealed record AppSettings(string Provider, string Model) {
     /// Accent colour as #RRGGBB; empty means the built-in amber.
     public string Accent { get; init; } = "";
 
+    /// Display name behind the top-right badge; empty until the first-run
+    /// welcome dialog collects one.
+    public string UserName { get; init; } = "";
+
     public bool SnapEnabled { get; init; } = true;
 
     public string KeyFor(string provider) => Keys.GetValueOrDefault(provider, "");
@@ -56,6 +60,7 @@ public static class SettingsStore {
         public Dictionary<string, string> KeysProtected { get; init; } = new();
         public Dictionary<string, string> Models { get; init; } = new();
         public string Accent { get; init; } = "";
+        public string UserName { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
     }
 
@@ -80,6 +85,7 @@ public static class SettingsStore {
                 Keys = keys,
                 Models = new Dictionary<string, string>(persisted.Models),
                 Accent = persisted.Accent,
+                UserName = persisted.UserName,
                 SnapEnabled = persisted.SnapEnabled,
             };
         } catch {
@@ -104,6 +110,7 @@ public static class SettingsStore {
                     KeysProtected = encrypted,
                     Models = new Dictionary<string, string>(settings.Models),
                     Accent = settings.Accent,
+                    UserName = settings.UserName,
                     SnapEnabled = settings.SnapEnabled,
                 }));
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {

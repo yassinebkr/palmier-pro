@@ -17,7 +17,6 @@ public partial class SettingsWindow : Window {
             has => has ? "Key saved — type to replace" : "Paste your API key");
 
     readonly MainViewModel? main;
-    readonly List<Button> swatches = new();
     readonly string accentOnOpen;
     string accentHex;
     bool saved;
@@ -35,7 +34,9 @@ public partial class SettingsWindow : Window {
         // provider, key, and model state.
         DataContext = main.Agent;
         SnapDefault.IsChecked = main.Timeline.SnapEnabled;
-        BuildSwatches();
+        UserNameBox.Text = SettingsStore.Load().UserName;
+        AccentSwatches.SelectedHex = accentHex;
+        AccentSwatches.SelectionChanged += hex => { accentHex = hex; Accent.Apply(hex); };
         BuildGenerationKeys();
         Closed += (_, _) => { if (!saved) Accent.Apply(accentOnOpen); };
     }
@@ -73,33 +74,12 @@ public partial class SettingsWindow : Window {
 
     static string HexOf(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-    void BuildSwatches() {
-        foreach (var (name, hex) in Accent.Choices) {
-            var button = new Button {
-                Width = 56, Height = 26, Padding = new Avalonia.Thickness(0),
-                CornerRadius = new Avalonia.CornerRadius(4),
-                Background = new SolidColorBrush(Color.Parse(hex)), Tag = hex,
-            };
-            ToolTip.SetTip(button, name);
-            button.Click += (_, _) => { accentHex = hex; Accent.Apply(hex); MarkSelected(); };
-            swatches.Add(button);
-        }
-        AccentSwatches.ItemsSource = swatches;
-        MarkSelected();
-    }
-
-    void MarkSelected() {
-        foreach (var button in swatches) {
-            bool selected = string.Equals((string)button.Tag!, accentHex, StringComparison.OrdinalIgnoreCase);
-            button.BorderBrush = Brushes.White;
-            button.BorderThickness = new Avalonia.Thickness(selected ? 2 : 0);
-        }
-    }
-
     async void OnSave(object? sender, RoutedEventArgs e) {
         if (main is null) return;
         bool snap = SnapDefault.IsChecked == true;
         main.Timeline.SnapEnabled = snap;
+        string userName = UserNameBox.Text?.Trim() ?? "";
+        main.SetUserName(userName);
         // Blank generation boxes keep whatever key is already stored.
         var generationKeys = generationKeyBoxes
             .Select(pair => (Provider: pair.Key, Key: pair.Value.Text?.Trim() ?? ""))
@@ -107,7 +87,7 @@ public partial class SettingsWindow : Window {
             .ToList();
 
         await Task.Run(() => SettingsStore.Update(s => {
-            var updated = s with { Accent = accentHex, SnapEnabled = snap };
+            var updated = s with { Accent = accentHex, SnapEnabled = snap, UserName = userName };
             foreach (var (provider, key) in generationKeys) updated = updated.WithKey(provider, key);
             return updated;
         }));

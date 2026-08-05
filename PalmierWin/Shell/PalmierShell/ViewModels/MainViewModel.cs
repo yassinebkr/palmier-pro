@@ -192,12 +192,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     async Task ApplyPreferencesAsync() {
         var settings = await Task.Run(SettingsStore.Load);
         Accent.Apply(settings.Accent);
+        UserInitial = UserBadge.Initial(settings.UserName);
+        NeedsWelcome = string.IsNullOrWhiteSpace(settings.UserName);
         Timeline.SnapEnabled = settings.SnapEnabled;
+        PreferencesReady = true;
         PreferencesApplied?.Invoke();
     }
 
     /// Lets the timeline toolbar refresh its snap button once preferences land.
     public event Action? PreferencesApplied;
+
+    /// True once the settings read has landed, so the shell can decide on the
+    /// first-run welcome dialog without racing it.
+    public bool PreferencesReady { get; private set; }
+
+    /// No saved user name: first run, so the shell collects one (and an accent).
+    public bool NeedsWelcome { get; private set; }
+
+    /// Letter in the top-right badge, from the saved user name.
+    [ObservableProperty] string userInitial = UserBadge.Initial(null);
+
+    /// Adopts the name chosen in the welcome dialog or settings; the badge follows.
+    public void SetUserName(string name) {
+        UserInitial = UserBadge.Initial(name);
+        NeedsWelcome = false;
+    }
 
     /// Agent panel collapsed to its icon rail, giving the width back to the
     /// preview and timeline. Persisted with the rest of the layout.
