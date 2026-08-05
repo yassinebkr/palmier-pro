@@ -13,6 +13,10 @@ public static partial class CoreApi {
     /// instead of a DllNotFoundException mid-constructor.
     public static bool TryLoadNativeHost() => TryLoadLibrary(Dll);
 
+    /// Dev-only: native AV inside the Swift DLL (crash-handler verification).
+    [LibraryImport(Dll)]
+    public static partial void palmier_crash_test();
+
     internal static bool TryLoadLibrary(string name) {
         try {
             // The handle is deliberately not freed: unloading a Swift runtime

@@ -271,3 +271,10 @@ public func palmierEngineDestroy(_ handle: UnsafeMutableRawPointer?) {
     Unmanaged<EngineContext>.fromOpaque(handle).release()
     Vulkan.destroyInstance(instance)
 }
+
+/// Dev-only: forces a genuine native access violation to verify the shell's
+/// vectored crash handler. Never called in production paths.
+@_cdecl("palmier_crash_test")
+public func palmierCrashTest() {
+    UnsafeMutablePointer<UInt8>(bitPattern: 0)!.pointee = 0
+}
