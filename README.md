@@ -16,7 +16,7 @@ This is an independent fork by [@yassinebkr](https://github.com/yassinebkr), not
 
 ## Install (Windows)
 
-**[Download the latest installer](https://github.com/yassinebkr/palmier-pro/releases/latest)** (`PalmierWin-Setup-*.exe`) and run it — no admin needed. Requirements: Windows 10/11 x64 and a Vulkan-capable GPU (the installer and the app both check and say so clearly instead of crashing).
+**[Download the latest installer](https://github.com/yassinebkr/palmier-pro/releases/latest/download/PalmierWin-Setup.exe)** and run it — no admin needed. Requirements: Windows 10/11 x64 and a Vulkan-capable GPU (the installer and the app both check and say so clearly instead of crashing).
 
 First launch asks your name and accent color. If something goes wrong, logs are always on: `%APPDATA%\PalmierPro\logs\` — use the badge menu's *Report a problem* to share them.
 

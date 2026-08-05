@@ -99,19 +99,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "ISCC exited $LASTEXITCODE" }
           Get-Item "PalmierWin\Shell\installer\output\PalmierWin-Setup-$env:VERSION.exe" |
             ForEach-Object { "installer: $($_.FullName) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
+          # Stable name for the permanent releases/latest/download link.
+          Copy-Item "PalmierWin\Shell\installer\output\PalmierWin-Setup-$env:VERSION.exe" `
+                    "PalmierWin\Shell\installer\output\PalmierWin-Setup.exe"
 
-      - name: Publish prerelease
+      - name: Publish release (marked Latest)
         uses: softprops/action-gh-release@v2
         with:
-          name: PalmierWin v${{ env.VERSION }} (Windows prerelease)
+          name: PalmierWin v${{ env.VERSION }} for Windows
           tag_name: v${{ env.VERSION }}-win
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: |
             PalmierWin/Shell/installer/output/PalmierWin-Setup-${{ env.VERSION }}.exe
+            PalmierWin/Shell/installer/output/PalmierWin-Setup.exe
             PalmierWin-${{ env.VERSION }}-win-x64.zip
           body: |
-            Windows x64 test build of PalmierWin.
+            Windows x64 build of PalmierWin.
 
             Download `PalmierWin-Setup-${{ env.VERSION }}.exe` and run it — no admin needed.
             The zip is the same build, unpackaged, for portable use. Needs a Vulkan-capable GPU.
-            Session and crash logs land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report.
+            Session and crash logs land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report
+            (badge menu → Report a problem does it in one click).
