@@ -34,6 +34,19 @@ public static class CrashLog {
         }
     }
 
+    /// Native-crash variant: free-form body (no managed exception exists).
+    public static string? Write(string kind, string body) {
+        try {
+            Directory.CreateDirectory(LogDirectory);
+            string path = Path.Combine(LogDirectory,
+                $"crash-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            File.WriteAllText(path, Format(kind, new Exception(body)));
+            return path;
+        } catch {
+            return null;
+        }
+    }
+
     internal static string Format(string kind, Exception exception) {
         var text = new StringBuilder();
         text.AppendLine("PalmierWin crash log");
@@ -64,7 +77,69 @@ public static class CrashHandler {
             CrashLog.Write("unobserved task exception", e.Exception);
             e.SetObserved();
         };
+        InstallNativeHandler();
     }
+
+    // --- Native crashes (access violations etc. in the Swift engine or CLR) ---
+    // Managed handlers never see these; a vectored handler runs before the
+    // process dies and leaves a log + minidump behind. Best-effort by design:
+    // the process is already broken, so keep the work small and never throw.
+
+    static readonly NativeExceptionDelegate nativeHandler = OnNativeException;
+    static int nativeReported;
+
+    delegate uint NativeExceptionDelegate(IntPtr exceptionPointers);
+
+    static void InstallNativeHandler() {
+        try {
+            AddVectoredExceptionHandler(1, Marshal.GetFunctionPointerForDelegate(nativeHandler));
+        } catch { }
+    }
+
+    static uint OnNativeException(IntPtr exceptionPointers) {
+        const uint CONTINUE_SEARCH = 0;
+        try {
+            if (Interlocked.Exchange(ref nativeReported, 1) != 0) return CONTINUE_SEARCH;
+            var rec = Marshal.PtrToStructure<ExceptionRecord>(ExceptionRecordOf(exceptionPointers));
+            string code = $"0x{rec.Code:X8}";
+            string body = $"Native crash {code} at 0x{rec.Address.ToInt64():X16}\n" +
+                          "(Swift engine or CLR fault — no managed stack available; see the .dmp next to this log)";
+            string? path = CrashLog.Write($"native crash {code}", body);
+            if (path is not null)
+                WriteMinidump(Path.ChangeExtension(path, ".dmp"), exceptionPointers);
+            Console.Error.WriteLine($"fatal: native crash {code} at 0x{rec.Address.ToInt64():X}");
+        } catch { }
+        return CONTINUE_SEARCH;  // let the process die its normal death
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ExceptionRecord { public uint Code; public uint Flags; public IntPtr Next; public IntPtr Address; }
+
+    static IntPtr ExceptionRecordOf(IntPtr exceptionPointers) => Marshal.ReadIntPtr(exceptionPointers);
+
+    static void WriteMinidump(string path, IntPtr exceptionPointers) {
+        try {
+            using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+            var info = new MinidumpExceptionInformation {
+                ThreadId = GetCurrentThreadId(),
+                ExceptionPointers = exceptionPointers,
+                ClientPointers = 0,
+            };
+            MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+                file.SafeFileHandle.DangerousGetHandle(), 2 /* MiniDumpWithFullMemory? no: 2 = with thread info */,
+                ref info, IntPtr.Zero, IntPtr.Zero);
+        } catch { }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MinidumpExceptionInformation { public uint ThreadId; public IntPtr ExceptionPointers; public int ClientPointers; }
+
+    [DllImport("kernel32.dll")] static extern IntPtr AddVectoredExceptionHandler(uint first, IntPtr handler);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern uint GetCurrentProcessId();
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("dbghelp.dll")] static extern bool MiniDumpWriteDump(IntPtr process, uint pid, IntPtr file,
+        int dumpType, ref MinidumpExceptionInformation info, IntPtr userStream, IntPtr callback);
 
     /// Avalonia UI-thread fatals arrive here from App.
     public static void OnUiThreadException(Exception exception) =>

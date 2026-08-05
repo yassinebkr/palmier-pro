@@ -12,6 +12,11 @@ static class Program {
     public static int Main(string[] args) {
         CrashHandler.Install();
         SessionLog.Start();
+        if (args.Contains("--native-crash-test")) {
+            // A real native fault inside the Swift DLL: exactly the wild case
+            // the vectored handler exists for.
+            CoreApi.palmier_crash_test();
+        }
         if (!CoreApi.TryLoadNativeHost()) {
             SessionLog.Event("startup", "PalmierCoreHost.dll could not be loaded");
             CrashHandler.ShowFatal("PalmierWin cannot start",
