@@ -17,12 +17,15 @@
       <RowDefinition Height="4"/>
       <RowDefinition Height="240" MinHeight="140"/>
     </Grid.RowDefinitions>
+    <!-- The column minima sum to the window's 960 MinWidth exactly; a bigger
+         sum would push the right side (zoom slider, overview strip, caption
+         buttons) past the right edge of a narrow window. -->
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="230" MinWidth="170" MaxWidth="420"/>
       <ColumnDefinition Width="4"/>
       <ColumnDefinition Width="280" MinWidth="220" MaxWidth="520"/>
       <ColumnDefinition Width="4"/>
-      <ColumnDefinition Width="*" MinWidth="360"/>
+      <ColumnDefinition Width="*" MinWidth="318"/>
       <ColumnDefinition Width="4"/>
       <ColumnDefinition Width="340" MinWidth="240" MaxWidth="520"/>
     </Grid.ColumnDefinitions>
@@ -37,8 +40,7 @@
         <views:CaptionButtons x:Name="Caption" DockPanel.Dock="Right"/>
       <Grid ColumnDefinitions="*,Auto,*" VerticalAlignment="Center" Margin="12,0">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Classes="icon" FontSize="11" Padding="8,3" Content="File"
-                  Foreground="{StaticResource ThemeTextMutedBrush}">
+          <Button Padding="12,3" FontSize="11" Content="File">
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnFileMenuOpening">
                 <MenuItem Header="New Project" Click="OnNewProject"/>
@@ -69,11 +71,6 @@
         </Panel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
                     HorizontalAlignment="Right" VerticalAlignment="Center">
-          <Button Classes="icon" Click="OnSettingsClick" ToolTip.Tip="Settings">
-            <Path Data="M 6,0 L 7.5,2.2 L 10.2,2 L 10.8,4.6 L 12,6 L 10.8,7.4 L 10.2,10 L 7.5,9.8 L 6,12 L 4.5,9.8 L 1.8,10 L 1.2,7.4 L 0,6 L 1.2,4.6 L 1.8,2 L 4.5,2.2 Z M 6,4.2 A 1.8,1.8 0 1 0 6,7.8 A 1.8,1.8 0 1 0 6,4.2"
-                  Stroke="{StaticResource ThemeTextMutedBrush}" StrokeThickness="1"
-                  VerticalAlignment="Center"/>
-          </Button>
           <Button Padding="12,3" FontSize="11" Click="OnExportClick">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Path Data="M 5,0 V 7 M 2,4 L 5,7 L 8,4 M 0,9 H 10"
@@ -82,9 +79,14 @@
               <TextBlock Text="Export" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
+          <!-- The badge: the user's initial on the accent. Its menu is the
+               way into Settings and About. -->
           <Button Classes="icon" ToolTip.Tip="About and settings">
-            <Border Width="22" Height="22" CornerRadius="11" Background="#7A5CC5">
-              <TextBlock Text="Y" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Border Width="22" Height="22" CornerRadius="11"
+                    Background="{StaticResource ThemePrimaryBrush}">
+              <TextBlock Text="{Binding UserInitial}" FontSize="11" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Foreground="{StaticResource ThemePrimaryTextBrush}"/>
             </Border>
             <Button.Flyout>
               <MenuFlyout>

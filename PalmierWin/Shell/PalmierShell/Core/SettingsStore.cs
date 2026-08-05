@@ -18,6 +18,10 @@ public sealed record AppSettings(string Provider, string Model) {
     /// Accent colour as #RRGGBB; empty means the built-in amber.
     public string Accent { get; init; } = "";
 
+    /// Display name behind the top-right badge; empty until the first-run
+    /// welcome dialog collects one.
+    public string UserName { get; init; } = "";
+
     public bool SnapEnabled { get; init; } = true;
 
     /// "Later" on an update prompt suppresses it until this moment.
@@ -62,6 +66,7 @@ public static class SettingsStore {
         public Dictionary<string, string> KeysProtected { get; init; } = new();
         public Dictionary<string, string> Models { get; init; } = new();
         public string Accent { get; init; } = "";
+        public string UserName { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
         public DateTimeOffset? UpdateSnoozeUntil { get; init; }
         public string UpdateSkipVersion { get; init; } = "";
@@ -88,6 +93,7 @@ public static class SettingsStore {
                 Keys = keys,
                 Models = new Dictionary<string, string>(persisted.Models),
                 Accent = persisted.Accent,
+                UserName = persisted.UserName,
                 SnapEnabled = persisted.SnapEnabled,
                 UpdateSnoozeUntil = persisted.UpdateSnoozeUntil,
                 UpdateSkipVersion = persisted.UpdateSkipVersion,
@@ -114,6 +120,7 @@ public static class SettingsStore {
                     KeysProtected = encrypted,
                     Models = new Dictionary<string, string>(settings.Models),
                     Accent = settings.Accent,
+                    UserName = settings.UserName,
                     SnapEnabled = settings.SnapEnabled,
                     UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
                     UpdateSkipVersion = settings.UpdateSkipVersion,

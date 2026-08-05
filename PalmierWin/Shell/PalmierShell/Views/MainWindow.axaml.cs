@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -56,6 +57,12 @@ public partial class MainWindow : Window {
         Closed += (_, _) => viewModel.Dispose();
         Opened += OnOpened;
         KeyDown += OnKeyDown;
+        viewModel.PreferencesApplied += MaybeShowWelcome;
+        // Resized arrives after the native resize, unlike the WindowState
+        // change itself — the margin math needs the final window rect.
+        Resized += (_, _) => {
+            if (WindowState == WindowState.Maximized) UpdateMaximizedMargin();
+        };
 
         autosave = new DispatcherTimer { Interval = TimeSpan.FromSeconds(45) };
         autosave.Tick += (_, _) => viewModel.SaveRecovery();
@@ -109,6 +116,67 @@ public partial class MainWindow : Window {
             // Stay silent: the next daily tick tries again.
         }
     }
+
+    bool opened;
+    bool welcomeShown;
+
+    /// First launch only: collect the name and accent that drive the badge.
+    /// Waits for both the window and the settings read before showing.
+    void MaybeShowWelcome() {
+        if (welcomeShown || !opened || !viewModel.PreferencesReady || !viewModel.NeedsWelcome) return;
+        welcomeShown = true;
+        _ = ShowWelcomeAsync();
+    }
+
+    async Task ShowWelcomeAsync() {
+        var choice = await WelcomeDialog.ShowAsync(this);
+        if (choice is null) return;  // closed: nothing saved, asked again next launch
+        viewModel.SetUserName(choice.Name);
+        await Task.Run(() => SettingsStore.Update(s =>
+            s with { UserName = choice.Name, Accent = choice.AccentHex }));
+    }
+
+    /// Borderless windows are sized past the screen edges when maximized;
+    /// the root margin in UpdateMaximizedMargin pulls the content back in.
+    /// Restore can go straight to zero; the maximize direction is corrected
+    /// by the Resized handler above once the native rect is final.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change) {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty && WindowState != WindowState.Maximized)
+            RootGrid.Margin = new Thickness(0);
+    }
+
+    void UpdateMaximizedMargin() {
+        if (WindowState != WindowState.Maximized) return;
+        var margin = FrameOverhang();
+        if (margin != RootGrid.Margin) RootGrid.Margin = margin;
+    }
+
+    /// How far the maximized borderless window hangs past the monitor's
+    /// working area, in DIPs, per side. Windows sizes a maximized window to
+    /// the work area plus the classic frame overhang even when there is no
+    /// frame, so the working area — not the window rect — is the measure.
+    Thickness FrameOverhang() {
+        try {
+            if (TryGetPlatformHandle() is not { } handle) return new Thickness(8);
+            if (!GetWindowRect(handle.Handle, out RECT window)) return new Thickness(8);
+            var area = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.WorkingArea;
+            if (area is not { } workArea) return new Thickness(8);
+            double scale = RenderScaling > 0 ? RenderScaling : 1;
+            double Side(double outside, double inside) => Math.Max(0, (inside - outside) / scale);
+            return new Thickness(
+                Side(window.Left, workArea.X), Side(window.Top, workArea.Y),
+                Side(workArea.X + workArea.Width, window.Right),
+                Side(workArea.Y + workArea.Height, window.Bottom));
+        } catch {
+            return new Thickness(8);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RECT { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 
     /// Never drop unsaved work on close: cancel, ask, then close for real.
     async void OnClosing(object? sender, WindowClosingEventArgs e) {
@@ -233,6 +301,9 @@ public partial class MainWindow : Window {
     /// timeline and selects the first clip).
     async void OnOpened(object? sender, EventArgs e) {
         RecentreIfOffScreen();
+        opened = true;
+        MaybeShowWelcome();
+        UpdateMaximizedMargin();
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         // Dev flag: throw on the UI thread to exercise the global crash
         // handler end to end (log on disk, dialog, exit).
