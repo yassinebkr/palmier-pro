@@ -467,6 +467,9 @@ public partial class MainWindow : Window {
             "OK");
     }
 
+    void OnReportProblemClick(object? sender, RoutedEventArgs e) =>
+        _ = ReportProblemDialog.ShowAsync(this);
+
     void OnProjectSettings(object? sender, RoutedEventArgs e) =>
         new ProjectSettingsDialog(viewModel).ShowDialog(this);
 

@@ -2,15 +2,23 @@
 
 **A Windows-native AI video editor — built on the open source [Palmier Pro](https://github.com/palmier-io/palmier-pro) codebase.**
 
+<img src="./assets/palmierwin-editor.png" alt="PalmierWin editor" width="960" />
+
 PalmierWin takes Palmier Pro's portable editor core and rebuilds everything Apple-specific on Windows foundations: a C#/Avalonia shell, a Vulkan compositor, FFmpeg decode/encode, and a Swift media engine shared with the original project through `PalmierCore`.
 
 This is an independent fork by [@yassinebkr](https://github.com/yassinebkr), not an official Palmier product. The upstream macOS app (SwiftUI/AppKit, macOS 26) still lives in `Sources/` and builds unchanged.
+
+## Install (Windows)
+
+**[Download the latest installer](https://github.com/yassinebkr/palmier-pro/releases/latest)** (`PalmierWin-Setup-*.exe`) and run it — no admin needed. Requirements: Windows 10/11 x64 and a Vulkan-capable GPU (the installer and the app both check and say so clearly instead of crashing).
+
+First launch asks your name and accent color. If something goes wrong, logs are always on: `%APPDATA%\PalmierPro\logs\` — use the badge menu's *Report a problem* to share them.
 
 ## Status
 
 The Windows app is real and running. What works today:
 
-- **Editor shell (Avalonia):** AppTheme-faithful dark UI — media library (folders, search, grid/list, hover scrub), preview with transport + source-monitor tabs, custom timeline (filmstrips, waveforms, roll/trim/blade/ripple edits, snap, ranges, multi-track, tabs), inspector (transform, keyframes, fades, effects, LUT), undo/redo, project files (`.palmier` save/open/autosave), export to H.264/MP4.
+- **Editor shell (Avalonia):** AppTheme-faithful dark UI — media library (folders, search, grid/list, hover scrub), preview with transport + source-monitor tabs, custom timeline (filmstrips, waveforms, roll/trim/blade/ripple edits, snap, ranges, multi-track, tabs), inspector (transform, keyframes, fades, effects, LUT), undo/redo, project files (`.palmier` save/open/autosave), export queue to H.264/MP4, FCPXML interchange, auto-update.
 - **Media engine (Swift + Vulkan + FFmpeg):** frame-accurate decode with seek-and-walk caching, 12 effect kernels re-authored in SPIR-V, text layers, audio (miniaudio/WASAPI), composited-frame capture, offscreen export.
 - **AI agent:** multi-provider chat (Anthropic, OpenAI, Z.AI, Moonshot, OpenRouter) with tool-use editing of the timeline, streaming, permission prompts, live model lists.
 - **Generation:** Replicate and fal.ai integration (Seedance 2.0, Kling 3.0, Veo 3 families) with first/last-frame transitions generated straight from timeline cuts, reference media, cost estimates, and provenance sidecars.

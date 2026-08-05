@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:PalmierShell.Views"
+        x:Class="PalmierShell.Views.ReportProblemDialog"
+        Title="Report a problem" Width="440" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="{StaticResource ThemeSurfaceBrush}">
+  <StackPanel>
+  <Border Height="32" Background="{StaticResource ThemeRaisedBrush}"
+          BorderBrush="{StaticResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+          PointerPressed="OnTitleBarPressed">
+    <DockPanel>
+      <views:CaptionButtons DockPanel.Dock="Right" ShowMinimize="False" ShowMaximize="False"/>
+      <TextBlock Text="Report a problem" FontSize="11" VerticalAlignment="Center" Margin="12,0"
+                 Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+    </DockPanel>
+  </Border>
+  <StackPanel Margin="16" Spacing="10">
+    <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="17"
+               Foreground="{StaticResource ThemeTextSecondaryBrush}"
+               Text="This bundles your recent session and crash logs plus basic system info, and uploads them to a temporary private link you can send us. Media files and API keys are never included — anything key-shaped is redacted."/>
+    <TextBox x:Name="NoteBox" Watermark="What went wrong? (optional)" FontSize="12"
+             AcceptsReturn="True" Height="64" TextWrapping="Wrap"/>
+    <TextBlock x:Name="StatusText" FontSize="11" TextWrapping="Wrap"
+               Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="SendButton" Content="Send logs" Click="OnSend" Classes="primary"/>
+      <Button x:Name="OpenButton" Content="Open logs folder" Click="OnOpenFolder" IsVisible="False"/>
+      <Button Content="Cancel" Click="OnCancel"/>
+    </StackPanel>
+  </StackPanel>
+  </StackPanel>
+</Window>
