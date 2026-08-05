@@ -99,8 +99,13 @@ public static class CrashHandler {
     static uint OnNativeException(IntPtr exceptionPointers) {
         const uint CONTINUE_SEARCH = 0;
         try {
-            if (Interlocked.Exchange(ref nativeReported, 1) != 0) return CONTINUE_SEARCH;
             var rec = Marshal.PtrToStructure<ExceptionRecord>(ExceptionRecordOf(exceptionPointers));
+            // Benign control-flow exceptions the runtime raises on purpose
+            // (thread naming, debugger notifications, managed throws) — never
+            // report these; only genuine faults below.
+            if (rec.Code is 0x406D1388 or 0x40010006 or 0x4001000A or 0x04242420 or 0xE0434F4D)
+                return CONTINUE_SEARCH;
+            if (Interlocked.Exchange(ref nativeReported, 1) != 0) return CONTINUE_SEARCH;
             string code = $"0x{rec.Code:X8}";
             string body = $"Native crash {code} at 0x{rec.Address.ToInt64():X16}\n" +
                           "(Swift engine or CLR fault — no managed stack available; see the .dmp next to this log)";
