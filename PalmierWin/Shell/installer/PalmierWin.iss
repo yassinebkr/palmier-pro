@@ -11,6 +11,7 @@
 [Setup]
 AppId={{B7E2A4F1-3C5D-4E6A-9F0B-1D2C3A4B5C6D}
 AppName=PalmierWin
+SetupIconFile=..\PalmierShell\Assets\app-icon.ico
 AppVersion={#AppVersion}
 AppVerName=PalmierWin {#AppVersion}
 AppPublisher=Yassine Bkr

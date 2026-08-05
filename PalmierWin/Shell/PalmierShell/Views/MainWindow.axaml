@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:PalmierShell.ViewModels"
         x:Class="PalmierShell.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="Palmier Pro" Width="1440" Height="900"
+        Title="PalmierWin" Icon="avares://PalmierShell/Assets/app-icon.png" Width="1440" Height="900"
         MinWidth="960" MinHeight="600"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"

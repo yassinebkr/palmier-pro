@@ -1,4 +1,10 @@
+<div align="center">
+
+<img src="./assets/palmierwin-logo2.png" alt="PalmierWin" width="520" />
+
 # PalmierWin
+
+</div>
 
 **A Windows-native AI video editor — built on the open source [Palmier Pro](https://github.com/palmier-io/palmier-pro) codebase.**
 
