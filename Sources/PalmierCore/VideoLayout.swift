@@ -48,6 +48,16 @@ public enum VideoLayout: String, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
+        case .full: "Full Frame"
+        case .sideBySide: "Side by Side"
+        case .topBottom: "Top / Bottom"
+        case .pipBottomRight: "PiP Bottom Right"
+        case .pipBottomLeft: "PiP Bottom Left"
+        case .pipTopRight: "PiP Top Right"
+        case .pipTopLeft: "PiP Top Left"
+        case .grid2x2: "Grid 2×2"
+        case .grid3x3: "Grid 3×3"
+        case .grid4x4: "Grid 4×4"
         case .mainSidebar: "Main + Sidebar"
         case .threeUp: "Three-Up"
         case .threeStack: "Three-Stack"
