@@ -65,10 +65,9 @@ extension EditorViewModel {
         withTimelineSwap(actionName: actionName) {
             // Pull moved clips off their source tracks first, so clearRegion on
             // the destinations never touches them.
-            for info in clipInfos {
-                if let loc = findClip(id: info.clip.id) {
-                    timeline.tracks[loc.trackIndex].clips.remove(at: loc.clipIndex)
-                }
+            let movedIds = Set(clipInfos.map(\.clip.id))
+            for trackIndex in timeline.tracks.indices {
+                timeline.tracks[trackIndex].clips.removeAll { movedIds.contains($0.id) }
             }
 
             // Trim / remove any non-moved clips blocking each destination range.
@@ -590,19 +589,11 @@ extension EditorViewModel {
     }
 
     private func clipLocations(for clipIds: [String]) -> [String: ClipLocation] {
-        let requestedIds = Set(clipIds)
-        guard !requestedIds.isEmpty else { return [:] }
-
         var locations: [String: ClipLocation] = [:]
-        locations.reserveCapacity(requestedIds.count)
-        for trackIndex in timeline.tracks.indices {
-            for clipIndex in timeline.tracks[trackIndex].clips.indices {
-                let clipId = timeline.tracks[trackIndex].clips[clipIndex].id
-                guard requestedIds.contains(clipId), locations[clipId] == nil else { continue }
-                locations[clipId] = ClipLocation(trackIndex: trackIndex, clipIndex: clipIndex)
-                if locations.count == requestedIds.count {
-                    return locations
-                }
+        locations.reserveCapacity(clipIds.count)
+        for clipId in clipIds {
+            if let location = findClip(id: clipId) {
+                locations[clipId] = location
             }
         }
         return locations

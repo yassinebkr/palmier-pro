@@ -281,14 +281,14 @@ struct MediaTab: View {
     // MARK: - Toolbar
 
     private var toolbar: some View {
-        VStack(spacing: AppTheme.Spacing.xs) {
+        VStack(spacing: AppTheme.Spacing.xxs) {
             actionsRow
             searchControlsRow
             contextBar
         }
         .padding(.horizontal, AppTheme.Spacing.sm)
         .padding(.top, AppTheme.Spacing.sm)
-        .padding(.bottom, AppTheme.Spacing.xs)
+        .padding(.bottom, AppTheme.Spacing.sm)
         .background(AppTheme.Background.surfaceColor)
     }
 
@@ -515,7 +515,11 @@ struct MediaTab: View {
     }
 
     func searchFilteredTimelines(_ timelines: [Timeline]) -> [Timeline] {
-        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        Self.timelinesMatchingName(timelines, query: searchQuery)
+    }
+
+    static func timelinesMatchingName(_ timelines: [Timeline], query: String) -> [Timeline] {
+        let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return timelines }
         return timelines.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }

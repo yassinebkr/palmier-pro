@@ -162,7 +162,6 @@
 "Chat history" = "Cronologia chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Chatta con il tuo agente. Può generare contenuti, modificare clip, organizzare risorse e molto altro. Per iniziare, accedi oppure usa la tua chiave API Anthropic.";
 "Check for Updates…" = "Controlla aggiornamenti…";
-"Choose Audio" = "Scegli audio";
 "Choose a .cube LUT file" = "Scegli un file LUT .cube";
 "Choose a crop aspect" = "Scegli proporzioni di ritaglio";
 "Choose animation clip color" = "Scegli colore clip animazione";
@@ -284,7 +283,6 @@
 "Designer" = "Designer";
 "Destination" = "Destinazione";
 "Detail" = "Dettaglio";
-"Details" = "Dettagli";
 "Detect Beats" = "Rileva battiti";
 "Detected %lld beats at %lld BPM." = "Rilevati %lld battiti a %lld BPM.";
 "Detected %lld beats." = "Rilevati %lld battiti.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "Genera video, immagini o audio con modelli e impostazioni diversi. Trascina le risorse dal pannello multimediale qui sopra nel fotogramma di riferimento.";
 "Generate · %lld credits" = "Genera · %lld crediti";
 "Generate · 1 credit" = "Genera · 1 credito";
-"Generated" = "Generato";
 "Generating…" = "Generazione…";
 "Generation Failed" = "Generazione non riuscita";
+"Generation Input" = "Generation Input";
 "Generation complete" = "Generazione completata";
 "Generation in progress" = "Generazione in corso";
 "Generation panel" = "Pannello di generazione";
@@ -421,6 +419,7 @@
 "Hard Light" = "Luce intensa";
 "Height" = "Altezza";
 "Help" = "Aiuto";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "Nascondi timeline fotogrammi chiave";
 "Highlight" = "Luce";
 "Highlight Block" = "Blocco evidenziazione";
@@ -796,6 +795,7 @@
 "Sharpen" = "Nitidezza";
 "Short-form and social" = "Formato breve e social";
 "Shortcuts" = "Abbreviazioni";
+"Show Info" = "Show Info";
 "Show in Finder" = "Mostra nel Finder";
 "Show keyframe timeline" = "Mostra timeline fotogrammi chiave";
 "Show notifications" = "Mostra notifiche";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Questo è il pannello di anteprima per riprodurre i contenuti multimediali selezionati o l'intera timeline.";
 "This model cannot cap the output at 60 FPS." = "Questo modello non può limitare l'output a 60 FPS.";
 "This permanently removes %@." = "Rimuove definitivamente %@.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Tre riquadri";
 "Threshold" = "Soglia";
 "Thumbnail Size" = "Dimensione miniature";
@@ -900,6 +901,7 @@
 "Timeline" = "Timeline";
 "Timeline Format" = "Formato timeline";
 "Timeline colors" = "Colori timeline";
+"Timelines" = "Timelines";
 "Tint" = "Tinta";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "Colora le forme d'onda per interlocutore. Le voci vengono abbinate tra le clip usando le trascrizioni Cloud.";
 "Toggle Agent Panel" = "Mostra/nascondi pannello agente";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "Separa multicamera";
 "Unlink" = "Scollega";
 "Untitled" = "Senza titolo";
-"Up to %@" = "Fino a %@";
 "Update" = "Aggiorna";
 "Update available" = "Aggiornamento disponibile";
 "Updating %@" = "Aggiornamento di %@";

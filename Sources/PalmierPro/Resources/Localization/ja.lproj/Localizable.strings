@@ -162,7 +162,6 @@
 "Chat history" = "チャット履歴";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "エージェントとチャットできます。コンテンツの生成、クリップの編集、アセットの整理などが可能です。まずサインインするか、ご自身のAnthropic APIキーを使用してください。";
 "Check for Updates…" = "アップデートを確認…";
-"Choose Audio" = "オーディオを選択";
 "Choose a .cube LUT file" = ".cube LUTファイルを選択";
 "Choose a crop aspect" = "クロップのアスペクトを選択";
 "Choose animation clip color" = "アニメーションクリップのカラーを選択";
@@ -284,7 +283,6 @@
 "Designer" = "デザイナー";
 "Destination" = "書き出し先";
 "Detail" = "ディテール";
-"Details" = "詳細";
 "Detect Beats" = "ビートを検出";
 "Detected %lld beats at %lld BPM." = "%lld個のビートを%lld BPMで検出しました。";
 "Detected %lld beats." = "%lld個のビートを検出しました。";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "さまざまなモデルと設定でビデオ、画像、オーディオを生成します。上のメディアパネルから参照フレームへアセットをドラッグしてください。";
 "Generate · %lld credits" = "生成 · %lldクレジット";
 "Generate · 1 credit" = "生成 · 1クレジット";
-"Generated" = "生成済み";
 "Generating…" = "生成中…";
 "Generation Failed" = "生成に失敗しました";
+"Generation Input" = "Generation Input";
 "Generation complete" = "生成完了";
 "Generation in progress" = "生成中";
 "Generation panel" = "生成パネル";
@@ -421,6 +419,7 @@
 "Hard Light" = "ハードライト";
 "Height" = "高さ";
 "Help" = "ヘルプ";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "キーフレームタイムラインを非表示";
 "Highlight" = "ハイライト";
 "Highlight Block" = "ハイライトブロック";
@@ -796,6 +795,7 @@
 "Sharpen" = "シャープ";
 "Short-form and social" = "ショート動画・SNS";
 "Shortcuts" = "ショートカット";
+"Show Info" = "Show Info";
 "Show in Finder" = "Finderに表示";
 "Show keyframe timeline" = "キーフレームタイムラインを表示";
 "Show notifications" = "通知を表示";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "これは選択したメディアまたはタイムライン全体を再生するプレビューパネルです。";
 "This model cannot cap the output at 60 FPS." = "このモデルでは出力を60 FPSに制限できません。";
 "This permanently removes %@." = "%@を完全に削除します。";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "3分割";
 "Threshold" = "しきい値";
 "Thumbnail Size" = "サムネイルサイズ";
@@ -900,6 +901,7 @@
 "Timeline" = "タイムライン";
 "Timeline Format" = "タイムライン形式";
 "Timeline colors" = "タイムラインのカラー";
+"Timelines" = "Timelines";
 "Tint" = "色合い";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "話者ごとに波形を色分けします。Cloud文字起こしを使用して、クリップ間で声を照合します。";
 "Toggle Agent Panel" = "エージェントパネルを切り替え";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "マルチカムのグループ化を解除";
 "Unlink" = "リンクを解除";
 "Untitled" = "名称未設定";
-"Up to %@" = "最大%@";
 "Update" = "アップデート";
 "Update available" = "アップデートがあります";
 "Updating %@" = "%@をアップデート中";

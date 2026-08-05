@@ -44,6 +44,7 @@ public enum VideoLayout: String, CaseIterable, Sendable {
     case grid4x4 = "grid_4x4"
     case mainSidebar = "main_sidebar"
     case threeUp = "three_up"
+    case threeStack = "three_stack"
 
     public var displayName: String {
         switch self {
@@ -59,6 +60,7 @@ public enum VideoLayout: String, CaseIterable, Sendable {
         case .grid4x4: "Grid 4×4"
         case .mainSidebar: "Main + Sidebar"
         case .threeUp: "Three-Up"
+        case .threeStack: "Three-Stack"
         }
     }
 
@@ -103,6 +105,14 @@ public enum VideoLayout: String, CaseIterable, Sendable {
                 LayoutSlot(id: "left",   rect: LayoutRect(x: 0,         y: 0, w: third, h: 1)),
                 LayoutSlot(id: "center", rect: LayoutRect(x: third,     y: 0, w: third, h: 1)),
                 LayoutSlot(id: "right",  rect: LayoutRect(x: third * 2, y: 0, w: third, h: 1)),
+            ]
+
+        case .threeStack:
+            let third = 1.0 / 3.0
+            return [
+                LayoutSlot(id: "top",    rect: LayoutRect(x: 0, y: 0,         w: 1, h: third)),
+                LayoutSlot(id: "middle", rect: LayoutRect(x: 0, y: third,     w: 1, h: third)),
+                LayoutSlot(id: "bottom", rect: LayoutRect(x: 0, y: third * 2, w: 1, h: third)),
             ]
         }
     }

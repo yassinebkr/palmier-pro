@@ -162,7 +162,6 @@
 "Chat history" = "对话历史";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "与 Agent 对话。它可以生成内容、编辑片段、整理素材等。登录即可开始，也可以使用自己的 Anthropic API key。";
 "Check for Updates…" = "检查更新…";
-"Choose Audio" = "选择音频";
 "Choose a .cube LUT file" = "选择 .cube LUT 文件";
 "Choose a crop aspect" = "选择裁剪宽高比";
 "Choose animation clip color" = "选择动画片段颜色";
@@ -284,7 +283,6 @@
 "Designer" = "设计师";
 "Destination" = "目标位置";
 "Detail" = "细节";
-"Details" = "详细信息";
 "Detect Beats" = "检测节拍";
 "Detected %lld beats at %lld BPM." = "检测到 %lld 个节拍，速度为 %lld BPM。";
 "Detected %lld beats." = "检测到 %lld 个节拍。";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "使用不同模型和设置生成视频、图像或音频。将素材从上方媒体面板拖入参考框。";
 "Generate · %lld credits" = "生成 · %lld 积分";
 "Generate · 1 credit" = "生成 · 1 积分";
-"Generated" = "已生成";
 "Generating…" = "正在生成…";
 "Generation Failed" = "生成失败";
+"Generation Input" = "Generation Input";
 "Generation complete" = "生成完成";
 "Generation in progress" = "正在生成";
 "Generation panel" = "生成面板";
@@ -421,6 +419,7 @@
 "Hard Light" = "强光";
 "Height" = "高度";
 "Help" = "帮助";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "隐藏关键帧时间线";
 "Highlight" = "高光";
 "Highlight Block" = "高亮色块";
@@ -796,6 +795,7 @@
 "Sharpen" = "锐化";
 "Short-form and social" = "短视频与社交媒体";
 "Shortcuts" = "快捷键";
+"Show Info" = "Show Info";
 "Show in Finder" = "在“访达”中显示";
 "Show keyframe timeline" = "显示关键帧时间线";
 "Show notifications" = "显示通知";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "这是预览面板，用于播放所选媒体或整个时间线。";
 "This model cannot cap the output at 60 FPS." = "此模型无法将输出限制为 60 FPS。";
 "This permanently removes %@." = "这将永久移除 %@。";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "三画面";
 "Threshold" = "阈值";
 "Thumbnail Size" = "缩略图大小";
@@ -900,6 +901,7 @@
 "Timeline" = "时间线";
 "Timeline Format" = "时间线格式";
 "Timeline colors" = "时间线颜色";
+"Timelines" = "Timelines";
 "Tint" = "色调";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "按说话人为波形着色。使用云端转录匹配不同片段中的声音。";
 "Toggle Agent Panel" = "显示或隐藏 Agent 面板";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "取消多机位分组";
 "Unlink" = "取消链接";
 "Untitled" = "未命名";
-"Up to %@" = "最高 %@";
 "Update" = "更新";
 "Update available" = "有可用更新";
 "Updating %@" = "正在更新 %@";

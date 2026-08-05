@@ -162,7 +162,6 @@
 "Chat history" = "История чата";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Общайтесь со своим агентом. Он может создавать контент, монтировать клипы, упорядочивать материалы и многое другое. Для начала войдите в систему или используйте свой API-ключ Anthropic.";
 "Check for Updates…" = "Проверить обновления…";
-"Choose Audio" = "Выбрать аудио";
 "Choose a .cube LUT file" = "Выберите файл LUT в формате .cube";
 "Choose a crop aspect" = "Выберите соотношение сторон кадрирования";
 "Choose animation clip color" = "Выберите цвет клипа анимации";
@@ -284,7 +283,6 @@
 "Designer" = "Дизайнер";
 "Destination" = "Назначение";
 "Detail" = "Детализация";
-"Details" = "Сведения";
 "Detect Beats" = "Определить ритм";
 "Detected %lld beats at %lld BPM." = "Обнаружено долей: %lld при темпе %lld BPM.";
 "Detected %lld beats." = "Обнаружено долей: %lld.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "Создавайте видео, изображения или аудио с разными моделями и настройками. Перетащите материалы из панели медиафайлов выше в область референса.";
 "Generate · %lld credits" = "Создать · %lld кредитов";
 "Generate · 1 credit" = "Создать · 1 кредит";
-"Generated" = "Создано";
 "Generating…" = "Создание…";
 "Generation Failed" = "Ошибка генерации";
+"Generation Input" = "Generation Input";
 "Generation complete" = "Генерация завершена";
 "Generation in progress" = "Идёт генерация";
 "Generation panel" = "Панель генерации";
@@ -421,6 +419,7 @@
 "Hard Light" = "Жёсткий свет";
 "Height" = "Высота";
 "Help" = "Справка";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "Скрыть таймлайн ключевых кадров";
 "Highlight" = "Выделение";
 "Highlight Block" = "Блок выделения";
@@ -796,6 +795,7 @@
 "Sharpen" = "Резкость";
 "Short-form and social" = "Короткие видео и соцсети";
 "Shortcuts" = "Сочетания клавиш";
+"Show Info" = "Show Info";
 "Show in Finder" = "Показать в Finder";
 "Show keyframe timeline" = "Показать таймлайн ключевых кадров";
 "Show notifications" = "Показывать уведомления";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Это панель предпросмотра для воспроизведения выбранного медиафайла или всего таймлайна.";
 "This model cannot cap the output at 60 FPS." = "Эта модель не может ограничить результат частотой 60 FPS.";
 "This permanently removes %@." = "Это безвозвратно удалит %@.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Три окна";
 "Threshold" = "Порог";
 "Thumbnail Size" = "Размер миниатюр";
@@ -900,6 +901,7 @@
 "Timeline" = "Таймлайн";
 "Timeline Format" = "Формат таймлайна";
 "Timeline colors" = "Цвета таймлайна";
+"Timelines" = "Timelines";
 "Tint" = "Оттенок";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "Окрашивает волновые формы по говорящим. Голоса сопоставляются между клипами с помощью облачных расшифровок.";
 "Toggle Agent Panel" = "Показать или скрыть панель агента";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "Разгруппировать мультикам";
 "Unlink" = "Отменить связь";
 "Untitled" = "Без названия";
-"Up to %@" = "До %@";
 "Update" = "Обновить";
 "Update available" = "Доступно обновление";
 "Updating %@" = "Обновляется %@";

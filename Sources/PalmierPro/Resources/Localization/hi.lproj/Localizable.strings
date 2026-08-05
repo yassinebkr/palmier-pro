@@ -162,7 +162,6 @@
 "Chat history" = "चैट इतिहास";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "अपने एजेंट से चैट करें। यह कंटेंट जेनरेट कर सकता है, क्लिप एडिट कर सकता है, एसेट व्यवस्थित कर सकता है और बहुत कुछ। शुरू करने के लिए साइन इन करें या अपनी Anthropic API कुंजी इस्तेमाल करें।";
 "Check for Updates…" = "अपडेट जाँचें…";
-"Choose Audio" = "ऑडियो चुनें";
 "Choose a .cube LUT file" = ".cube LUT फ़ाइल चुनें";
 "Choose a crop aspect" = "क्रॉप आस्पेक्ट चुनें";
 "Choose animation clip color" = "एनिमेशन क्लिप का रंग चुनें";
@@ -284,7 +283,6 @@
 "Designer" = "डिज़ाइनर";
 "Destination" = "डेस्टिनेशन";
 "Detail" = "डिटेल";
-"Details" = "डिटेल्स";
 "Detect Beats" = "बीट्स पहचानें";
 "Detected %lld beats at %lld BPM." = "%lld बीट्स पहचानी गईं, %lld BPM पर।";
 "Detected %lld beats." = "%lld बीट्स पहचानी गईं।";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "अलग-अलग मॉडल और सेटिंग्स से वीडियो, इमेज या ऑडियो जेनरेट करें। ऊपर के मीडिया पैनल से एसेट को रेफ़रेंस फ़्रेम में ड्रैग करें।";
 "Generate · %lld credits" = "जेनरेट करें · %lld क्रेडिट";
 "Generate · 1 credit" = "जेनरेट करें · 1 क्रेडिट";
-"Generated" = "जेनरेट किया गया";
 "Generating…" = "जेनरेट हो रहा है…";
 "Generation Failed" = "जेनरेशन विफल";
+"Generation Input" = "Generation Input";
 "Generation complete" = "जेनरेशन पूर्ण";
 "Generation in progress" = "जेनरेशन जारी है";
 "Generation panel" = "जेनरेशन पैनल";
@@ -421,6 +419,7 @@
 "Hard Light" = "हार्ड लाइट";
 "Height" = "ऊँचाई";
 "Help" = "मदद";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "कीफ़्रेम टाइमलाइन छिपाएँ";
 "Highlight" = "हाइलाइट";
 "Highlight Block" = "हाइलाइट ब्लॉक";
@@ -796,6 +795,7 @@
 "Sharpen" = "शार्पन";
 "Short-form and social" = "शॉर्ट-फ़ॉर्म और सोशल";
 "Shortcuts" = "शॉर्टकट्स";
+"Show Info" = "Show Info";
 "Show in Finder" = "Finder में दिखाएँ";
 "Show keyframe timeline" = "कीफ़्रेम टाइमलाइन दिखाएँ";
 "Show notifications" = "सूचनाएँ दिखाएँ";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "यह चयनित मीडिया या पूरी टाइमलाइन चलाने का प्रीव्यू पैनल है।";
 "This model cannot cap the output at 60 FPS." = "यह मॉडल आउटपुट को 60 FPS पर सीमित नहीं कर सकता।";
 "This permanently removes %@." = "यह %@ को स्थायी रूप से हटाता है।";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "तीन पैनल";
 "Threshold" = "थ्रेशोल्ड";
 "Thumbnail Size" = "थंबनेल आकार";
@@ -900,6 +901,7 @@
 "Timeline" = "टाइमलाइन";
 "Timeline Format" = "टाइमलाइन फ़ॉर्मैट";
 "Timeline colors" = "टाइमलाइन के रंग";
+"Timelines" = "Timelines";
 "Tint" = "टिंट";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "स्पीकर के अनुसार वेवफ़ॉर्म को रंग देता है। क्लाउड ट्रांसक्रिप्ट से क्लिप्स के बीच आवाज़ें मैच की जाती हैं।";
 "Toggle Agent Panel" = "एजेंट पैनल टॉगल करें";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "मल्टीकैम अनग्रुप करें";
 "Unlink" = "अनलिंक";
 "Untitled" = "बिना शीर्षक";
-"Up to %@" = "%@ तक";
 "Update" = "अपडेट";
 "Update available" = "अपडेट उपलब्ध है";
 "Updating %@" = "%@ अपडेट हो रहा है";

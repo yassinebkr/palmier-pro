@@ -28,6 +28,7 @@ final class VideoEngine {
     private var playbackEndObserver: NSObjectProtocol?
     private(set) var rebuildTask: Task<Void, Never>?
     private var rebuildGeneration = 0
+    private var visualRefreshGeneration = 0
     private(set) var sourcePreviewTask: Task<Void, Never>?
     private var sourcePreviewGeneration = 0
     private var sourceTrackStart: CMTime = .zero
@@ -46,7 +47,6 @@ final class VideoEngine {
 
     private var trackMappings: [TrackMapping] = []
     private var clipNaturalSizes: [String: CGSize] = [:]
-    private var resolveTimelineSnapshot: @Sendable (String) -> Timeline? = { _ in nil }
     private var clipTransforms: [String: CGAffineTransform] = [:]
     private var compositionDuration: CMTime = .zero
 
@@ -279,15 +279,22 @@ final class VideoEngine {
 
     /// Everything CompositionBuilder.build reads; equal inputs → identical composition.
     private struct RebuildInputs: Equatable {
-        let involved: [Timeline]  // active timeline plus nested children
+        let involved: [Timeline]
+        let involvedTotalFrames: [Int]
         let mediaURLs: [String: URL]
         let assetSizes: [String: CGSize]
         let missingMediaRefs: Set<String>
     }
 
-    func rebuild() {
+    private typealias CompositionVisuals = (
+        audioMix: AVMutableAudioMix,
+        videoComposition: AVVideoComposition
+    )
+
+    func rebuild(visualsCurrent: Bool = false) {
         guard let editor, editor.activePreviewTab == .timeline else { return }
         let generation = invalidateRebuild()
+        let startingVisualRefreshGeneration = visualRefreshGeneration
 
         let mediaURLs = editor.mediaResolver.expectedURLMap()
         let missingMediaRefs = editor.missingMediaRefs
@@ -300,18 +307,27 @@ final class VideoEngine {
         let resolveTimeline = editor.timelineResolver()
 
         let timelineId = editor.timeline.id
+        let involvedTimelines = [editor.timeline]
+            + editor.timeline.reachableTimelines(resolve: { editor.timeline(for: $0) })
         let inputs = RebuildInputs(
-            involved: [editor.timeline] + editor.timeline.reachableTimelines(resolve: { editor.timeline(for: $0) }),
+            involved: involvedTimelines.map { $0.strippingTextClips() },
+            involvedTotalFrames: involvedTimelines.map(\.totalFrames),
             mediaURLs: mediaURLs,
             assetSizes: assetSizes,
             missingMediaRefs: missingMediaRefs
         )
         if let cached = compositionCache[timelineId], cached.inputs == inputs {
-            apply(cached.result, resolveTimeline: resolveTimeline, editor: editor)
+            let needsApply = player.currentItem?.asset !== cached.result.composition
+            if needsApply {
+                apply(cached.result, editor: editor)
+            }
+            if !trackMappings.isEmpty, needsApply || !visualsCurrent {
+                refreshVisuals()
+            }
             return
         }
 
-        let snapshot = inputs.involved[0]
+        let snapshot = involvedTimelines[0]
         rebuildTask = Task {
             let result: CompositionResult
             do {
@@ -332,15 +348,35 @@ final class VideoEngine {
                 return
             }
 
-            guard generation == rebuildGeneration else { return }
-            rebuildTask = nil
-            guard !Task.isCancelled else { return }
+            guard generation == rebuildGeneration,
+                  !Task.isCancelled,
+                  editor.activePreviewTab == .timeline,
+                  editor.timeline.id == timelineId else { return }
 
+            let useCurrentVisuals = startingVisualRefreshGeneration != visualRefreshGeneration
+            let appliedTimelineResolver = useCurrentVisuals ? editor.timelineResolver() : resolveTimeline
+            let correctiveVisuals = useCurrentVisuals
+                ? CompositionBuilder.buildVisuals(
+                    timeline: editor.timeline,
+                    trackMappings: result.trackMappings,
+                    clipNaturalSizes: result.clipNaturalSizes,
+                    clipTransforms: result.clipTransforms,
+                    resolveTimeline: appliedTimelineResolver,
+                    compositionDuration: result.composition.duration,
+                    renderSize: CGSize(width: editor.timeline.width, height: editor.timeline.height)
+                )
+                : nil
+
+            rebuildTask = nil
             if result.offlineMediaRefs.isEmpty && result.unprocessableMediaRefs.isEmpty {
                 compositionCache[timelineId] = (inputs, result)
             }
             compositionCache = compositionCache.filter { editor.openTimelineIds.contains($0.key) }
-            apply(result, resolveTimeline: resolveTimeline, editor: editor)
+            apply(
+                result,
+                editor: editor,
+                visuals: correctiveVisuals
+            )
         }
     }
 
@@ -358,18 +394,25 @@ final class VideoEngine {
         compositionCache.removeValue(forKey: timelineId)
     }
 
-    private func apply(_ result: CompositionResult, resolveTimeline: @escaping @Sendable (String) -> Timeline?, editor: EditorViewModel) {
+    private func apply(
+        _ result: CompositionResult,
+        editor: EditorViewModel,
+        visuals: CompositionVisuals? = nil
+    ) {
         trackMappings = result.trackMappings
         clipNaturalSizes = result.clipNaturalSizes
         clipTransforms = result.clipTransforms
         compositionDuration = result.composition.duration
-        resolveTimelineSnapshot = resolveTimeline
         editor.offlineMediaRefs = result.offlineMediaRefs
         editor.unprocessableMediaRefs = result.unprocessableMediaRefs
 
+        let appliedVisuals = visuals ?? (
+            audioMix: result.audioMix,
+            videoComposition: result.videoComposition
+        )
         let item = AVPlayerItem(asset: result.composition)
-        item.audioMix = result.audioMix
-        item.videoComposition = result.videoComposition
+        item.audioMix = appliedVisuals.audioMix
+        item.videoComposition = appliedVisuals.videoComposition
         replacePlayerItem(item, reason: "rebuild")
 
         seek(to: editor.currentFrame, mode: .exact)
@@ -377,6 +420,7 @@ final class VideoEngine {
     }
 
     func refreshVisuals() {
+        visualRefreshGeneration &+= 1
         guard let editor, editor.activePreviewTab == .timeline,
               let currentItem = player.currentItem,
               !trackMappings.isEmpty else {
@@ -389,7 +433,7 @@ final class VideoEngine {
             trackMappings: trackMappings,
             clipNaturalSizes: clipNaturalSizes,
             clipTransforms: clipTransforms,
-            resolveTimeline: resolveTimelineSnapshot,
+            resolveTimeline: editor.timelineResolver(),
             compositionDuration: compositionDuration,
             renderSize: CGSize(width: editor.timeline.width, height: editor.timeline.height)
         )
@@ -730,4 +774,14 @@ final class VideoEngine {
     }
 
     private static let interactiveSeekInterval: TimeInterval = 1.0 / 30.0
+}
+
+extension Timeline {
+    func strippingTextClips() -> Timeline {
+        var stripped = self
+        for index in stripped.tracks.indices {
+            stripped.tracks[index].clips.removeAll { $0.mediaType == .text }
+        }
+        return stripped
+    }
 }

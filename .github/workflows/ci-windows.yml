@@ -37,8 +37,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build-core-windows
-          key: spm-core-windows-${{ hashFiles('Sources/PalmierCore/**/*.swift') }}
-          restore-keys: spm-core-windows-
+          # ModuleCache .pcm files embed the absolute checkout path, so the
+          # cache is only valid for the same repository name (rename-proof).
+          key: spm-core-windows-${{ github.repository_id }}-${{ hashFiles('Sources/PalmierCore/**/*.swift') }}
+          restore-keys: spm-core-windows-${{ github.repository_id }}-
 
       - name: Build & test isolated PalmierCore
         shell: pwsh

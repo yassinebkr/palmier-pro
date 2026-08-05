@@ -162,7 +162,6 @@
 "Chat history" = "Sohbet geçmişi";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Aracınızla sohbet edin. İçerik oluşturabilir, klipleri düzenleyebilir, varlıklarınızı organize edebilir ve çok daha fazlasını yapabilir. Oturum açarak veya kendi Anthropic API anahtarınızı kullanarak başlayın.";
 "Check for Updates…" = "Güncellemeleri Denetle…";
-"Choose Audio" = "Ses Seç";
 "Choose a .cube LUT file" = "Bir .cube LUT dosyası seçin";
 "Choose a crop aspect" = "Kırpma oranı seçin";
 "Choose animation clip color" = "Animasyon klibi rengini seç";
@@ -284,7 +283,6 @@
 "Designer" = "Tasarımcı";
 "Destination" = "Hedef";
 "Detail" = "Ayrıntı";
-"Details" = "Ayrıntılar";
 "Detect Beats" = "Vuruşları Algıla";
 "Detected %lld beats at %lld BPM." = "%lld vuruş, %lld BPM hızında algılandı.";
 "Detected %lld beats." = "%lld vuruş algılandı.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "Farklı modeller ve ayarlarla video, görüntü veya ses oluşturun. Yukarıdaki medya panelinden varlıkları referans karesine sürükleyin.";
 "Generate · %lld credits" = "Oluştur · %lld kredi";
 "Generate · 1 credit" = "Oluştur · 1 kredi";
-"Generated" = "Oluşturuldu";
 "Generating…" = "Oluşturuluyor…";
 "Generation Failed" = "Oluşturma Başarısız Oldu";
+"Generation Input" = "Generation Input";
 "Generation complete" = "Oluşturma tamamlandı";
 "Generation in progress" = "Oluşturma sürüyor";
 "Generation panel" = "Oluşturma paneli";
@@ -421,6 +419,7 @@
 "Hard Light" = "Sert Işık";
 "Height" = "Yükseklik";
 "Help" = "Yardım";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "Anahtar kare zaman eksenini gizle";
 "Highlight" = "Vurgu";
 "Highlight Block" = "Vurgu Bloğu";
@@ -796,6 +795,7 @@
 "Sharpen" = "Keskinleştir";
 "Short-form and social" = "Kısa video ve sosyal medya";
 "Shortcuts" = "Kestirmeler";
+"Show Info" = "Show Info";
 "Show in Finder" = "Finder'da Göster";
 "Show keyframe timeline" = "Anahtar kare zaman eksenini göster";
 "Show notifications" = "Bildirimleri göster";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "Bu, seçili medyayı veya tüm zaman eksenini oynatabileceğiniz önizleme panelinizdir.";
 "This model cannot cap the output at 60 FPS." = "Bu model çıktıyı 60 FPS ile sınırlayamaz.";
 "This permanently removes %@." = "Bu işlem %@ öğesini kalıcı olarak kaldırır.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "Üçlü";
 "Threshold" = "Eşik";
 "Thumbnail Size" = "Küçük Resim Boyutu";
@@ -900,6 +901,7 @@
 "Timeline" = "Zaman Ekseni";
 "Timeline Format" = "Zaman Ekseni Biçimi";
 "Timeline colors" = "Zaman ekseni renkleri";
+"Timelines" = "Timelines";
 "Tint" = "Renk Tonu";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "Dalga biçimlerini konuşmacıya göre renklendirir. Sesler, bulut dökümleri kullanılarak klipler arasında eşleştirilir.";
 "Toggle Agent Panel" = "Aracı Panelini Aç/Kapat";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "Çoklu Kamera Grubunu Çöz";
 "Unlink" = "Bağlantıyı Kaldır";
 "Untitled" = "Adsız";
-"Up to %@" = "%@ değerine kadar";
 "Update" = "Güncelle";
 "Update available" = "Güncelleme var";
 "Updating %@" = "%@ güncelleniyor";

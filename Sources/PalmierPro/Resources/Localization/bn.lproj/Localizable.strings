@@ -162,7 +162,6 @@
 "Chat history" = "চ্যাট হিস্ট্রি";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "আপনার এজেন্টের সঙ্গে চ্যাট করুন। এটি কনটেন্ট জেনারেট, ক্লিপ এডিট, অ্যাসেট সাজানোসহ আরও অনেক কিছু করতে পারে। সাইন ইন করে বা নিজের Anthropic API কী দিয়ে শুরু করুন।";
 "Check for Updates…" = "আপডেট দেখুন…";
-"Choose Audio" = "অডিও বেছে নিন";
 "Choose a .cube LUT file" = "একটি .cube LUT ফাইল বেছে নিন";
 "Choose a crop aspect" = "ক্রপ অ্যাসপেক্ট বেছে নিন";
 "Choose animation clip color" = "অ্যানিমেশন ক্লিপের রং বেছে নিন";
@@ -284,7 +283,6 @@
 "Designer" = "ডিজাইনার";
 "Destination" = "গন্তব্য";
 "Detail" = "ডিটেইল";
-"Details" = "বিস্তারিত";
 "Detect Beats" = "বিট শনাক্ত করুন";
 "Detected %lld beats at %lld BPM." = "%lldটি বিট %lld BPM-এ শনাক্ত হয়েছে।";
 "Detected %lld beats." = "%lldটি বিট শনাক্ত হয়েছে।";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "বিভিন্ন মডেল ও সেটিংস দিয়ে ভিডিও, ইমেজ বা অডিও জেনারেট করুন। উপরের মিডিয়া প্যানেল থেকে অ্যাসেট রেফারেন্স ফ্রেমে ড্র্যাগ করুন।";
 "Generate · %lld credits" = "জেনারেট · %lld ক্রেডিট";
 "Generate · 1 credit" = "জেনারেট · ১ ক্রেডিট";
-"Generated" = "জেনারেট হয়েছে";
 "Generating…" = "জেনারেট হচ্ছে…";
 "Generation Failed" = "জেনারেশন ব্যর্থ হয়েছে";
+"Generation Input" = "Generation Input";
 "Generation complete" = "জেনারেশন সম্পন্ন";
 "Generation in progress" = "জেনারেশন চলছে";
 "Generation panel" = "জেনারেশন প্যানেল";
@@ -421,6 +419,7 @@
 "Hard Light" = "হার্ড লাইট";
 "Height" = "উচ্চতা";
 "Help" = "সহায়তা";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "কিফ্রেম টাইমলাইন লুকান";
 "Highlight" = "হাইলাইট";
 "Highlight Block" = "হাইলাইট ব্লক";
@@ -796,6 +795,7 @@
 "Sharpen" = "শার্পেন";
 "Short-form and social" = "শর্ট-ফর্ম ও সোশ্যাল";
 "Shortcuts" = "শর্টকাট";
+"Show Info" = "Show Info";
 "Show in Finder" = "Finder-এ দেখান";
 "Show keyframe timeline" = "কিফ্রেম টাইমলাইন দেখান";
 "Show notifications" = "নোটিফিকেশন দেখান";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "এটি সিলেক্ট করা মিডিয়া বা পুরো টাইমলাইন প্লে করার প্রিভিউ প্যানেল।";
 "This model cannot cap the output at 60 FPS." = "এই মডেল আউটপুট 60 FPS-এ সীমাবদ্ধ করতে পারে না।";
 "This permanently removes %@." = "এটি %@ স্থায়ীভাবে সরিয়ে দেয়।";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "থ্রি-আপ";
 "Threshold" = "থ্রেশহোল্ড";
 "Thumbnail Size" = "থাম্বনেইল সাইজ";
@@ -900,6 +901,7 @@
 "Timeline" = "টাইমলাইন";
 "Timeline Format" = "টাইমলাইন ফরম্যাট";
 "Timeline colors" = "টাইমলাইনের রং";
+"Timelines" = "Timelines";
 "Tint" = "টিন্ট";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "স্পিকার অনুযায়ী ওয়েভফর্মে রং দেয়। ক্লাউড ট্রান্সক্রিপ্ট দিয়ে ক্লিপগুলোর ভয়েস ম্যাচ করা হয়।";
 "Toggle Agent Panel" = "এজেন্ট প্যানেল চালু/বন্ধ করুন";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "মাল্টিক্যাম আনগ্রুপ করুন";
 "Unlink" = "আনলিঙ্ক";
 "Untitled" = "শিরোনামহীন";
-"Up to %@" = "%@ পর্যন্ত";
 "Update" = "আপডেট";
 "Update available" = "আপডেট পাওয়া যাচ্ছে";
 "Updating %@" = "%@ আপডেট হচ্ছে";

@@ -49,6 +49,14 @@ enum ClipRenderer {
         rect.width < AppTheme.ComponentSize.timelineClipBorderMinWidth
     }
 
+    static func supportsPrecisionControls(atWidth width: CGFloat) -> Bool {
+        width >= AppTheme.ComponentSize.timelineClipControlsMinWidth
+    }
+
+    static func supportsPrecisionControls(in rect: NSRect) -> Bool {
+        supportsPrecisionControls(atWidth: rect.width)
+    }
+
     static func showsLabel(isSelected: Bool, in rect: NSRect) -> Bool {
         let minimumWidth = isSelected
             ? AppTheme.ComponentSize.timelineClipDetailMinWidth
@@ -57,8 +65,8 @@ enum ClipRenderer {
     }
 
     static func showsFadeControls(isSelected: Bool, isHovered: Bool, in rect: NSRect) -> Bool {
-        guard !usesCompactRendering(in: rect) else { return false }
-        return isHovered || (isSelected && rect.width >= AppTheme.ComponentSize.timelineClipDetailMinWidth)
+        guard supportsPrecisionControls(in: rect) else { return false }
+        return isHovered || isSelected
     }
 
     static func showsVolumeKeyframes(isSelected: Bool, isHovered: Bool, in rect: NSRect) -> Bool {
@@ -128,6 +136,8 @@ enum ClipRenderer {
             drawWaveform(samples: samples, deadAirRanges: deadAirRanges(),
                          speakerMask: speakerColors.isEmpty ? nil : cache?.speakerMask(for: clip.mediaRef),
                          clip: clip, type: colorType, in: audioRect, context: context)
+        } else if type == .text, showsLabel(isSelected: isSelected, in: rect) {
+            drawTextParagraph(clip: clip, displayName: displayName, in: rect)
         }
 
         let showsFadeControls = showsFadeControls(isSelected: isSelected, isHovered: isHovered, in: rect)
@@ -184,7 +194,7 @@ enum ClipRenderer {
         let showDetailChrome = rect.width >= AppTheme.ComponentSize.timelineClipDetailMinWidth
         let showLabel = showsLabel(isSelected: isSelected, in: rect)
 
-        if showLabel {
+        if showLabel, type != .text {
             drawLabelBar(clip: clip, type: type, in: labelRect, clipRect: rect, context: context,
                          displayName: displayName, badge: multicamAngleLabel, fps: fps)
         } else if multicamAngleLabel != nil, rect.width >= AppTheme.ComponentSize.timelineClipBorderMinWidth {
@@ -826,6 +836,20 @@ enum ClipRenderer {
         str.draw(at: NSPoint(x: rect.minX + padH, y: rect.minY + padV))
         context.restoreGState()
         return rect
+    }
+
+    private static func drawTextParagraph(clip: Clip, displayName: String?, in rect: NSRect) {
+        let content = clip.textContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = content.isEmpty ? (displayName ?? "") : content
+        guard !text.isEmpty else { return }
+
+        let drawRect = rect.insetBy(dx: AppTheme.Spacing.sm, dy: AppTheme.Spacing.xxs)
+        guard !drawRect.isEmpty else { return }
+
+        NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: AppTheme.FontSize.xs, weight: .medium),
+            .foregroundColor: clip.sourceClipType.themeForegroundColor,
+        ]).draw(with: drawRect, options: [.usesLineFragmentOrigin], context: nil)
     }
 
     private static func drawLabelBar(clip: Clip, type: ClipType, in labelRect: NSRect, clipRect: NSRect, context: CGContext, displayName: String? = nil, badge: String? = nil, fps: Int) {

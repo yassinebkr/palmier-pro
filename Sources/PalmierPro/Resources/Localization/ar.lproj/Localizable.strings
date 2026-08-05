@@ -162,7 +162,6 @@
 "Chat history" = "سجل الدردشة";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "تحدث مع وكيلك. يمكنه إنشاء المحتوى وتحرير المقاطع وتنظيم أصولك وغير ذلك. ابدأ بتسجيل الدخول أو استخدم مفتاح واجهة API الخاص بك من Anthropic.";
 "Check for Updates…" = "التحقق من وجود تحديثات…";
-"Choose Audio" = "اختيار الصوت";
 "Choose a .cube LUT file" = "اختيار ملف LUT بتنسيق ⁨.cube⁩";
 "Choose a crop aspect" = "اختيار نسبة اقتصاص";
 "Choose animation clip color" = "اختيار لون مقطع الرسوم المتحركة";
@@ -284,7 +283,6 @@
 "Designer" = "مصمم";
 "Destination" = "الوجهة";
 "Detail" = "التفاصيل";
-"Details" = "التفاصيل";
 "Detect Beats" = "اكتشاف الإيقاعات";
 "Detected %lld beats at %lld BPM." = "تم اكتشاف ⁨%lld⁩ إيقاعًا بسرعة ⁨%lld BPM⁩.";
 "Detected %lld beats." = "تم اكتشاف ⁨%lld⁩ إيقاعًا.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "أنشئ فيديو أو صورة أو صوتًا باستخدام نماذج وإعدادات مختلفة. اسحب الأصول من لوحة الوسائط أعلاه إلى إطار المرجع.";
 "Generate · %lld credits" = "إنشاء · ⁨%lld⁩ رصيد";
 "Generate · 1 credit" = "إنشاء · رصيد واحد";
-"Generated" = "تم الإنشاء";
 "Generating…" = "جارٍ الإنشاء…";
 "Generation Failed" = "فشل الإنشاء";
+"Generation Input" = "Generation Input";
 "Generation complete" = "اكتمل الإنشاء";
 "Generation in progress" = "الإنشاء قيد التنفيذ";
 "Generation panel" = "لوحة الإنشاء";
@@ -421,6 +419,7 @@
 "Hard Light" = "إضاءة قوية";
 "Height" = "الارتفاع";
 "Help" = "مساعدة";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "إخفاء المخطط الزمني للإطارات الرئيسية";
 "Highlight" = "تمييز";
 "Highlight Block" = "كتلة التمييز";
@@ -796,6 +795,7 @@
 "Sharpen" = "زيادة الحدة";
 "Short-form and social" = "المقاطع القصيرة والتواصل الاجتماعي";
 "Shortcuts" = "الاختصارات";
+"Show Info" = "Show Info";
 "Show in Finder" = "إظهار في Finder";
 "Show keyframe timeline" = "إظهار المخطط الزمني للإطارات الرئيسية";
 "Show notifications" = "إظهار الإشعارات";
@@ -893,6 +893,7 @@
 "This is your preview panel to play a selected media or the whole timeline." = "هذه لوحة المعاينة لتشغيل الوسائط المحددة أو المخطط الزمني كاملاً.";
 "This model cannot cap the output at 60 FPS." = "لا يمكن لهذا النموذج تحديد سقف الإخراج عند ⁨60 FPS⁩.";
 "This permanently removes %@." = "يؤدي هذا إلى إزالة ⁨%@⁩ نهائيًا.";
+"Three-Stack" = "Three-Stack";
 "Three-Up" = "عرض ثلاثي";
 "Threshold" = "الحد";
 "Thumbnail Size" = "حجم الصورة المصغرة";
@@ -900,6 +901,7 @@
 "Timeline" = "المخطط الزمني";
 "Timeline Format" = "تنسيق المخطط الزمني";
 "Timeline colors" = "ألوان المخطط الزمني";
+"Timelines" = "Timelines";
 "Tint" = "الصبغة";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "يلوّن أشكال الموجات حسب المتحدث. تتم مطابقة الأصوات بين المقاطع باستخدام النصوص المفرّغة سحابيًا.";
 "Toggle Agent Panel" = "تبديل إظهار لوحة الوكيل";
@@ -935,7 +937,6 @@
 "Ungroup Multicam" = "فك تجميع متعدد الكاميرات";
 "Unlink" = "إلغاء الربط";
 "Untitled" = "بلا عنوان";
-"Up to %@" = "حتى ⁨%@⁩";
 "Update" = "تحديث";
 "Update available" = "يتوفر تحديث";
 "Updating %@" = "جارٍ تحديث ⁨%@⁩";
