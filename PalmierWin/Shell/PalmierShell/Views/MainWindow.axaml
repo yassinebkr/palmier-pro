@@ -91,6 +91,7 @@
             <Button.Flyout>
               <MenuFlyout>
                 <MenuItem Header="Settings&#x2026;" Click="OnSettingsClick"/>
+                <MenuItem Header="Report a problem&#x2026;" Click="OnReportProblemClick"/>
                 <MenuItem Header="About PalmierWin" Click="OnAboutClick"/>
               </MenuFlyout>
             </Button.Flyout>
