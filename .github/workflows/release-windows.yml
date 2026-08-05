@@ -1,7 +1,8 @@
 name: Release (Windows shell)
 
-# Builds the PalmierWin editor as a portable zip and publishes it as a GitHub
-# prerelease. Manual trigger with a version input; also runs on v*-win tags.
+# Builds the PalmierWin editor, packages it as an Inno Setup installer (plus a
+# portable zip), and publishes both as a GitHub prerelease. Manual trigger
+# with a version input; also runs on v*-win tags.
 
 on:
   workflow_dispatch:
@@ -19,6 +20,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.version }}"
+          if ($env:GITHUB_REF_TYPE -eq "tag") { $ver = $env:GITHUB_REF_NAME -replace "^v","" -replace "-win$","" }
+          echo "VERSION=$ver" >> $env:GITHUB_ENV
 
       - name: Setup Swift
         uses: compnerd/gha-setup-swift@main
@@ -53,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           Push-Location PalmierWin/Shell
-          dotnet publish PalmierShell -c Release -r win-x64 --self-contained true -o publish
+          dotnet publish PalmierShell -c Release -r win-x64 --self-contained true -p:Version=$env:VERSION -o publish
           Pop-Location
 
       - name: Stage the portable package
@@ -63,22 +71,31 @@ jobs:
           $release = "PalmierWin/.build/x86_64-unknown-windows-msvc/release"
           Copy-Item "$release/PalmierCoreHost.dll" $stage
           Copy-Item "PalmierWin/ThirdParty/ffmpeg/bin/*.dll" $stage
-          # Swift runtime DLLs: resolve from the installed toolchain layout
-          # ($root/Runtimes/<ver>/usr/bin next to Toolchains/<ver>/usr/bin/swift.exe).
-          $swift = (Get-Command swift.exe).Source
-          $toolchainsUsrBin = Split-Path $swift
-          $swiftRoot = Split-Path (Split-Path (Split-Path $toolchainsUsrBin))
-          $runtimes = Get-ChildItem "$swiftRoot/Runtimes" -Directory | Select-Object -First 1
-          Copy-Item "$($runtimes.FullName)/usr/bin/*.dll" $stage
+          # Swift runtime DLLs: locate the installed runtime by its
+          # swiftCore.dll instead of deriving the path from the toolchain
+          # layout — the Toolchains/Runtimes split varies between runners.
+          $swiftCore = Get-ChildItem "$env:LOCALAPPDATA\Programs\Swift\Runtimes\*\usr\bin\swiftCore.dll" |
+            Select-Object -First 1
+          if (-not $swiftCore) { throw "Swift runtime not found under $env:LOCALAPPDATA\Programs\Swift\Runtimes" }
+          Copy-Item "$($swiftCore.DirectoryName)\*.dll" $stage
           Get-ChildItem $stage | Measure-Object | ForEach-Object { "staged $($_.Count) files" }
 
       - name: Zip the package
         shell: pwsh
         run: |
-          $ver = "${{ inputs.version }}"
-          if ($env:GITHUB_REF_TYPE -eq "tag") { $ver = $env:GITHUB_REF_NAME -replace "^v","" -replace "-win$","" }
-          Compress-Archive -Path "PalmierWin/Shell/publish/*" -DestinationPath "PalmierWin-$ver-win-x64.zip" -Force
-          echo "VERSION=$ver" >> $env:GITHUB_ENV
+          Compress-Archive -Path "PalmierWin/Shell/publish/*" -DestinationPath "PalmierWin-$env:VERSION-win-x64.zip" -Force
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=$env:VERSION "PalmierWin\Shell\installer\PalmierWin.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC exited $LASTEXITCODE" }
+          Get-Item "PalmierWin\Shell\installer\output\PalmierWin-Setup-$env:VERSION.exe" |
+            ForEach-Object { "installer: $($_.FullName) ($([math]::Round($_.Length / 1MB, 1)) MB)" }
 
       - name: Publish prerelease
         uses: softprops/action-gh-release@v2
@@ -86,8 +103,12 @@ jobs:
           name: PalmierWin v${{ env.VERSION }} (Windows prerelease)
           tag_name: v${{ env.VERSION }}-win
           prerelease: true
-          files: PalmierWin-${{ env.VERSION }}-win-x64.zip
+          files: |
+            PalmierWin/Shell/installer/output/PalmierWin-Setup-${{ env.VERSION }}.exe
+            PalmierWin-${{ env.VERSION }}-win-x64.zip
           body: |
-            First public test build of PalmierWin for Windows x64.
-            Unzip anywhere and run `PalmierShell.exe`. Needs a Vulkan-capable GPU.
-            Crash reports land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report.
+            Windows x64 test build of PalmierWin.
+
+            Download `PalmierWin-Setup-${{ env.VERSION }}.exe` and run it — no admin needed.
+            The zip is the same build, unpackaged, for portable use. Needs a Vulkan-capable GPU.
+            Session and crash logs land in `%APPDATA%\PalmierPro\logs\` — send them with any bug report.

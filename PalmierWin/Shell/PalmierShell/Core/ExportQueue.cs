@@ -88,11 +88,13 @@ public sealed class ExportQueue {
             if (status == 101) {
                 running.Progress = 100;
                 running.State = ExportJobState.Done;
+                SessionLog.Event("export", $"done: {Path.GetFileName(running.OutputPath)}");
             } else if (status == -2) {
                 running.State = ExportJobState.Cancelled;
             } else {
                 running.State = ExportJobState.Failed;
                 running.Error = runner.Error(running.Handle);
+                SessionLog.Event("export", $"failed: {Path.GetFileName(running.OutputPath)} — {running.Error}");
             }
             runner.Destroy(running.Handle);
             running.Handle = IntPtr.Zero;
