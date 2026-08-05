@@ -162,7 +162,6 @@
 "Chat history" = "Lịch sử chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Chat với agent của bạn. Agent có thể tạo nội dung, chỉnh sửa clip, sắp xếp tài nguyên và nhiều việc khác. Hãy đăng nhập hoặc dùng khóa API Anthropic của riêng bạn để bắt đầu.";
 "Check for Updates…" = "Kiểm tra bản cập nhật…";
-"Choose Audio" = "Chọn âm thanh";
 "Choose a .cube LUT file" = "Chọn tệp LUT .cube";
 "Choose a crop aspect" = "Chọn tỷ lệ cắt xén";
 "Choose animation clip color" = "Chọn màu clip hoạt ảnh";
@@ -284,7 +283,6 @@
 "Designer" = "Nhà thiết kế";
 "Destination" = "Đích";
 "Detail" = "Chi tiết";
-"Details" = "Chi tiết";
 "Detect Beats" = "Phát hiện nhịp";
 "Detected %lld beats at %lld BPM." = "Đã phát hiện %lld nhịp ở %lld BPM.";
 "Detected %lld beats." = "Đã phát hiện %lld nhịp.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "Tạo video, hình ảnh hoặc âm thanh bằng nhiều mô hình và cài đặt. Kéo tài nguyên từ bảng phương tiện ở trên vào khung tham chiếu.";
 "Generate · %lld credits" = "Tạo · %lld tín dụng";
 "Generate · 1 credit" = "Tạo · 1 tín dụng";
-"Generated" = "Đã tạo";
 "Generating…" = "Đang tạo…";
 "Generation Failed" = "Tạo không thành công";
+"Generation Input" = "Generation Input";
 "Generation complete" = "Đã tạo xong";
 "Generation in progress" = "Đang tạo";
 "Generation panel" = "Bảng tạo nội dung";
@@ -421,6 +419,7 @@
 "Hard Light" = "Ánh sáng mạnh";
 "Height" = "Chiều cao";
 "Help" = "Trợ giúp";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "Ẩn timeline khung hình chính";
 "Highlight" = "Tô sáng";
 "Highlight Block" = "Khối tô sáng";
@@ -796,6 +795,7 @@
 "Sharpen" = "Làm sắc nét";
 "Short-form and social" = "Video ngắn và mạng xã hội";
 "Shortcuts" = "Phím tắt";
+"Show Info" = "Show Info";
 "Show in Finder" = "Hiển thị trong Finder";
 "Show keyframe timeline" = "Hiển thị timeline khung hình chính";
 "Show notifications" = "Hiển thị thông báo";
@@ -901,6 +901,7 @@
 "Timeline" = "Timeline";
 "Timeline Format" = "Định dạng timeline";
 "Timeline colors" = "Màu timeline";
+"Timelines" = "Timelines";
 "Tint" = "Sắc màu";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "Tô màu dạng sóng theo người nói. Giọng nói được đối chiếu giữa các clip bằng bản chép lời trên đám mây.";
 "Toggle Agent Panel" = "Bật/tắt bảng Agent";
@@ -936,7 +937,6 @@
 "Ungroup Multicam" = "Bỏ nhóm Multicam";
 "Unlink" = "Bỏ liên kết";
 "Untitled" = "Không có tiêu đề";
-"Up to %@" = "Tối đa %@";
 "Update" = "Cập nhật";
 "Update available" = "Có bản cập nhật";
 "Updating %@" = "Đang cập nhật %@";

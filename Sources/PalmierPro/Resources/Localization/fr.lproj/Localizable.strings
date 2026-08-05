@@ -162,7 +162,6 @@
 "Chat history" = "Historique du chat";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "Échangez avec votre agent. Il peut générer du contenu, monter des clips, organiser vos ressources et bien plus. Pour commencer, connectez-vous ou utilisez votre propre clé API Anthropic.";
 "Check for Updates…" = "Rechercher les mises à jour…";
-"Choose Audio" = "Choisir l’audio";
 "Choose a .cube LUT file" = "Choisir un fichier LUT .cube";
 "Choose a crop aspect" = "Choisir un format de recadrage";
 "Choose animation clip color" = "Choisir la couleur du clip d’animation";
@@ -284,7 +283,6 @@
 "Designer" = "Designer";
 "Destination" = "Destination";
 "Detail" = "Détail";
-"Details" = "Détails";
 "Detect Beats" = "Détecter les temps";
 "Detected %lld beats at %lld BPM." = "%lld temps détectés à %lld BPM.";
 "Detected %lld beats." = "%lld temps détectés.";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "Générez de la vidéo, des images ou de l’audio avec différents modèles et réglages. Faites glisser les ressources du panneau Médias ci-dessus vers l’image de référence.";
 "Generate · %lld credits" = "Générer · %lld crédits";
 "Generate · 1 credit" = "Générer · 1 crédit";
-"Generated" = "Généré";
 "Generating…" = "Génération…";
 "Generation Failed" = "Échec de la génération";
+"Generation Input" = "Generation Input";
 "Generation complete" = "Génération terminée";
 "Generation in progress" = "Génération en cours";
 "Generation panel" = "Panneau de génération";
@@ -421,6 +419,7 @@
 "Hard Light" = "Lumière crue";
 "Height" = "Hauteur";
 "Help" = "Aide";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "Masquer la timeline des images clés";
 "Highlight" = "Surligner";
 "Highlight Block" = "Bloc de surbrillance";
@@ -796,6 +795,7 @@
 "Sharpen" = "Netteté";
 "Short-form and social" = "Format court et réseaux sociaux";
 "Shortcuts" = "Raccourcis";
+"Show Info" = "Show Info";
 "Show in Finder" = "Afficher dans le Finder";
 "Show keyframe timeline" = "Afficher la timeline des images clés";
 "Show notifications" = "Afficher les notifications";
@@ -901,6 +901,7 @@
 "Timeline" = "Timeline";
 "Timeline Format" = "Format de la timeline";
 "Timeline colors" = "Couleurs de la timeline";
+"Timelines" = "Timelines";
 "Tint" = "Teinte";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "Colore les formes d’onde selon le locuteur. Les voix sont associées entre les clips à l’aide des transcriptions du Cloud.";
 "Toggle Agent Panel" = "Afficher ou masquer le panneau Agent";
@@ -936,7 +937,6 @@
 "Ungroup Multicam" = "Dissocier le multicam";
 "Unlink" = "Délier";
 "Untitled" = "Sans titre";
-"Up to %@" = "Jusqu’à %@";
 "Update" = "Mettre à jour";
 "Update available" = "Mise à jour disponible";
 "Updating %@" = "Mise à jour de %@";

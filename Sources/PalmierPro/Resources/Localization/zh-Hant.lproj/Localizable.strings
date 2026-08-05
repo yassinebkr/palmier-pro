@@ -162,7 +162,6 @@
 "Chat history" = "對話歷史";
 "Chat with your agent! It can generate content, edit clips, organize your assets, and much more. Start by signing in, or bring your own Anthropic API key." = "與 Agent 對話。它可以產生內容、編輯片段、整理素材等。登入即可開始，也可以使用自己的 Anthropic API key。";
 "Check for Updates…" = "檢查更新…";
-"Choose Audio" = "選擇音訊";
 "Choose a .cube LUT file" = "選擇 .cube LUT 檔案";
 "Choose a crop aspect" = "選擇裁切長寬比";
 "Choose animation clip color" = "選擇動畫片段顏色";
@@ -284,7 +283,6 @@
 "Designer" = "設計師";
 "Destination" = "目標位置";
 "Detail" = "細節";
-"Details" = "詳細資訊";
 "Detect Beats" = "偵測節拍";
 "Detected %lld beats at %lld BPM." = "偵測到 %lld 個節拍，速度為 %lld BPM。";
 "Detected %lld beats." = "偵測到 %lld 個節拍。";
@@ -401,9 +399,9 @@
 "Generate video, image, or audio with different models and settings. Drag assets from the media panel above into the reference frame." = "使用不同模型和設定產生影片、圖像或音訊。將素材從上方媒體面板拖入參考框。";
 "Generate · %lld credits" = "產生 · %lld 積分";
 "Generate · 1 credit" = "產生 · 1 積分";
-"Generated" = "已產生";
 "Generating…" = "正在產生…";
 "Generation Failed" = "產生失敗";
+"Generation Input" = "Generation Input";
 "Generation complete" = "產生完成";
 "Generation in progress" = "正在產生";
 "Generation panel" = "產生面板";
@@ -421,6 +419,7 @@
 "Hard Light" = "強光";
 "Height" = "高度";
 "Help" = "幫助";
+"Hide Info" = "Hide Info";
 "Hide keyframe timeline" = "隱藏關鍵影格時間軸";
 "Highlight" = "高光";
 "Highlight Block" = "高亮色塊";
@@ -796,6 +795,7 @@
 "Sharpen" = "銳化";
 "Short-form and social" = "短影片與社群";
 "Shortcuts" = "快速鍵";
+"Show Info" = "Show Info";
 "Show in Finder" = "在“Finder”中顯示";
 "Show keyframe timeline" = "顯示關鍵影格時間軸";
 "Show notifications" = "顯示通知";
@@ -901,6 +901,7 @@
 "Timeline" = "時間軸";
 "Timeline Format" = "時間軸格式";
 "Timeline colors" = "時間軸顏色";
+"Timelines" = "Timelines";
 "Tint" = "色調";
 "Tints waveforms by speaker. Voices are matched across clips using cloud transcripts." = "按說話者為波形著色。使用雲端轉錄匹配不同片段中的聲音。";
 "Toggle Agent Panel" = "顯示或隱藏 Agent 面板";
@@ -936,7 +937,6 @@
 "Ungroup Multicam" = "取消多機位分組";
 "Unlink" = "取消連結";
 "Untitled" = "未命名";
-"Up to %@" = "最高 %@";
 "Update" = "更新";
 "Update available" = "有可用更新";
 "Updating %@" = "正在更新 %@";
