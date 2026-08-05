@@ -73,12 +73,50 @@ public partial class MainWindow : Window {
         exportPump = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         exportPump.Tick += (_, _) => viewModel.Exports.Tick();
         exportPump.Start();
+
+        // Update checks: once shortly after startup, then daily.
+        updateDaily = new DispatcherTimer { Interval = TimeSpan.FromHours(24) };
+        updateDaily.Tick += async (_, _) => await CheckForUpdateAsync();
+        updateStartup = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        updateStartup.Tick += async (_, _) => {
+            updateStartup.Stop();
+            await CheckForUpdateAsync();
+            updateDaily.Start();
+        };
+        Closed += (_, _) => {
+            updateStartup.Stop();
+            updateDaily.Stop();
+        };
     }
 
     readonly DispatcherTimer autosave;
     readonly DispatcherTimer exportPump;
+    readonly DispatcherTimer updateStartup;
+    readonly DispatcherTimer updateDaily;
     bool closeConfirmed;
     bool exportNoticeShowing;
+    bool updatePromptOpen;
+
+    /// Offers a newer build when one exists. A check must never block or
+    /// break the session: offline, rate-limited, and malformed responses all
+    /// read as "no update".
+    async Task CheckForUpdateAsync() {
+        if (updatePromptOpen) return;
+        try {
+            var settings = await Task.Run(() => SettingsStore.Load());
+            if (await UpdateChecker.CheckAsync(settings) is not { } info) return;
+            SessionLog.Event("update", $"v{info.Version} available");
+            updatePromptOpen = true;
+            try {
+                await UpdateDialog.ShowAsync(this, info, Close);
+            } finally {
+                updatePromptOpen = false;
+            }
+        } catch {
+            // Stay silent: the next daily tick tries again.
+        }
+    }
+
     bool opened;
     bool welcomeShown;
 
@@ -271,6 +309,17 @@ public partial class MainWindow : Window {
         // handler end to end (log on disk, dialog, exit).
         if (args.Contains("--crash-test"))
             throw new InvalidOperationException("Deliberate crash from --crash-test.");
+        // Dev flag: --update-demo <url> opens the update dialog against a
+        // fake release, so the download bar can be exercised from any URL.
+        if (Array.IndexOf(args, "--update-demo") is var demoAt && demoAt >= 0 &&
+            args.ElementAtOrDefault(demoAt + 1) is { } demoUrl) {
+            var demo = new UpdateInfo(new Version(9, 9, 9), "v9.9.9-win",
+                "Demo release notes.\n\n• Download progress in this dialog\n• Later / Skip this version",
+                demoUrl);
+            await UpdateDialog.ShowAsync(this, demo, Close);
+            return;
+        }
+        updateStartup.Start();
         bool addToTimeline = args.Contains("--add-to-timeline");
         foreach (var path in args.Where(a => !a.StartsWith("--") && File.Exists(a))) {
             await viewModel.Media.ImportFileAsync(Path.GetFullPath(path));

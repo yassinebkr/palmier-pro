@@ -60,3 +60,6 @@ docs/seedance-prompt-engineering.md
 docs/kling-prompt-engineering.md
 docs/windows-media-engine-design.md
 docs/windows-shell-design.md
+
+# Inno Setup compiler output
+PalmierWin/Shell/installer/output/

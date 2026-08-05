@@ -24,6 +24,12 @@ public sealed record AppSettings(string Provider, string Model) {
 
     public bool SnapEnabled { get; init; } = true;
 
+    /// "Later" on an update prompt suppresses it until this moment.
+    public DateTimeOffset? UpdateSnoozeUntil { get; init; }
+
+    /// "Skip this version" — the normalized version string (no v/-win).
+    public string UpdateSkipVersion { get; init; } = "";
+
     public string KeyFor(string provider) => Keys.GetValueOrDefault(provider, "");
 
     public AppSettings WithKey(string provider, string key) {
@@ -62,6 +68,8 @@ public static class SettingsStore {
         public string Accent { get; init; } = "";
         public string UserName { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
+        public DateTimeOffset? UpdateSnoozeUntil { get; init; }
+        public string UpdateSkipVersion { get; init; } = "";
     }
 
     public static AppSettings Load() {
@@ -87,6 +95,8 @@ public static class SettingsStore {
                 Accent = persisted.Accent,
                 UserName = persisted.UserName,
                 SnapEnabled = persisted.SnapEnabled,
+                UpdateSnoozeUntil = persisted.UpdateSnoozeUntil,
+                UpdateSkipVersion = persisted.UpdateSkipVersion,
             };
         } catch {
             // Corrupt or foreign-machine settings: start fresh rather than crash.
@@ -112,6 +122,8 @@ public static class SettingsStore {
                     Accent = settings.Accent,
                     UserName = settings.UserName,
                     SnapEnabled = settings.SnapEnabled,
+                    UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
+                    UpdateSkipVersion = settings.UpdateSkipVersion,
                 }));
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // An unwritable AppData must not take the app down; the session

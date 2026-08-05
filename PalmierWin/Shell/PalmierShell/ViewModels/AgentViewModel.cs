@@ -397,8 +397,9 @@ public sealed partial class AgentViewModel : ObservableObject {
                     // can only resume the turn still sitting at the end of the
                     // conversation.
                     foreach (var stale in Entries.Where(e => e.CanRetry)) stale.CanRetry = false;
-                    Entries.Add(new AgentEntryViewModel(AgentEntryKind.Error,
-                        ev.GetProperty("message").GetString() ?? "Unknown error") { CanRetry = retryable });
+                    string message = ev.GetProperty("message").GetString() ?? "Unknown error";
+                    SessionLog.Event("agent", $"error: {message}");
+                    Entries.Add(new AgentEntryViewModel(AgentEntryKind.Error, message) { CanRetry = retryable });
                     break;
                 }
                 case "done":
