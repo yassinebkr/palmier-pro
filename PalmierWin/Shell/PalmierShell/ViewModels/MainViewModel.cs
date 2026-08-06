@@ -990,8 +990,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Agent.Shutdown();
         Media.Generate.CancelAll();
         engine?.Dispose();
-        // Stop the meter poll before the audio handle it reads dies.
+        // Stop the meter poll before the audio handle it reads dies, and drop
+        // the handle so a queued PlayingChanged can't restart it.
         Timeline.SetMetering(false);
+        Timeline.AudioHandle = IntPtr.Zero;
         if (agentHandle != IntPtr.Zero) {
             CoreApi.palmier_agent_destroy(agentHandle);
             agentHandle = IntPtr.Zero;
