@@ -308,9 +308,11 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
         Items.Add(item);
         OnPropertyChanged(nameof(FilteredItems));
         OnPropertyChanged(nameof(FolderGroups));
-        var thumb = await Task.Run(() => CoreApi.GetThumbnails(path, 1));
-        if (thumb is not null)
-            item.Thumbnail = ThumbnailBitmaps.FromTiles(thumb.Value.Tiles, 0);
+        if (probe.Value.Width > 0) {
+            var thumb = await Task.Run(() => CoreApi.GetThumbnails(path, 1));
+            if (thumb is not null)
+                item.Thumbnail = ThumbnailBitmaps.FromTiles(thumb.Value.Tiles, 0);
+        }
     }
 
     [RelayCommand]
