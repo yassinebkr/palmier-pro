@@ -423,17 +423,23 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     defer { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
     guard avformat_find_stream_info(fmt, nil) >= 0 else { return 0 }
 
-    let vidx = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nil, 0)
-    guard vidx >= 0,
-          let streamsBase = fmt.pointee.streams,
-          Int(vidx) < Int(fmt.pointee.nb_streams),
-          let stream = streamsBase[Int(vidx)],
-          let par = stream.pointee.codecpar else { return 0 }
+    // Cover art is a video stream too; only a non-attached_pic stream is playable video.
+    var stream: UnsafeMutablePointer<AVStream>? = nil
+    if let streamsBase = fmt.pointee.streams {
+        for i in 0..<Int(fmt.pointee.nb_streams) {
+            guard let s = streamsBase[i], let p = s.pointee.codecpar,
+                  p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
+                  (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 else { continue }
+            stream = s
+            break
+        }
+    }
+    guard let videoStream = stream, let par = videoStream.pointee.codecpar else { return 0 }
 
     let width = Int(par.pointee.width)
     let height = Int(par.pointee.height)
 
-    let rate = stream.pointee.avg_frame_rate
+    let rate = videoStream.pointee.avg_frame_rate
     let fps: Double = (rate.num > 0 && rate.den > 0) ? Double(rate.num) / Double(rate.den) : 30
     let fpsX100 = Int((fps * 100).rounded())
 

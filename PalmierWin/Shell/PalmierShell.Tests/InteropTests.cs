@@ -535,4 +535,13 @@ public class InteropTests {
     public void ProbeMedia_FailsForMissingFile() {
         Assert.Null(CoreApi.ProbeMedia(TestMediaPath("does-not-exist.mp4")));
     }
+
+    [Fact]
+    public void ProbeMedia_SkipsAttachedPicStreams() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("coverart.mp4"));
+        Assert.NotNull(probe);
+        Assert.Equal(320, probe.Value.Width);
+        Assert.Equal(240, probe.Value.Height);
+        Assert.Equal(30, probe.Value.Fps, 1);
+    }
 }
