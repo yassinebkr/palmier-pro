@@ -646,4 +646,38 @@ public class InteropTests {
         Assert.True(center > 0.05f, $"center peak {center}");
         Assert.True(early < 0.02f, $"early peak {early} — burst smeared left");
     }
+
+    [Fact]
+    public void NewProjectTracksGetPerTypeDefaultHeights() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            Assert.Equal(50, state.Tracks.Single(t => t.Type == "video").DisplayHeight);
+            Assert.Equal(72, state.Tracks.Single(t => t.Type == "audio").DisplayHeight);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    [Fact]
+    public void SetTrackDisplayHeight_RoundTripsAndClamps() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string audioId = TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Type == "audio").Id;
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 120));
+            Assert.Equal(120, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 10));
+            Assert.Equal(32, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 500));
+            Assert.Equal(200, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(0, CoreApi.palmier_track_set_display_height(project, "no-such-track", 100));
+            Assert.Equal(0, CoreApi.palmier_track_set_display_height(project, audioId, double.NaN));
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
 }

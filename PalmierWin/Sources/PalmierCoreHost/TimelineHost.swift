@@ -8,6 +8,14 @@ import PalmierWin
 // intent call targets the active timeline; the shell mutates via intents and
 // reads state back as JSON snapshots.
 
+extension Track {
+    /// New host tracks are born at the per-type product height; PalmierCore's
+    /// 44 default predates per-type heights and stays a real, honored value.
+    init(productType type: ClipType) {
+        self.init(type: type, displayHeight: type == .audio ? 72 : 50)
+    }
+}
+
 /// Retained project state. `lock` guards the timelines and the active index:
 /// intent calls come from the shell's UI thread while the render loop, audio
 /// mixer, and exporter read on their own workers.
@@ -74,7 +82,7 @@ final class ProjectContext {
 
     static func newTimeline(named name: String) -> Timeline {
         var t = Timeline(name: name)
-        t.tracks = [Track(type: .video), Track(type: .audio)]
+        t.tracks = [Track(productType: .video), Track(productType: .audio)]
         return t
     }
 
@@ -379,12 +387,12 @@ public func palmierProjectSetPreviewSource(_ handle: UnsafeMutableRawPointer?,
     guard let frames = sourceDurationFrames(path: mediaPath), frames > 0 else { return 0 }
 
     var source = Timeline(name: "Source")
-    var video = Track(type: .video)
+    var video = Track(productType: .video)
     var clip = Clip(mediaRef: mediaPath, startFrame: 0, durationFrames: frames)
     video.clips = [clip]
     source.tracks = [video]
     if FFmpegAudioDecoder.hasAudioStream(path: mediaPath) {
-        var audio = Track(type: .audio)
+        var audio = Track(productType: .audio)
         clip.id = UUID().uuidString
         clip.mediaType = .audio
         clip.sourceClipType = .audio
@@ -1032,6 +1040,22 @@ public func palmierTrackSetHidden(_ handle: UnsafeMutableRawPointer?, _ trackId:
     }
 }
 
+/// Sets a track's display height, clamped to [32, 200]. Returns 1, or 0 for an
+/// unknown track or a non-finite height.
+@_cdecl("palmier_track_set_display_height")
+public func palmierTrackSetDisplayHeight(_ handle: UnsafeMutableRawPointer?, _ trackId: UnsafePointer<CChar>?,
+                                         _ height: Double) -> Int32 {
+    guard let ctx = projectContext(handle), let trackId else { return 0 }
+    let id = String(cString: trackId)
+    guard height.isFinite else { return 0 }
+    return ctx.withTimeline { timeline in
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == id }) else { return 0 }
+        timeline.tracks[index].displayHeight = min(Track.displayHeightRange.upperBound,
+                                                   max(Track.displayHeightRange.lowerBound, height))
+        return 1
+    }
+}
+
 /// Renames a track. An empty or whitespace-only name clears the custom name,
 /// so the track falls back to its derived label (V1, A2…). Returns 1, or 0 for
 /// an unknown track.
@@ -1094,7 +1118,7 @@ public func palmierTimelineAddTrack(_ handle: UnsafeMutableRawPointer?,
                                     _ idBuf: UnsafeMutablePointer<CChar>?, _ idBufSize: Int32) -> Int32 {
     guard let ctx = projectContext(handle), let kind, let idBuf else { return 0 }
     let type: ClipType = String(cString: kind).lowercased() == "audio" ? .audio : .video
-    let track = Track(type: type)
+    let track = Track(productType: type)
     guard writeCString(track.id, into: idBuf, size: idBufSize) == 1 else { return 0 }
     return ctx.withTimeline { timeline in
         // Video tracks come first in the array, audio after; insert at the end

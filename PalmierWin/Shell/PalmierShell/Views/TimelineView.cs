@@ -11,10 +11,6 @@ namespace PalmierShell.Views;
 /// Renders straight from the view model's TimelineState snapshot; all input
 /// (scrub, select, blade, zoom, scroll) is handled here.
 public sealed class TimelineView : Control {
-    const double RulerHeight = 24;
-    /// Row height follows the view model's density setting: upstream fits
-    /// roughly eight tracks where the roomy default fits three.
-    double TrackHeight => vm?.CompactRows == true ? 28 : 50;
     internal const double HeaderWidth = 100;
     const double ClipCornerRadius = 4;
 
@@ -66,11 +62,29 @@ public sealed class TimelineView : Control {
     int loopDragFrame;
     bool loopDragActive;
 
+    // Track-resize drag state (Select tool, grabbed the header's bottom edge).
+    string? resizeTrackId;
+    double resizeStartY, resizeOriginalHeight, resizePreviewHeight;
+    bool resizeActive;
+
     /// 0/1 when `x` grabs the loop range's start/end edge, else null.
     int? LoopEdgeUnderPointer(double x) {
         if (vm?.HasLoop != true || vm.Tool != TimelineTool.Select) return null;
         if (Math.Abs(x - FrameToX(vm.LoopStart!.Value)) <= EdgeGrabWidth) return 0;
         if (Math.Abs(x - FrameToX(vm.LoopEnd!.Value)) <= EdgeGrabWidth) return 1;
+        return null;
+    }
+
+    /// The (track, row height) whose bottom edge is within grab range of `y`.
+    /// Compact rows are a uniform display override, so there is no per-track
+    /// edge to resize — arming one would write a layout-height shrink into
+    /// the model as a "grow".
+    (TrackState Track, double Height)? ResizeEdgeAt(double y) {
+        if (vm?.State is null || vm.CompactRows) return null;
+        if (y < TimelineMath.RulerHeight) return null;  // the ruler is chrome, not content
+        double contentY = y + vm.ScrollOffsetY;
+        foreach (var (track, rowY, height) in vm.Layout.Rows)
+            if (Math.Abs(contentY - (rowY + height)) <= EdgeGrabWidth) return (track, height);
         return null;
     }
 
@@ -151,10 +165,23 @@ public sealed class TimelineView : Control {
 
         RenderRuler(ctx, bounds);
 
-        double y = RulerHeight;
-        foreach (var track in state.Tracks) {
-            RenderTrack(ctx, bounds, track, LabelFor(state, track), y);
-            y += TrackHeight;
+        // A live header resize previews the grabbed row at its drag height;
+        // the layout only rebuilds once the release commits the new height.
+        double resizeDelta = resizeTrackId is not null ? resizePreviewHeight - resizeOriginalHeight : 0;
+        bool belowResized = false;
+        // Rows scroll vertically under the ruler, which is already painted —
+        // the clip keeps them out of its band. The offset applies once here
+        // so every per-row visual shares it.
+        using (ctx.PushClip(new Rect(0, TimelineMath.RulerHeight, bounds.Width,
+                   Math.Max(0, bounds.Height - TimelineMath.RulerHeight)))) {
+            foreach (var row in vm.Layout.Rows) {
+                bool armed = row.Track.Id == resizeTrackId;
+                double rowY = row.Y - vm.ScrollOffsetY + (belowResized ? resizeDelta : 0);
+                double rowHeight = armed ? resizePreviewHeight : row.Height;
+                belowResized |= armed;
+                if (rowY + rowHeight < TimelineMath.RulerHeight || rowY > bounds.Height) continue;
+                RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track), rowY, rowHeight);
+            }
         }
 
         // The marked range: a wash over the tracks plus in/out brackets on the
@@ -168,11 +195,11 @@ public sealed class TimelineView : Control {
             }
             var bracket = new Pen(new SolidColorBrush(TimecodeColor), 2);
             if (vm.RangeStart is not null && x0 >= HeaderWidth) {
-                ctx.DrawLine(bracket, new Point(x0, 0), new Point(x0, RulerHeight));
+                ctx.DrawLine(bracket, new Point(x0, 0), new Point(x0, TimelineMath.RulerHeight));
                 ctx.DrawLine(bracket, new Point(x0, 2), new Point(x0 + 5, 2));
             }
             if (vm.RangeEnd is not null && x1 >= HeaderWidth) {
-                ctx.DrawLine(bracket, new Point(x1, 0), new Point(x1, RulerHeight));
+                ctx.DrawLine(bracket, new Point(x1, 0), new Point(x1, TimelineMath.RulerHeight));
                 ctx.DrawLine(bracket, new Point(x1 - 5, 2), new Point(x1, 2));
             }
         }
@@ -192,22 +219,22 @@ public sealed class TimelineView : Control {
             }
             var tick = new Pen(accent, 2);
             if (loopStart is not null && lx0 >= HeaderWidth)
-                ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, RulerHeight));
+                ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, TimelineMath.RulerHeight));
             if (loopEnd is not null && lx1 >= HeaderWidth)
-                ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, RulerHeight));
+                ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, TimelineMath.RulerHeight));
         }
 
         if (snapGuideFrame is { } snapFrame) {
             double sx = FrameToX(snapFrame);
             if (sx >= HeaderWidth)
                 ctx.DrawLine(new Pen(new SolidColorBrush(TimecodeColor), 1),
-                    new Point(sx, RulerHeight), new Point(sx, bounds.Height));
+                    new Point(sx, TimelineMath.RulerHeight), new Point(sx, bounds.Height));
         }
         if (vm.Tool == TimelineTool.Blade && bladeHoverFrame is { } bladeFrame) {
             double bx = FrameToX(bladeFrame);
             if (bx >= HeaderWidth)
                 ctx.DrawLine(new Pen(new SolidColorBrush(Color.Parse("#CCFFFFFF")), 1),
-                    new Point(bx, RulerHeight), new Point(bx, bounds.Height));
+                    new Point(bx, TimelineMath.RulerHeight), new Point(bx, bounds.Height));
         }
 
         RenderPlayhead(ctx, bounds);
@@ -215,7 +242,7 @@ public sealed class TimelineView : Control {
 
     void RenderRuler(DrawingContext ctx, Rect bounds) {
         ctx.FillRectangle(new SolidColorBrush(RaisedColor),
-            new Rect(0, 0, bounds.Width, RulerHeight));
+            new Rect(0, 0, bounds.Width, TimelineMath.RulerHeight));
 
         double ppf = vm!.PixelsPerFrame;
         // Major tick every second; thin out labels when zoomed far out.
@@ -230,7 +257,7 @@ public sealed class TimelineView : Control {
             if (x < HeaderWidth) continue;
             int second = f / framesPerMajor;
             bool labeled = second % labelEvery == 0;
-            ctx.DrawLine(tickPen, new Point(x, labeled ? 6 : 14), new Point(x, RulerHeight));
+            ctx.DrawLine(tickPen, new Point(x, labeled ? 6 : 14), new Point(x, TimelineMath.RulerHeight));
             if (labeled) {
                 var text = new FormattedText(FormatTimecode(f), System.Globalization.CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, LabelTypeface, 10,
@@ -240,14 +267,14 @@ public sealed class TimelineView : Control {
         }
     }
 
-    void RenderTrack(DrawingContext ctx, Rect bounds, TrackState track, string label, double y) {
-        var rowRect = new Rect(0, y, bounds.Width, TrackHeight);
+    void RenderTrack(DrawingContext ctx, Rect bounds, TrackState track, string label, double y, double height) {
+        var rowRect = new Rect(0, y, bounds.Width, height);
         ctx.FillRectangle(new SolidColorBrush(SurfaceColor), rowRect);
         ctx.DrawLine(new Pen(new SolidColorBrush(BorderColor)),
-            new Point(0, y + TrackHeight), new Point(bounds.Width, y + TrackHeight));
+            new Point(0, y + height), new Point(bounds.Width, y + height));
 
         // Header: name, link chain, then the eye/mute toggle — one row, as upstream.
-        ctx.FillRectangle(new SolidColorBrush(RaisedColor), new Rect(0, y, HeaderWidth, TrackHeight));
+        ctx.FillRectangle(new SolidColorBrush(RaisedColor), new Rect(0, y, HeaderWidth, height));
         var name = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, LabelTypeface, 12, new SolidColorBrush(Colors.White)) {
             // A renamed track takes the sync glyph's space rather than running
@@ -255,7 +282,7 @@ public sealed class TimelineView : Control {
             MaxTextWidth = track.Name is { Length: > 0 } ? 46 : 28,
             Trimming = TextTrimming.CharacterEllipsis,
         };
-        double rowMid = y + TrackHeight / 2;
+        double rowMid = y + height / 2;
         ctx.DrawText(name, new Point(12, rowMid - name.Height / 2));
         if (track.Name is not { Length: > 0 }) RenderLinkIcon(ctx, new Rect(44, rowMid - 5, 12, 10));
         var iconRect = new Rect(66, rowMid - 6, 14, 12);
@@ -264,18 +291,18 @@ public sealed class TimelineView : Control {
         else
             RenderEyeIcon(ctx, iconRect, off: track.Hidden);
 
-        using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, TrackHeight));
+        using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, height));
         foreach (var clip in track.Clips) {
             // A clip being dragged to another track draws there, not here.
             if (dragActive && clip.Id == dragClipId && dragTargetTrackId != track.Id) continue;
-            RenderClip(ctx, track, clip, y);
+            RenderClip(ctx, track, clip, y, height);
         }
         if (dragActive && dragTargetTrackId == track.Id && dragClipId is { } moving &&
             track.Clips.All(c => c.Id != moving) && vm?.State?.FindClip(moving) is { } incoming)
-            RenderClip(ctx, track, incoming, y);
+            RenderClip(ctx, track, incoming, y, height);
     }
 
-    void RenderClip(DrawingContext ctx, TrackState track, ClipState clip, double y) {
+    void RenderClip(DrawingContext ctx, TrackState track, ClipState clip, double y, double height) {
         int visualStart = clip.StartFrame;
         int visualDuration = clip.DurationFrames;
         if (dragActive && (clip.Id == dragClipId ||
@@ -301,7 +328,7 @@ public sealed class TimelineView : Control {
         double x = FrameToX(visualStart);
         double w = visualDuration * vm!.PixelsPerFrame;
         if (x + w < HeaderWidth || x > Bounds.Width) return;
-        var rect = new Rect(x, y + ClipPadY, Math.Max(2, w), TrackHeight - ClipPadY * 2);
+        var rect = new Rect(x, y + ClipPadY, Math.Max(2, w), height - ClipPadY * 2);
 
         var fill = track.Type == "audio" ? AudioClipColor
                  : clip.MediaType == "text" ? TextClipColor
@@ -593,7 +620,10 @@ public sealed class TimelineView : Control {
         base.OnSizeChanged(e);
         // The zoom anchor and the overview strip need to know how much of the
         // timeline one screen holds.
-        if (vm is not null) vm.ViewportWidth = Math.Max(1, e.NewSize.Width - HeaderWidth);
+        if (vm is not null) {
+            vm.ViewportWidth = Math.Max(1, e.NewSize.Width - HeaderWidth);
+            vm.ViewportHeight = Math.Max(1, e.NewSize.Height - TimelineMath.RulerHeight);
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
@@ -610,12 +640,21 @@ public sealed class TimelineView : Control {
             return;
         }
         if (p.X < HeaderWidth) {
+            // Track bottom edge in the header: drag to resize the row (Select tool).
+            if (vm.Tool == TimelineTool.Select && ResizeEdgeAt(p.Y) is { } edge) {
+                resizeTrackId = edge.Track.Id;
+                resizeOriginalHeight = edge.Height;
+                resizePreviewHeight = edge.Height;
+                resizeStartY = p.Y;
+                e.Pointer.Capture(this);
+                return;
+            }
             // Header toggle zone: the eye/mute glyph at the right of the name row.
-            if (p.Y >= RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
+            if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
                 vm.RequestTrackToggle(toggled);
             // The empty column below the last track has exactly one meaning:
             // track management. A left click opens it like the right click does.
-            else if (p.Y >= RulerHeight && TrackAt(p) is null)
+            else if (p.Y >= TimelineMath.RulerHeight && TrackAt(p) is null)
                 ShowTrackMenu(p);
             return;
         }
@@ -859,11 +898,12 @@ public sealed class TimelineView : Control {
         return source is not null && track.Type == source.Type ? track : null;
     }
 
-    TrackState? TrackAt(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        return row >= 0 && row < state.Tracks.Count ? state.Tracks[row] : null;
-    }
+    // Pointer-side lookups take view y; the layout speaks content y, so the
+    // scroll offset is added back at the door (here, JunctionAt, HitTestClip,
+    // ResizeEdgeAt) rather than at every caller.
+    TrackState? TrackAt(Point p) => vm is null || p.Y < TimelineMath.RulerHeight
+        ? null
+        : vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY);
 
     /// Vertical inset between a clip and its track row, shared by the renderer
     /// and every hit test so they cannot disagree about where a clip is.
@@ -872,10 +912,10 @@ public sealed class TimelineView : Control {
     /// The rect a clip is drawn in at rest (no live gesture applied) — the
     /// same geometry the renderer uses, so hit tests land on what is shown.
     Rect ClipRect(TrackState track, ClipState clip) {
-        int row = vm!.State!.Tracks.IndexOf(track);
-        double y = RulerHeight + row * TrackHeight;
+        double y = vm!.Layout.YOf(track.Id) - vm.ScrollOffsetY;
+        double height = vm.Layout.HeightOf(track.Id);
         return new Rect(FrameToX(clip.StartFrame), y + ClipPadY,
-                        clip.DurationFrames * vm.PixelsPerFrame, TrackHeight - ClipPadY * 2);
+                        clip.DurationFrames * vm.PixelsPerFrame, height - ClipPadY * 2);
     }
 
     /// 0/1 when `x` grabs the clip's left/right edge, else null.
@@ -898,10 +938,8 @@ public sealed class TimelineView : Control {
     /// The junction under a point, with its track — used by the context menu
     /// and the transition affordance as well as the roll drag.
     public (TrackState Track, ClipState Left, ClipState Right)? JunctionAt(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight || p.X < HeaderWidth) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        if (row < 0 || row >= state.Tracks.Count) return null;
-        var track = state.Tracks[row];
+        if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X < HeaderWidth) return null;
+        if (vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY) is not { } track) return null;
         return JunctionUnderPointer(track, p.X) is { } cut ? (track, cut.Left, cut.Right) : null;
     }
 
@@ -970,10 +1008,8 @@ public sealed class TimelineView : Control {
     }
 
     (TrackState Track, ClipState Clip)? HitTestClip(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        if (row < 0 || row >= state.Tracks.Count) return null;
-        var track = state.Tracks[row];
+        if (vm?.State is null || p.Y < TimelineMath.RulerHeight) return null;
+        if (vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY) is not { } track) return null;
         int frame = XToFrame(p.X);
         var clip = track.Clips.FirstOrDefault(c => frame >= c.StartFrame && frame < c.EndFrame);
         return clip is null ? null : (track, clip);
@@ -1005,6 +1041,15 @@ public sealed class TimelineView : Control {
                 fadeFramesPreview = fadeIsIn
                     ? Math.Clamp(frame - clip.StartFrame, 0, clip.DurationFrames)
                     : Math.Clamp(clip.EndFrame - frame, 0, clip.DurationFrames);
+                InvalidateVisual();
+            }
+            return;
+        }
+        if (resizeTrackId is not null) {
+            double rawHeight = resizeOriginalHeight + (p.Y - resizeStartY);
+            if (!resizeActive && Math.Abs(rawHeight - resizeOriginalHeight) > 2) resizeActive = true;
+            if (resizeActive) {
+                resizePreviewHeight = Math.Clamp(rawHeight, 32, 200);
                 InvalidateVisual();
             }
             return;
@@ -1095,6 +1140,13 @@ public sealed class TimelineView : Control {
             Cursor = Cursor.Default;
             return;
         }
+        // In the header only a row's bottom edge is a handle: it resizes.
+        if (p.X < HeaderWidth) {
+            Cursor = ResizeEdgeAt(p.Y) is not null
+                ? new Cursor(StandardCursorType.SizeNorthSouth)
+                : Cursor.Default;
+            return;
+        }
         // A cut reads as a roll handle; a lone edge reads as a trim handle.
         bool overJunction = JunctionAt(p) is not null;
         bool overEdge = HitTestClip(p) is { } h && EdgeUnderPointer(h.Clip, p.X) is not null;
@@ -1133,6 +1185,9 @@ public sealed class TimelineView : Control {
             else if (dragDeltaFrames != 0)
                 vm?.RequestMove(id, dragOriginalStart + dragDeltaFrames);
         }
+        if (resizeTrackId is { } rtid && resizeActive &&
+            Math.Abs(resizePreviewHeight - resizeOriginalHeight) > 0.5)
+            vm?.RequestTrackResize(rtid, (int)Math.Round(resizePreviewHeight));
         DisarmGesture();
         e.Pointer.Capture(null);
         InvalidateVisual();
@@ -1162,7 +1217,10 @@ public sealed class TimelineView : Control {
     bool DisarmGesture() {
         bool armed = scrubbing || rollLeftId is not null || trimClipId is not null
                      || dragClipId is not null || envelopeActive || fadeActive
-                     || loopDragEdge >= 0;
+                     || loopDragEdge >= 0 || resizeTrackId is not null;
+        resizeTrackId = null;
+        resizeActive = false;
+        resizePreviewHeight = 0;
         loopDragEdge = -1;
         loopDragActive = false;
         envelopeClipId = null;
@@ -1189,7 +1247,10 @@ public sealed class TimelineView : Control {
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e) {
         base.OnPointerWheelChanged(e);
         if (vm is null) return;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && !e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
+            // Shift scrolls the rows vertically under the fixed ruler.
+            vm.ScrollOffsetY = Math.Clamp(vm.ScrollOffsetY - e.Delta.Y * 60, 0, vm.MaxScrollOffsetY);
+        } else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
             // Zoom about the cursor: keep the frame under the pointer fixed.
             var p = e.GetPosition(this);
             double frameAtCursor = (p.X - HeaderWidth + vm.ScrollOffsetX) / vm.PixelsPerFrame;

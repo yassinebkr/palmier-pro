@@ -19,16 +19,44 @@ public sealed partial class TimelineViewModel : ObservableObject {
     [ObservableProperty] int playheadFrame;
     [ObservableProperty] double pixelsPerFrame = 4.0;
     [ObservableProperty] double scrollOffsetX;
+    [ObservableProperty] double scrollOffsetY;
     /// Clip-area width in DIPs, reported by the view. Zoom anchoring and the
     /// overview strip read it. Plain on purpose: it is written during layout
     /// and read during paint, so a change notification would repaint
     /// mid-render.
     public double ViewportWidth { get; set; } = 1;
+    /// Clip-area height in DIPs, reported by the view. Plain for the same
+    /// reason as ViewportWidth.
+    double viewportHeightField = 1;
+    public double ViewportHeight {
+        get => viewportHeightField;
+        set {
+            viewportHeightField = value;
+            // A taller window shrinks the scrollable range; don't strand the view.
+            ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, MaxScrollOffsetY);
+        }
+    }
+    /// Furthest the rows may scroll up: the content bottom sits one
+    /// screenful deep, so shorter content allows no scroll at all.
+    public double MaxScrollOffsetY =>
+        Math.Max(0, Layout.Bottom - TimelineMath.RulerHeight - ViewportHeight);
     [ObservableProperty] string? selectedClipId;
     [ObservableProperty] TimelineTool tool = TimelineTool.Select;
     [ObservableProperty] bool snapEnabled = true;
     /// Tighter rows so more tracks fit on screen.
     [ObservableProperty] bool compactRows;
+
+    /// Geometry for the current state; rebuilt on state reload / compact toggle.
+    public TrackLayout Layout { get; private set; } = new([], 0, _ => 50);
+
+    void RebuildLayout() {
+        Layout = new TrackLayout(State?.Tracks ?? [], TimelineMath.RulerHeight,
+            t => CompactRows ? 28 : t.RenderHeight);
+        // A shrink (track removed, compact toggle) must not strand scrolled rows.
+        ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, MaxScrollOffsetY);
+    }
+
+    partial void OnCompactRowsChanged(bool value) => RebuildLayout();
 
     /// Every selected clip. `SelectedClipId` stays the primary one — it is
     /// what the inspector edits — and is always a member of this set.
@@ -347,6 +375,12 @@ public sealed partial class TimelineViewModel : ObservableObject {
         TrackToggleRequested?.Invoke(track.Id, track.Type == "audio",
             track.Type == "audio" ? !track.Muted : !track.Hidden);
 
+    /// Fired when a header edge drag ends with a new track height.
+    public event Action<string, int>? TrackResizeRequested;
+
+    public void RequestTrackResize(string trackId, int height) =>
+        TrackResizeRequested?.Invoke(trackId, height);
+
     public sealed record WaveformData(float[] MinMax, int SourceFrames);
 
     readonly Dictionary<string, WaveformData?> waveforms = new();
@@ -399,6 +433,7 @@ public sealed partial class TimelineViewModel : ObservableObject {
         SelectedClipIds.RemoveWhere(id => State.FindClip(id) is null);
         if (SelectedClipId is not null && State.FindClip(SelectedClipId) is null)
             SelectedClipId = SelectedClipIds.FirstOrDefault();
+        RebuildLayout();
         StateReloaded?.Invoke();
     }
 

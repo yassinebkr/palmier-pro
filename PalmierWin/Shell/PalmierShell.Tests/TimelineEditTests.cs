@@ -18,6 +18,8 @@ public class TimelineEditTests {
             Assert.NotNull(CoreApi.AddTrack(project, "audio"));
             var types = State(project).Tracks.Select(t => t.Type).ToList();
             Assert.Equal(["video", "video", "audio", "audio"], types);
+            Assert.Equal([50, 50, 72, 72],
+                State(project).Tracks.Select(t => (int)t.DisplayHeight).ToList());
         } finally {
             CoreApi.palmier_project_destroy(project);
         }

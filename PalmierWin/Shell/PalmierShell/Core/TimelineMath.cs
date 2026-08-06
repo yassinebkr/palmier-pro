@@ -6,6 +6,9 @@ public static class TimelineMath {
     public const double MinPixelsPerFrame = 0.5;
     public const double MaxPixelsPerFrame = 16;
 
+    /// Height of the time ruler strip above the tracks.
+    public const double RulerHeight = 24;
+
     /// The scroll offset after a zoom change that keeps an anchor frame at
     /// the same screen x: the playhead when it is visible, otherwise whatever
     /// sits at the view's centre.

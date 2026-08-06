@@ -79,6 +79,16 @@ public sealed record TrackState(string Id, string Type, bool Muted, bool Hidden,
     /// User-given name; null means the derived label (V1, A2…).
     public string? Name { get; init; }
 
+    /// Per-track height from the model. Old files decode to PalmierCore's 44
+    /// on the engine side; 0 is only reachable from hand-written JSON, where
+    /// RenderHeight falls back to the per-type default as defense-in-depth.
+    public double DisplayHeight { get; init; }
+
+    /// Height this track renders at: the persisted height, or the per-type
+    /// default when unset; clamped to the model's [32, 200].
+    public double RenderHeight =>
+        Math.Clamp(DisplayHeight > 0 ? DisplayHeight : Type == "audio" ? 72 : 50, 32, 200);
+
     /// The clips bracketing the empty span `[startFrame, endFrame)`, used to
     /// seed a generated shot with the frames it has to sit between. Either side
     /// is null at the head or tail of the track. Text clips are skipped: they

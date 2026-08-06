@@ -116,6 +116,9 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
     /// on 64-bit); clamped to [32, 200] on decode to match the app's TrackSize.
     public var displayHeight: Double = 44
 
+    /// The one display-height bound every setter and decode shares.
+    public static let displayHeightRange: ClosedRange<Double> = 32...200
+
     public init(
         id: String = UUID().uuidString,
         type: ClipType,
@@ -172,7 +175,7 @@ public extension Track {
             syncLocked: (try? c.decode(Bool.self, forKey: .syncLocked)) ?? true,
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
-                .map { min(max($0, 32), 200) } ?? 44,
+                .map { min(max($0, Track.displayHeightRange.lowerBound), Track.displayHeightRange.upperBound) } ?? 44,
             name: try? c.decode(String.self, forKey: .name)
         )
     }
