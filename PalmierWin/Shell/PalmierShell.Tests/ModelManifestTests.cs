@@ -8,13 +8,27 @@ public sealed class ModelManifestTests : IDisposable {
 
     [Fact]
     public void EveryCurrentModelIsPresentWithDurations() {
+        string[] replicateIds = [
+            "bytedance/seedance-2.0", "bytedance/seedance-1.5-pro", "bytedance/seedance-1-pro",
+            "kwaivgi/kling-v3-video", "kwaivgi/kling-v2.1", "google/veo-3", "google/veo-3-fast",
+            "minimax/video-01",
+        ];
         var replicate = ModelManifest.For("replicate");
+        Assert.Equal(replicateIds.Length, replicate.Count);
+        Assert.All(replicateIds, id =>
+            Assert.Contains(replicate, m => m.Id == id && m.Durations.Length > 0));
         Assert.Contains(replicate, m => m.Id == "bytedance/seedance-2.0" && m.Durations.Contains(15));
-        Assert.Contains(replicate, m => m.Id == "kwaivgi/kling-v3-video");
-        Assert.Contains(replicate, m => m.Id == "google/veo-3-fast");
+
+        string[] falIds = [
+            "bytedance/seedance-2.0/image-to-video", "bytedance/seedance-2.0/text-to-video",
+            "bytedance/seedance-2.0/fast/image-to-video", "bytedance/seedance-2.0/fast/text-to-video",
+            "fal-ai/kling-video/v2.1/standard/text-to-video", "fal-ai/veo3/fast",
+            "fal-ai/minimax/hailuo-02/standard/text-to-video",
+        ];
         var fal = ModelManifest.For("fal");
-        Assert.Contains(fal, m => m.Id == "bytedance/seedance-2.0/image-to-video");
-        Assert.Contains(fal, m => m.Id == "fal-ai/veo3/fast");
+        Assert.Equal(falIds.Length, fal.Count);
+        Assert.All(falIds, id =>
+            Assert.Contains(fal, m => m.Id == id && m.Durations.Length > 0));
     }
 
     [Fact]
