@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -417,7 +418,60 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public TimelineViewModel(IntPtr project) {
         this.project = project;
+        for (int i = 0; i < meters.Length; i++) meters[i] = new TrackMeters();
         Reload();
+    }
+
+    readonly TrackMeters[] meters = new TrackMeters[64];
+    readonly float[] meterPeaks = new float[64];
+    // The track id holding each audio ordinal; meter state follows the
+    // ordinal, so a change means the channel inherited another track's levels.
+    readonly string?[] meterTrackIds = new string?[64];
+    readonly Stopwatch meterClock = new();
+    DispatcherTimer? meterTimer;
+
+    /// Fired ~30×/s while playing so the header meters redraw. High-frequency:
+    /// subscribe only the timeline header meter, nothing else.
+    public event Action? MetersChanged;
+
+    public TrackMeters MeterFor(int audioTrackOrdinal) =>
+        meters[Math.Min(audioTrackOrdinal, meters.Length - 1)];  // engine shares the last slot beyond 64
+
+    /// The audio context the poll reads peaks from, set once by its owner.
+    /// Zero means the app runs silent: the poll ticks zeros.
+    public IntPtr AudioHandle { get; set; }
+
+    bool meteringDisposed;
+
+    /// Permanently stops the poll (owner teardown); later SetMetering no-ops.
+    public void MarkMeteringDisposed() {
+        meteringDisposed = true;
+        meterTimer?.Stop();
+    }
+
+    /// Starts/stops the peak poll with playback (UI thread). Pausing freezes
+    /// the meters; the ballistics resume from the frozen levels on play.
+    public void SetMetering(bool playing) {
+        if (meteringDisposed) return;
+        if (!playing) { meterTimer?.Stop(); return; }
+        if (meterTimer is null) {
+            meterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            meterTimer.Tick += (_, _) => PollMeters();
+        }
+        meterClock.Restart();
+        meterTimer.Start();
+    }
+
+    void PollMeters() {
+        double dt = meterClock.Elapsed.TotalSeconds;
+        meterClock.Restart();
+        int n = AudioHandle == IntPtr.Zero
+            ? 0
+            : CoreApi.palmier_audio_track_peaks(AudioHandle, meterPeaks, meterPeaks.Length);
+        // Slots at/past the count are trailing clip-less tracks: silence (E1).
+        for (int i = 0; i < meters.Length; i++)
+            meters[i].Tick(i < n ? meterPeaks[i] : 0f, dt);
+        MetersChanged?.Invoke();
     }
 
     public int TotalFrames => State?.TotalFrames ?? 0;
@@ -435,6 +489,17 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public void Reload() {
         State = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+        // A removed track shifts later audio ordinals up; reset any channel
+        // whose ordinal changed hands so it drops the previous track's levels
+        // (clip latch included). Done here, not in the poll, so it also holds
+        // while paused.
+        var audioIds = State.Tracks.Where(t => t.Type == "audio").Select(t => t.Id).ToList();
+        for (int i = 0; i < meters.Length; i++) {
+            string? id = i < audioIds.Count ? audioIds[i] : null;
+            if (meterTrackIds[i] == id) continue;
+            meters[i].Reset();
+            meterTrackIds[i] = id;
+        }
         // Drop selections whose clips no longer exist (split, delete, undo).
         SelectedClipIds.RemoveWhere(id => State.FindClip(id) is null);
         if (SelectedClipId is not null && State.FindClip(SelectedClipId) is null)

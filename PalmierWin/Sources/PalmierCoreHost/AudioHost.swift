@@ -27,7 +27,13 @@ final class AudioContext {
         syncedGeneration = generation
 
         var sources: [WinAudioEngine.ClipSource] = []
-        for track in timeline.tracks where track.type == .audio && !track.muted {
+        var audioOrdinal = 0
+        for track in timeline.tracks where track.type == .audio {
+            // The shell's track order is the same JSON, so ordinals line up
+            // 1:1 with its audio tracks. Muted tracks keep their slot.
+            let slot = min(audioOrdinal, WinAudioEngine.peakSlotCapacity - 1)
+            audioOrdinal += 1
+            guard !track.muted else { continue }
             let trackGain = VolumeScale.linearFromDb(track.gainDb)
             for clip in track.clips {
                 let volumePoints = (clip.volumeTrack?.keyframes ?? []).map {
@@ -37,7 +43,7 @@ final class AudioContext {
                     id: clip.id, mediaRef: clip.mediaRef,
                     startFrame: clip.startFrame, durationFrames: clip.durationFrames,
                     trimStartFrame: clip.trimStartFrame, volume: clip.volume,
-                    trackGain: trackGain,
+                    trackGain: trackGain, peakSlot: slot,
                     fadeInFrames: clip.fadeInFrames, fadeOutFrames: clip.fadeOutFrames,
                     volumeKeyframes: volumePoints))
             }
@@ -103,4 +109,16 @@ public func palmierAudioClipTrackGain(_ handle: UnsafeMutableRawPointer?, _ clip
     let ctx = Unmanaged<AudioContext>.fromOpaque(handle).takeUnretainedValue()
     ctx.syncIfNeeded()
     return ctx.engine.trackGain(forClipId: String(cString: clipId)) ?? .nan
+}
+
+/// Writes per-track peaks (max |sample| since the previous call) as f32 in
+/// timeline track order (audio tracks only), up to `maxCount` entries, and
+/// resets them. Returns the entry count, 0 when no audio device/entries.
+@_cdecl("palmier_audio_track_peaks")
+public func palmierAudioTrackPeaks(_ handle: UnsafeMutableRawPointer?,
+                                   _ buf: UnsafeMutablePointer<Float>?, _ maxCount: Int32) -> Int32 {
+    guard let handle, let buf, maxCount > 0 else { return 0 }
+    let ctx = Unmanaged<AudioContext>.fromOpaque(handle).takeUnretainedValue()
+    ctx.syncIfNeeded()
+    return Int32(ctx.engine.readAndResetPeaks(into: buf, maxCount: Int(maxCount)))
 }

@@ -27,6 +27,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Project = CoreApi.palmier_project_create();
         audio = CoreApi.palmier_audio_create(Project);  // Zero: no output device; app runs silent
         Timeline = new TimelineViewModel(Project);
+        Timeline.AudioHandle = audio;
         Tabs = new TimelineTabsViewModel(Project, Timeline);
         Viewer = new ViewerTabsViewModel(Project);
         // Undo entries carry their timeline tab so a restore always lands on
@@ -717,6 +718,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         session.PlayingChanged += (playing, frame) => {
             if (audio != IntPtr.Zero) CoreApi.palmier_audio_set_playing(audio, playing ? 1 : 0, frame);
         };
+        // PlayingChanged can fire on the render thread; the meter timer is UI-thread only.
+        // Source playback meters the source's own slots, not the timeline's:
+        // park the headers frozen instead of showing those levels on real tracks.
+        session.PlayingChanged += (playing, _) =>
+            Dispatcher.UIThread.Post(() => Timeline.SetMetering(playing && !Viewer.ShowingSource));
         session.PlayheadLooped += frame => {
             if (audio != IntPtr.Zero) CoreApi.palmier_audio_seek(audio, frame);
         };
@@ -986,6 +992,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Agent.Shutdown();
         Media.Generate.CancelAll();
         engine?.Dispose();
+        // Stop the meter poll before the audio handle it reads dies, and drop
+        // the handle so a queued PlayingChanged can't restart it.
+        Timeline.SetMetering(false);
+        Timeline.AudioHandle = IntPtr.Zero;
+        Timeline.MarkMeteringDisposed();
         if (agentHandle != IntPtr.Zero) {
             CoreApi.palmier_agent_destroy(agentHandle);
             agentHandle = IntPtr.Zero;

@@ -39,12 +39,14 @@ public final class WinAudioEngine: @unchecked Sendable {
         public let volume: Double
         /// Linear track gain, folded in alongside `volume` at mix time.
         public let trackGain: Double
+        /// Peak-meter slot of the owning track (audio-track ordinal, capped).
+        public let peakSlot: Int
         public let fadeInFrames: Int
         public let fadeOutFrames: Int
         public let volumeKeyframes: [VolumePoint]
         public init(id: String, mediaRef: String, startFrame: Int, durationFrames: Int,
                     trimStartFrame: Int, volume: Double, trackGain: Double = 1,
-                    fadeInFrames: Int = 0, fadeOutFrames: Int = 0,
+                    peakSlot: Int = 0, fadeInFrames: Int = 0, fadeOutFrames: Int = 0,
                     volumeKeyframes: [VolumePoint] = []) {
             self.id = id
             self.mediaRef = mediaRef
@@ -53,6 +55,7 @@ public final class WinAudioEngine: @unchecked Sendable {
             self.trimStartFrame = trimStartFrame
             self.volume = volume
             self.trackGain = trackGain
+            self.peakSlot = peakSlot
             self.fadeInFrames = fadeInFrames
             self.fadeOutFrames = fadeOutFrames
             self.volumeKeyframes = volumeKeyframes
@@ -162,6 +165,9 @@ public final class WinAudioEngine: @unchecked Sendable {
     /// How far ahead of the playhead the feeder keeps each clip buffered.
     private static let bufferSeconds = 0.5
 
+    /// Peak-meter slot capacity; tracks beyond it share the last slot.
+    public static let peakSlotCapacity = 64
+
     private let stateLock = NSLock()
     private var clips: [ClipPlayback] = []
     private var playing = false
@@ -174,6 +180,14 @@ public final class WinAudioEngine: @unchecked Sendable {
     private var seekGeneration = 0
     /// Last seek generation the feeder acted on. Feeder thread only.
     private var feederGeneration = -1
+    /// Slots in use at the last `update` (max assigned slot + 1).
+    private var peakSlotsInUse = 0
+    /// Audio-thread scratch: per-slot maxima accumulated during one callback.
+    private var localPeaks = [Float](repeating: 0, count: WinAudioEngine.peakSlotCapacity)
+    /// Published per-slot max |post-gain sample| since the last read. Folded
+    /// in once per callback under `peaksLock`, which is never held per sample.
+    private var publishedPeaks = [Float](repeating: 0, count: WinAudioEngine.peakSlotCapacity)
+    private let peaksLock = NSLock()
 
     private var feeder: Thread?
     private var running = true
@@ -245,7 +259,31 @@ public final class WinAudioEngine: @unchecked Sendable {
             if let old = existing.removeValue(forKey: source.id), old.source == source { return old }
             return ClipPlayback(source: source, capacityFrames: capacity, channels: Self.channels)
         }
+        peakSlotsInUse = (newSources.map(\.peakSlot).max() ?? -1) + 1
         stateLock.unlock()
+        // A new clip set must not resurrect peaks recorded by the old one.
+        peaksLock.lock()
+        publishedPeaks = [Float](repeating: 0, count: Self.peakSlotCapacity)
+        peaksLock.unlock()
+    }
+
+    /// Copies the published per-slot peaks (max |sample| since the previous
+    /// call) into `buf`, up to `maxCount` entries, and clears all in-use
+    /// slots. Returns the written count, 0 when there are no audio entries.
+    public func readAndResetPeaks(into buf: UnsafeMutablePointer<Float>, maxCount: Int) -> Int {
+        stateLock.lock()
+        let inUse = peakSlotsInUse
+        stateLock.unlock()
+        let slots = min(inUse, Self.peakSlotCapacity)
+        guard slots > 0 else { return 0 }
+        let count = min(maxCount, slots)
+        peaksLock.lock()
+        for slot in 0..<slots {
+            if slot < count { buf[slot] = publishedPeaks[slot] }
+            publishedPeaks[slot] = 0
+        }
+        peaksLock.unlock()
+        return count
     }
 
     /// The track gain stored on `clipId`'s mix entry, or nil when the clip is
@@ -440,11 +478,26 @@ public final class WinAudioEngine: @unchecked Sendable {
                 gain *= Float(envelope)
             }
             mixBuffer.withUnsafeBufferPointer { src in
+                let slot = clip.source.peakSlot
+                var peak = slot < Self.peakSlotCapacity ? localPeaks[slot] : 0
                 for i in 0..<(got * Self.channels) {
-                    out[outOffset * Self.channels + i] += src[i] * gain
+                    let s = src[i] * gain
+                    out[outOffset * Self.channels + i] += s
+                    let a = abs(s)
+                    if a > peak { peak = a }
                 }
+                if slot < Self.peakSlotCapacity { localPeaks[slot] = peak }
             }
         }
+
+        // Fold this callback's per-slot maxima into the published peaks. One
+        // lock per callback, never per sample.
+        peaksLock.lock()
+        for slot in 0..<Self.peakSlotCapacity where localPeaks[slot] > 0 {
+            if localPeaks[slot] > publishedPeaks[slot] { publishedPeaks[slot] = localPeaks[slot] }
+            localPeaks[slot] = 0
+        }
+        peaksLock.unlock()
     }
 }
 
