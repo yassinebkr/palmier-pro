@@ -431,15 +431,25 @@ public sealed partial class TimelineViewModel : ObservableObject {
     /// subscribe only the timeline header meter, nothing else.
     public event Action? MetersChanged;
 
-    public TrackMeters MeterFor(int audioTrackOrdinal) => meters[audioTrackOrdinal];
+    public TrackMeters MeterFor(int audioTrackOrdinal) =>
+        meters[Math.Min(audioTrackOrdinal, meters.Length - 1)];  // engine shares the last slot beyond 64
 
     /// The audio context the poll reads peaks from, set once by its owner.
     /// Zero means the app runs silent: the poll ticks zeros.
     public IntPtr AudioHandle { get; set; }
 
+    bool meteringDisposed;
+
+    /// Permanently stops the poll (owner teardown); later SetMetering no-ops.
+    public void MarkMeteringDisposed() {
+        meteringDisposed = true;
+        meterTimer?.Stop();
+    }
+
     /// Starts/stops the peak poll with playback (UI thread). Pausing freezes
     /// the meters; the ballistics resume from the frozen levels on play.
     public void SetMetering(bool playing) {
+        if (meteringDisposed) return;
         if (!playing) { meterTimer?.Stop(); return; }
         if (meterTimer is null) {
             meterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };

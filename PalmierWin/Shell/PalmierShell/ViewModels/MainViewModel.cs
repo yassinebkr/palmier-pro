@@ -994,6 +994,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         // the handle so a queued PlayingChanged can't restart it.
         Timeline.SetMetering(false);
         Timeline.AudioHandle = IntPtr.Zero;
+        Timeline.MarkMeteringDisposed();
         if (agentHandle != IntPtr.Zero) {
             CoreApi.palmier_agent_destroy(agentHandle);
             agentHandle = IntPtr.Zero;
