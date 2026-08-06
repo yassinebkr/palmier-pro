@@ -71,10 +71,12 @@ $outAudio = Join-Path $outDir "audioonly.m4a"
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outAudio"
 
-# Known-level fixture: 440 Hz at exactly 0.5 amplitude, for waveform level checks.
+# Known-level fixture for waveform level checks. The engine remixes mono to
+# stereo through swr (-3 dB), so target 1/sqrt(2) in-file for a 0.5 peak
+# through palmier_waveform (sine defaults to 1/8 amplitude, hence 4*sqrt(2)).
 $outLoud = Join-Path $outDir "loudsine.mp4"
 & $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
-    -f lavfi -i "sine=frequency=440:duration=2" -af "volume=0.5" `
+    -f lavfi -i "sine=frequency=440:duration=2" -af "volume=5.656854249" `
     -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outLoud
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outLoud"

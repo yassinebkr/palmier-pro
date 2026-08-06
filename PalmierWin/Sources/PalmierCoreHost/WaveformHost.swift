@@ -15,33 +15,32 @@ public func palmierWaveform(_ path: UnsafePointer<CChar>?,
     let channels = FFmpegAudioDecoder.channels
     let chunkFrames = 4096
     var chunk = [Float](repeating: 0, count: chunkFrames * channels)
-    var samples: [Float] = []  // mono
+    var granules: [(lo: Float, hi: Float)] = []  // one per chunk: bounded memory
     while true {
         let got = chunk.withUnsafeMutableBufferPointer {
             decoder.read(into: $0.baseAddress!, sampleFrames: chunkFrames)
         }
         guard got > 0 else { break }
-        samples.reserveCapacity(samples.count + got)
+        var lo: Float = 1, hi: Float = -1
         for i in 0..<got {
             var sum: Float = 0
             for c in 0..<channels { sum += chunk[i * channels + c] }
-            samples.append(sum / Float(channels))
+            let mono = sum / Float(channels)
+            lo = min(lo, mono); hi = max(hi, mono)
         }
+        granules.append((min(lo, hi), max(lo, hi)))
         if got < chunkFrames { break }
     }
-    guard !samples.isEmpty else { return 0 }
+    guard !granules.isEmpty else { return 0 }
 
     let cols = Int(columns)
     for col in 0..<cols {
-        let start = samples.count * col / cols
-        let end = max(start + 1, samples.count * (col + 1) / cols)
+        let g0 = granules.count * col / cols
+        let g1 = min(granules.count, max(g0 + 1, granules.count * (col + 1) / cols))
         var lo: Float = 1, hi: Float = -1
-        for i in start..<min(end, samples.count) {
-            lo = min(lo, samples[i])
-            hi = max(hi, samples[i])
-        }
-        buf[col * 2] = min(lo, hi)
-        buf[col * 2 + 1] = max(lo, hi)
+        for g in granules[g0..<g1] { lo = min(lo, g.lo); hi = max(hi, g.hi) }
+        buf[col * 2] = lo
+        buf[col * 2 + 1] = hi
     }
     return 1
 }

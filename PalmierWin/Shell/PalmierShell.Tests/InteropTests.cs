@@ -616,4 +616,23 @@ public class InteropTests {
             CoreApi.palmier_project_destroy(project);
         }
     }
+
+    [Fact]
+    public void Waveform_KnownLevelSinePeaksAtHalfScale() {
+        var wave = CoreApi.GetWaveform(TestMediaPath("loudsine.mp4"), 400);
+        Assert.NotNull(wave);
+        float max = wave.Max(Math.Abs);
+        Assert.True(max > 0.45f && max < 0.55f, $"expected ~0.5 peak, got {max}");
+    }
+
+    [Fact]
+    public void Waveform_PairsAreOrderedAndBounded() {
+        var wave = CoreApi.GetWaveform(TestMediaPath("testav.mp4"), 256);
+        Assert.NotNull(wave);
+        Assert.Equal(512, wave!.Length);
+        for (int i = 0; i < wave.Length; i += 2) {
+            Assert.True(wave[i] <= wave[i + 1], $"pair {i / 2} inverted");
+            Assert.True(wave[i] >= -1f && wave[i + 1] <= 1f, $"pair {i / 2} out of range");
+        }
+    }
 }
