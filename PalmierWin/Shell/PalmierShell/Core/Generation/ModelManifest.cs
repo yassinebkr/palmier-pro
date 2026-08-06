@@ -17,6 +17,8 @@ public static class ModelManifest {
     };
 
     /// Test seam: replaces the bundled asset read. Never set in production.
+    /// Overrides must stay malformed-or-identical: valid divergent payloads
+    /// are unsafe under xunit's parallel test runs.
     public static Func<string>? BundledOverride;
 
     /// The bundled asset never changes at runtime, so it is read and parsed once.
