@@ -97,9 +97,10 @@ public final class FFmpegAudioDecoder {
         // swr's default remix would attenuate the center by 1/√2.
         if cc.pointee.ch_layout.nb_channels == 1 {
             let matrix: [Double] = [1.0, 1.0]  // L = C, R = C
-            matrix.withUnsafeBufferPointer { ptr in
-                _ = swr_set_matrix(swrCtx, ptr.baseAddress, 1)
+            let setResult = matrix.withUnsafeBufferPointer { ptr in
+                swr_set_matrix(swrCtx, ptr.baseAddress, 1)
             }
+            guard setResult >= 0 else { try fail(.resampleFailed(-1)) }
         }
         guard swr_init(swrCtx) >= 0 else { try fail(.resampleFailed(-1)) }
         swr = swrCtx
