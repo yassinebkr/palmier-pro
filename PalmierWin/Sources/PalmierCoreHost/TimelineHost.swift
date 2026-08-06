@@ -434,7 +434,14 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
             break
         }
     }
-    guard let videoStream = stream, let par = videoStream.pointee.codecpar else { return 0 }
+    guard let videoStream = stream, let par = videoStream.pointee.codecpar else {
+        // No playable video stream: an audio-only file still imports, with
+        // zero dimensions and a 30 fps duration so the timeline can place it.
+        guard av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0 else { return 0 }
+        let seconds = fmt.pointee.duration > 0 ? Double(fmt.pointee.duration) / 1_000_000 : 0
+        guard seconds > 0 else { return 0 }
+        return writeCString("0,0,3000,\(Int((seconds * 30).rounded()))", into: buf, size: bufSize)
+    }
 
     let width = Int(par.pointee.width)
     let height = Int(par.pointee.height)

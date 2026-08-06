@@ -544,4 +544,24 @@ public class InteropTests {
         Assert.Equal(240, probe.Value.Height);
         Assert.Equal(30, probe.Value.Fps, 1);
     }
+
+    [Fact]
+    public void ProbeMedia_AudioOnlyFileReportsZeroDimensionsAndDuration() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("audioonly.m4a"));
+        Assert.NotNull(probe);
+        Assert.Equal(0, probe.Value.Width);
+        Assert.Equal(0, probe.Value.Height);
+        Assert.True(probe.Value.TotalFrames >= 80 && probe.Value.TotalFrames <= 100,
+            $"3s at 30fps expected ~90 frames, got {probe.Value.TotalFrames}");
+    }
+
+    [Fact]
+    public void ProbeMedia_AudioPlusCoverArtProbesAsAudioOnly() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("coveronly.m4a"));
+        Assert.NotNull(probe);
+        Assert.Equal(0, probe.Value.Width);
+        Assert.Equal(0, probe.Value.Height);
+        Assert.True(probe.Value.TotalFrames >= 80 && probe.Value.TotalFrames <= 100,
+            $"3s at 30fps expected ~90 frames, got {probe.Value.TotalFrames}");
+    }
 }
