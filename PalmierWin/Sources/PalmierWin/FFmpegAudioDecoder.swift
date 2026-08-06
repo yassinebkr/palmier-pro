@@ -40,6 +40,20 @@ public final class FFmpegAudioDecoder {
         return av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0
     }
 
+    /// Container probe: true when the file has a playable (non-attached-pic) video stream.
+    public static func hasVideoStream(path: String) -> Bool {
+        var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
+        guard path.withCString({ avformat_open_input(&fmtCtx, $0, nil, nil) }) == 0, let fmt = fmtCtx else { return false }
+        defer { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
+        guard avformat_find_stream_info(fmt, nil) >= 0, let streamsBase = fmt.pointee.streams else { return false }
+        for i in 0..<Int(fmt.pointee.nb_streams) {
+            guard let s = streamsBase[i], let p = s.pointee.codecpar else { continue }
+            if p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
+               (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 { return true }
+        }
+        return false
+    }
+
     public init(path: String) throws {
         var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
         let openResult = path.withCString { avformat_open_input(&fmtCtx, $0, nil, nil) }

@@ -61,7 +61,17 @@ public final class FFmpegDecoder {
             throw DecodeError.openFailed(-1)
         }
 
-        let vidx = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nil, 0)
+        // av_find_best_stream can pick a large attached pic over the real video; skip cover art.
+        var vidx: Int32 = -1
+        if let streamsBase = fmtCtx.pointee.streams {
+            for i in 0..<Int(fmtCtx.pointee.nb_streams) {
+                guard let s = streamsBase[i], let p = s.pointee.codecpar,
+                      p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
+                      (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 else { continue }
+                vidx = Int32(i)
+                break
+            }
+        }
         guard vidx >= 0 else {
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
             throw DecodeError.noVideoStream

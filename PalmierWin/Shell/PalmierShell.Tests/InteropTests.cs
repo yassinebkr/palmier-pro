@@ -564,4 +564,38 @@ public class InteropTests {
         Assert.True(probe.Value.TotalFrames >= 80 && probe.Value.TotalFrames <= 100,
             $"3s at 30fps expected ~90 frames, got {probe.Value.TotalFrames}");
     }
+
+    [Fact]
+    public void AddClip_AudioOnlyLandsOnAudioTrackWithoutVideoClip() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string? clipId = CoreApi.AddClip(project, TestMediaPath("audioonly.m4a"), 90);
+            Assert.NotNull(clipId);
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            var video = state.Tracks.Single(t => t.Type == "video");
+            var audio = state.Tracks.Single(t => t.Type == "audio");
+            Assert.Empty(video.Clips);
+            var clip = Assert.Single(audio.Clips);
+            Assert.Equal("audio", clip.MediaType);
+            Assert.Equal(90, clip.DurationFrames);
+            Assert.Null(clip.LinkGroupId);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    [Fact]
+    public void ExtractFrame_HiResCoverArtDecodesTheVideoNotTheCover() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("hirescover.mp4"));
+        Assert.NotNull(probe);
+        Assert.Equal(320, probe.Value.Width);
+        var pixels = new byte[probe.Value.Width * probe.Value.Height * 4];
+        int ok = CoreApi.palmier_extract_frame(TestMediaPath("hirescover.mp4"), 0, 30, pixels, pixels.Length);
+        Assert.Equal(1, ok);
+        // The real video is the testsrc pattern (lots of color variance); the
+        // cover is a flat green PNG (near-zero variance). Guard against a
+        // decoder that picked the 1024x1024 attached pic.
+        int distinct = pixels.Take(4000).Distinct().Count();
+        Assert.True(distinct > 20, $"flat cover art decoded instead of video (distinct={distinct})");
+    }
 }

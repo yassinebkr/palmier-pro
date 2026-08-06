@@ -413,6 +413,7 @@ public func palmierProjectTimelineName(_ handle: UnsafeMutableRawPointer?,
 /// Probes a media file via libavformat without decoding. Writes
 /// "width,height,fpsX100,totalFrames" (ASCII) into buf. totalFrames is -1
 /// when the container reports no duration. Returns 1 on success, 0 on failure.
+/// Audio-only files report 0,0,3000,frames at a synthetic 30 fps and fail when the container has no duration.
 @_cdecl("palmier_probe_media")
 public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
                               _ buf: UnsafeMutablePointer<CChar>?, _ bufSize: Int32) -> Int32 {
@@ -497,6 +498,16 @@ private func addClip(_ handle: UnsafeMutableRawPointer?,
     var clip = Clip(mediaRef: path, startFrame: 0, durationFrames: Int(durationFrames))
     guard writeCString(clip.id, into: idBuf, size: idBufSize) == 1 else { return 0 }
     let added: Bool = ctx.withTimeline { timeline in
+        if !FFmpegAudioDecoder.hasVideoStream(path: path) {
+            // Audio-only media: one clip on the audio track, no video twin, no link.
+            guard let audioIndex = timeline.tracks.firstIndex(where: { $0.type == .audio }) else { return false }
+            var audioClip = clip
+            audioClip.mediaType = .audio
+            audioClip.sourceClipType = .audio
+            audioClip.startFrame = startFrame ?? timeline.tracks[audioIndex].endFrame
+            insertOverwriting(audioClip, into: &timeline.tracks[audioIndex].clips)
+            return true
+        }
         guard let trackIndex = timeline.tracks.firstIndex(where: { $0.type == .video }) else { return false }
         clip.startFrame = startFrame ?? timeline.tracks[trackIndex].endFrame
         if hasAudio, let audioIndex = timeline.tracks.firstIndex(where: { $0.type == .audio }) {
