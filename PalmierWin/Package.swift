@@ -47,6 +47,13 @@ let package = Package(
                 publicHeadersPath: ".", cSettings: [
                     .headerSearchPath("."),
                 ]),
+        // Native vectored crash handler: no managed code on the faulting
+        // thread (a managed handler was a fatal CLR re-entry under GC).
+        .target(name: "CCrashGuard", path: "CCrashGuard",
+                sources: ["crashguard.c"],
+                publicHeadersPath: ".", cSettings: [
+                    .headerSearchPath("."),
+                ]),
         // Dear ImGui flat-C wrapper. C++ target — compiles the wrapper + ImGui
         // core + Vulkan/Win32 backends. Exposes extern "C" functions for Swift.
         .target(name: "CImGui", path: "CImGui",
@@ -73,7 +80,7 @@ let package = Package(
         .target(name: "PalmierCore", path: "Sources/PalmierCore"),
         .target(
             name: "PalmierCoreHost",
-            dependencies: ["PalmierCore", "PalmierWin"],
+            dependencies: ["PalmierCore", "PalmierWin", "CCrashGuard"],
             path: "Sources/PalmierCoreHost",
             swiftSettings: [
                 .unsafeFlags(["-I", vkInc, "-I", ffInc]),

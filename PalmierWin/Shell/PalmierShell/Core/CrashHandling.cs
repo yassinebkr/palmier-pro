@@ -27,33 +27,34 @@ public static class CrashLog {
             Directory.CreateDirectory(LogDirectory);
             string path = Path.Combine(LogDirectory,
                 $"crash-{DateTime.Now:yyyyMMdd-HHmmss}.log");
-            File.WriteAllText(path, Format(kind, exception));
+            File.WriteAllText(path, Format(kind, exception, null));
             return path;
         } catch {
             return null;
         }
     }
 
-    /// Native-crash variant: free-form body (no managed exception exists).
-    public static string? Write(string kind, string body) {
+    /// Native-crash variant: free-form body (no managed exception exists) and
+    /// the faulting process's uptime, measured by the native crash guard.
+    public static string? Write(string kind, string body, TimeSpan? uptime = null) {
         try {
             Directory.CreateDirectory(LogDirectory);
             string path = Path.Combine(LogDirectory,
                 $"crash-{DateTime.Now:yyyyMMdd-HHmmss}.log");
-            File.WriteAllText(path, Format(kind, new Exception(body)));
+            File.WriteAllText(path, Format(kind, new Exception(body), uptime));
             return path;
         } catch {
             return null;
         }
     }
 
-    internal static string Format(string kind, Exception exception) {
+    internal static string Format(string kind, Exception exception, TimeSpan? uptime = null) {
         var text = new StringBuilder();
         text.AppendLine("PalmierWin crash log");
         text.AppendLine($"Time: {DateTime.UtcNow:O}");
         text.AppendLine($"Kind: {kind}");
         text.AppendLine($"Version: {Version}");
-        text.AppendLine($"Uptime: {DateTime.UtcNow - StartedAt:g}");
+        text.AppendLine($"Uptime: {uptime ?? (DateTime.UtcNow - StartedAt):g}");
         text.AppendLine($"OS: {RuntimeInformation.OSDescription}");
         text.AppendLine();
         text.Append(exception);
@@ -77,74 +78,75 @@ public static class CrashHandler {
             CrashLog.Write("unobserved task exception", e.Exception);
             e.SetObserved();
         };
-        InstallNativeHandler();
     }
 
     // --- Native crashes (access violations etc. in the Swift engine or CLR) ---
-    // Managed handlers never see these; a vectored handler runs before the
-    // process dies and leaves a log + minidump behind. Best-effort by design:
-    // the process is already broken, so keep the work small and never throw.
+    // A native vectored handler inside PalmierCoreHost.dll (CCrashGuard)
+    // catches them; a MANAGED vectored handler used to run here, but entering
+    // managed code on an arbitrary faulting thread is a fatal CLR reverse-
+    // pinvoke transition under GC (0x80131506) — the handler itself killed the
+    // app during playback. The native guard instead re-launches this exe as
+    // `--crash-report <pid> <tid> <exceptionPointers> <code> <address>
+    // <uptimeMs>`; that healthy process writes the .log and the minidump.
 
-    static readonly NativeExceptionDelegate nativeHandler = OnNativeException;
-    static int nativeReported;
-
-    delegate uint NativeExceptionDelegate(IntPtr exceptionPointers);
-
-    static void InstallNativeHandler() {
+    /// Crash-reporter mode entry (see Program.Main). Exit codes: 0 dump with
+    /// exception context, 2 dump without it, 3 OpenProcess failed, 4 dump
+    /// failed, 5 bad arguments or unexpected failure.
+    public static int CrashReport(string pidText, string tidText, string epText,
+                                  string codeText, string addrText, string uptimeText) {
+        string? logPath = null;
         try {
-            AddVectoredExceptionHandler(1, Marshal.GetFunctionPointerForDelegate(nativeHandler));
-        } catch { }
-    }
-
-    static uint OnNativeException(IntPtr exceptionPointers) {
-        const uint CONTINUE_SEARCH = 0;
-        try {
-            var rec = Marshal.PtrToStructure<ExceptionRecord>(ExceptionRecordOf(exceptionPointers));
-            // Benign control-flow exceptions the runtime raises on purpose
-            // (thread naming, debugger notifications, managed throws) — never
-            // report these; only genuine faults below.
-            if (rec.Code is 0x406D1388 or 0x40010006 or 0x4001000A or 0x04242420 or 0xE0434F4D)
-                return CONTINUE_SEARCH;
-            if (Interlocked.Exchange(ref nativeReported, 1) != 0) return CONTINUE_SEARCH;
-            string code = $"0x{rec.Code:X8}";
-            string body = $"Native crash {code} at 0x{rec.Address.ToInt64():X16}\n" +
+            string code = codeText;  // the guard formats it "0x" + 8 upper hex
+            long addr = long.Parse(addrText.AsSpan(2), System.Globalization.NumberStyles.HexNumber);
+            var uptime = TimeSpan.FromMilliseconds(ulong.Parse(uptimeText));
+            string body = $"Native crash {code} at 0x{addr:X16}\n" +
                           "(Swift engine or CLR fault — no managed stack available; see the .dmp next to this log)";
-            string? path = CrashLog.Write($"native crash {code}", body);
-            if (path is not null)
-                WriteMinidump(Path.ChangeExtension(path, ".dmp"), exceptionPointers);
-            Console.Error.WriteLine($"fatal: native crash {code} at 0x{rec.Address.ToInt64():X}");
+            logPath = CrashLog.Write($"native crash {code}", body, uptime);
+            if (logPath is null)
+                Console.Error.WriteLine("crash log could not be written");
         } catch { }
-        return CONTINUE_SEARCH;  // let the process die its normal death
+        try {
+            string dmpPath = logPath is not null
+                ? Path.ChangeExtension(logPath, ".dmp")
+                : Path.Combine(CrashLog.LogDirectory,
+                               $"crash-{DateTime.Now:yyyyMMdd-HHmmss}.dmp");
+            return WriteDump(uint.Parse(pidText), tidText, epText, dmpPath);
+        } catch { return 5; }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    struct ExceptionRecord { public uint Code; public uint Flags; public IntPtr Next; public IntPtr Address; }
-
-    static IntPtr ExceptionRecordOf(IntPtr exceptionPointers) => Marshal.ReadIntPtr(exceptionPointers);
-
-    static void WriteMinidump(string path, IntPtr exceptionPointers) {
+    static int WriteDump(uint pid, string tidText, string epText, string dmpPath) {
+        IntPtr infoPtr = IntPtr.Zero;
         try {
-            using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
             var info = new MinidumpExceptionInformation {
-                ThreadId = GetCurrentThreadId(),
-                ExceptionPointers = exceptionPointers,
-                ClientPointers = 0,
+                ThreadId = uint.Parse(tidText),
+                ExceptionPointers = (IntPtr)long.Parse(epText.AsSpan(2),
+                    System.Globalization.NumberStyles.HexNumber),
+                ClientPointers = 0,  // the pointers live in the target process
             };
-            MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
-                file.SafeFileHandle.DangerousGetHandle(), 2 /* MiniDumpWithFullMemory? no: 2 = with thread info */,
-                ref info, IntPtr.Zero, IntPtr.Zero);
-        } catch { }
+            infoPtr = Marshal.AllocHGlobal(Marshal.SizeOf(info));
+            Marshal.StructureToPtr(info, infoPtr, false);
+            IntPtr target = OpenProcess(0x001F0FFF /* PROCESS_ALL_ACCESS */, false, pid);
+            if (target == IntPtr.Zero) return 3;
+            using var file = new FileStream(dmpPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            const int MiniDumpNormal = 0;  // every thread's stack
+            IntPtr handle = file.SafeFileHandle.DangerousGetHandle();
+            if (MiniDumpWriteDump(target, pid, handle, MiniDumpNormal, infoPtr, IntPtr.Zero, IntPtr.Zero))
+                return 0;
+            // Retry without the exception context: stacks still land, and the
+            // .log already carries the exception code + fault address.
+            if (MiniDumpWriteDump(target, pid, handle, MiniDumpNormal, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero))
+                return 2;
+            return 4;
+        } catch { return 5; }
+        finally { if (infoPtr != IntPtr.Zero) Marshal.FreeHGlobal(infoPtr); }
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct MinidumpExceptionInformation { public uint ThreadId; public IntPtr ExceptionPointers; public int ClientPointers; }
 
-    [DllImport("kernel32.dll")] static extern IntPtr AddVectoredExceptionHandler(uint first, IntPtr handler);
-    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
-    [DllImport("kernel32.dll")] static extern uint GetCurrentProcessId();
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-    [DllImport("dbghelp.dll")] static extern bool MiniDumpWriteDump(IntPtr process, uint pid, IntPtr file,
-        int dumpType, ref MinidumpExceptionInformation info, IntPtr userStream, IntPtr callback);
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("dbghelp.dll", SetLastError = true)] static extern bool MiniDumpWriteDump(IntPtr process, uint pid, IntPtr file,
+        int dumpType, IntPtr exceptionInfo, IntPtr userStream, IntPtr callback);
 
     /// Avalonia UI-thread fatals arrive here from App.
     public static void OnUiThreadException(Exception exception) =>
@@ -162,8 +164,6 @@ public static class CrashHandler {
         ShowFatal("PalmierWin", body + "\n\nPress OK to exit.");
     }
 
-    /// A Win32 message box, not an Avalonia window: by the time this runs the
-    /// dispatcher may not be healthy enough to show one.
     /// A Win32 message box, not an Avalonia window: by the time this runs the
     /// dispatcher may not be healthy enough to show one. Task-modal, topmost
     /// and foreground so the dialog cannot hide behind other apps' windows.

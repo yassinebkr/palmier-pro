@@ -328,6 +328,13 @@ public partial class MainWindow : Window {
         }
         if (args.Contains("--select-first-clip") && viewModel.Timeline.State is { } state)
             viewModel.Timeline.SelectOnly(state.Tracks.SelectMany(t => t.Clips).FirstOrDefault()?.Id);
+        // Dev flag: arm a transition across the first two timeline clips,
+        // driving the still-capture path without pixel-driving the menu.
+        if (args.Contains("--transition-repro") && viewModel.Timeline.State is { } reproState) {
+            var pair = reproState.Tracks.SelectMany(t => t.Clips)
+                                 .OrderBy(c => c.StartFrame).ToArray();
+            if (pair.Length >= 2) viewModel.Timeline.RequestTransition(pair[0], pair[1]);
+        }
     }
 
     void OnViewerTabClose(object? sender, PointerPressedEventArgs e) {

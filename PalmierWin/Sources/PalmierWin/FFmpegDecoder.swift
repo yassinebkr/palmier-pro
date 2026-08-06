@@ -93,11 +93,15 @@ public final class FFmpegDecoder {
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
             throw DecodeError.openCodecFailed(-1)
         }
-        // libavcodec defaults thread_count to 1. Walking forward from a
-        // keyframe after a seek is pure decode, so single-threaded decode is
-        // what made clicking in the timeline wait on one core.
-        cc.pointee.thread_count = 0                 // auto: one per core
-        cc.pointee.thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE
+        // libavcodec defaults thread_count to 1; frame threading parallelizes
+        // the walk after a seek (it was why timeline clicks waited on one
+        // core). FF_THREAD_SLICE is deliberately off: with this file's usage
+        // (continuous decode+upload, avcodec_flush_buffers on seeks, long
+        // GOPs) it corrupts memory and kills the host — reproduced with a 5
+        // min 1080p clip crashing at ~25 s; frame-only is stable and keeps
+        // most of the speed win.
+        cc.pointee.thread_count = 0  // auto: one per core
+        cc.pointee.thread_type = FF_THREAD_FRAME
         let openCodec = avcodec_open2(cc, decoder, nil)
         guard openCodec == 0 else {
             var c: UnsafeMutablePointer<AVCodecContext>? = cc; avcodec_free_context(&c)
