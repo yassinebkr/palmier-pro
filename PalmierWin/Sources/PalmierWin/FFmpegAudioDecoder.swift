@@ -92,7 +92,16 @@ public final class FFmpegAudioDecoder {
             swr_alloc_set_opts2(&swrCtx, &outLayout, AV_SAMPLE_FMT_FLT, Int32(Self.sampleRate),
                                 inLayout, cc.pointee.sample_fmt, cc.pointee.sample_rate, 0, nil)
         }
-        guard allocResult == 0, let swrCtx, swr_init(swrCtx) >= 0 else { try fail(.resampleFailed(-1)) }
+        guard allocResult == 0, let swrCtx else { try fail(.resampleFailed(-1)) }
+        // Mono plays dual-mono at full level (FCP/Resolve/upstream parity);
+        // swr's default remix would attenuate the center by 1/√2.
+        if cc.pointee.ch_layout.nb_channels == 1 {
+            let matrix: [Double] = [1.0, 1.0]  // L = C, R = C
+            matrix.withUnsafeBufferPointer { ptr in
+                _ = swr_set_matrix(swrCtx, ptr.baseAddress, 1)
+            }
+        }
+        guard swr_init(swrCtx) >= 0 else { try fail(.resampleFailed(-1)) }
         swr = swrCtx
 
         guard let f = av_frame_alloc(), let p = av_packet_alloc() else { try fail(.codecFailed(-1)) }
