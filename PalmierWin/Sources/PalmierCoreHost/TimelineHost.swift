@@ -8,6 +8,14 @@ import PalmierWin
 // intent call targets the active timeline; the shell mutates via intents and
 // reads state back as JSON snapshots.
 
+extension Track {
+    /// New host tracks are born at the per-type product height; PalmierCore's
+    /// 44 default is upstream's "unset" sentinel.
+    init(productType type: ClipType) {
+        self.init(type: type, displayHeight: type == .audio ? 72 : 50)
+    }
+}
+
 /// Retained project state. `lock` guards the timelines and the active index:
 /// intent calls come from the shell's UI thread while the render loop, audio
 /// mixer, and exporter read on their own workers.
@@ -74,7 +82,7 @@ final class ProjectContext {
 
     static func newTimeline(named name: String) -> Timeline {
         var t = Timeline(name: name)
-        t.tracks = [Track(type: .video), Track(type: .audio)]
+        t.tracks = [Track(productType: .video), Track(productType: .audio)]
         return t
     }
 
@@ -1094,7 +1102,7 @@ public func palmierTimelineAddTrack(_ handle: UnsafeMutableRawPointer?,
                                     _ idBuf: UnsafeMutablePointer<CChar>?, _ idBufSize: Int32) -> Int32 {
     guard let ctx = projectContext(handle), let kind, let idBuf else { return 0 }
     let type: ClipType = String(cString: kind).lowercased() == "audio" ? .audio : .video
-    let track = Track(type: type)
+    let track = Track(productType: type)
     guard writeCString(track.id, into: idBuf, size: idBufSize) == 1 else { return 0 }
     return ctx.withTimeline { timeline in
         // Video tracks come first in the array, audio after; insert at the end

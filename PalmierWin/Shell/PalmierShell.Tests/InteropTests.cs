@@ -646,4 +646,16 @@ public class InteropTests {
         Assert.True(center > 0.05f, $"center peak {center}");
         Assert.True(early < 0.02f, $"early peak {early} — burst smeared left");
     }
+
+    [Fact]
+    public void NewProjectTracksGetPerTypeDefaultHeights() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            Assert.Equal(50, state.Tracks.Single(t => t.Type == "video").DisplayHeight);
+            Assert.Equal(72, state.Tracks.Single(t => t.Type == "audio").DisplayHeight);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
 }
