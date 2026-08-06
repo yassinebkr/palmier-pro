@@ -53,8 +53,7 @@ public sealed class WaveformCacheTests : IDisposable {
 
     [Fact]
     public async Task NullDecodeStaysNullAndIsNotCached() {
-        int calls = 0;
-        WaveformCache.DecodeOverride = (_, _) => { calls++; return null; };
+        WaveformCache.DecodeOverride = (_, _) => null;
         Assert.Null(await WaveformCache.GetAsync(media, 64));
         Assert.Empty(Directory.EnumerateFiles(dir, "*.wf"));
     }
