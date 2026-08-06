@@ -17,6 +17,11 @@ public static partial class CoreApi {
     [LibraryImport(Dll)]
     public static partial void palmier_crash_test();
 
+    /// Registers the native vectored crash handler (CCrashGuard) with the exe
+    /// to spawn as the crash reporter on a fatal fault.
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial void palmier_install_crash_guard(string reporterPath);
+
     internal static bool TryLoadLibrary(string name) {
         try {
             // The handle is deliberately not freed: unloading a Swift runtime

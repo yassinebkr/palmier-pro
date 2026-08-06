@@ -1,3 +1,4 @@
+import CCrashGuard
 import CVulkan
 import Foundation
 import PalmierCore
@@ -272,9 +273,17 @@ public func palmierEngineDestroy(_ handle: UnsafeMutableRawPointer?) {
     Vulkan.destroyInstance(instance)
 }
 
-/// Dev-only: forces a genuine native access violation to verify the shell's
-/// vectored crash handler. Never called in production paths.
+/// Dev-only: forces a genuine native access violation to verify the crash
+/// guard end to end. Never called in production paths. (Address 1, not 0:
+/// bitPattern 0 makes a nil pointer and the unwrap trap fires instead.)
 @_cdecl("palmier_crash_test")
 public func palmierCrashTest() {
-    UnsafeMutablePointer<UInt8>(bitPattern: 0)!.pointee = 0
+    UnsafeMutablePointer<UInt8>(bitPattern: 1)!.pointee = 0
+}
+
+/// Installs the native vectored crash handler, passing the reporter exe
+/// (this shell) the handler spawns on a fatal fault.
+@_cdecl("palmier_install_crash_guard")
+public func palmierInstallCrashGuard(_ reporterPath: UnsafePointer<UInt16>?) {
+    crashguard_install(reporterPath)
 }
