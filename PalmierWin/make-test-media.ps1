@@ -106,3 +106,13 @@ $outHiRes = Join-Path $outDir "hirescover.mp4"
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Remove-Item $png3
 Write-Host "Generated $outHiRes"
+
+# Click-track fixture: 2 s of silence with one 50 ms tone burst at t=1.0 —
+# waveform resolution must place the peak in the middle columns, not smear it.
+$outClick = Join-Path $outDir "click.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=0.05" -f lavfi -i "anullsrc=r=48000:cl=mono:d=2" `
+    -filter_complex "[1:a]adelay=1000|1000[tone];[2:a][tone]amix=inputs=2:normalize=0[a]" `
+    -map 0:v -map "[a]" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outClick
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outClick"
