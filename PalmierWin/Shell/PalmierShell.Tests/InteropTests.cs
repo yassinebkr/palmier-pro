@@ -303,9 +303,12 @@ public class InteropTests {
                 int n = CoreApi.palmier_audio_track_peaks(audio, peaks, peaks.Length);
                 Assert.True(n >= 1);
                 Assert.True(peaks[0] > 0, $"expected signal in slot 0, got {peaks[0]}");
-                float first = peaks[0];
+                // Deterministic reset proof: pause, drain the leftover peak,
+                // then the next read must be silent.
+                CoreApi.palmier_audio_set_playing(audio, 0, 0);
+                Thread.Sleep(100);
                 CoreApi.palmier_audio_track_peaks(audio, peaks, peaks.Length);
-                Assert.True(peaks[0] <= first, "reset-on-read must not return stale peaks");
+                Assert.Equal(0f, peaks[0]);
             } finally {
                 CoreApi.palmier_audio_destroy(audio);
             }

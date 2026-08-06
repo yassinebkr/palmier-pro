@@ -268,17 +268,18 @@ public final class WinAudioEngine: @unchecked Sendable {
     }
 
     /// Copies the published per-slot peaks (max |sample| since the previous
-    /// call) into `buf`, up to `maxCount` entries, and clears them. Returns
-    /// how many slots are in use, 0 when there are no audio entries.
+    /// call) into `buf`, up to `maxCount` entries, and clears all in-use
+    /// slots. Returns the written count, 0 when there are no audio entries.
     public func readAndResetPeaks(into buf: UnsafeMutablePointer<Float>, maxCount: Int) -> Int {
         stateLock.lock()
         let inUse = peakSlotsInUse
         stateLock.unlock()
-        let count = min(maxCount, min(inUse, Self.peakSlotCapacity))
-        guard count > 0 else { return 0 }
+        let slots = min(inUse, Self.peakSlotCapacity)
+        guard slots > 0 else { return 0 }
+        let count = min(maxCount, slots)
         peaksLock.lock()
-        for slot in 0..<count {
-            buf[slot] = publishedPeaks[slot]
+        for slot in 0..<slots {
+            if slot < count { buf[slot] = publishedPeaks[slot] }
             publishedPeaks[slot] = 0
         }
         peaksLock.unlock()
