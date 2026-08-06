@@ -100,10 +100,12 @@ public static class CrashHandler {
         const uint CONTINUE_SEARCH = 0;
         try {
             var rec = Marshal.PtrToStructure<ExceptionRecord>(ExceptionRecordOf(exceptionPointers));
-            // Benign control-flow exceptions the runtime raises on purpose
-            // (thread naming, debugger notifications, managed throws) — never
-            // report these; only genuine faults below.
-            if (rec.Code is 0x406D1388 or 0x40010006 or 0x4001000A or 0x04242420 or 0xE0434F4D)
+            // Report only genuine faults. Everything else (thread naming,
+            // debugger/RPC notifications, managed throws, CLR bookkeeping)
+            // must not consume the single report slot — a benign blip at
+            // startup used to swallow the real crash minutes later.
+            if (rec.Code is not (0xC0000005 or 0xC000001D or 0xC00000FD or 0xC0000094
+                or 0xC0000374 or 0xC0000409 or 0x80131506 or 0xE06D7363))
                 return CONTINUE_SEARCH;
             if (Interlocked.Exchange(ref nativeReported, 1) != 0) return CONTINUE_SEARCH;
             string code = $"0x{rec.Code:X8}";
