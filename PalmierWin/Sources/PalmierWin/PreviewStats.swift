@@ -7,25 +7,31 @@ import WinSDK
 /// writing FileHandle.standardError then is not a no-op but a fatal Swift
 /// assertion that took the whole process down.
 private enum EngineLogDestination {
-    static let fileHandle: FileHandle? = {
+    // Set once on first access, never mutated; every use is serialized by
+    // EngineLogDestination.lock.
+    nonisolated(unsafe) static let fileHandle: HANDLE? = {
         guard let appData = ProcessInfo.processInfo.environment["APPDATA"] else { return nil }
         let dir = URL(fileURLWithPath: appData)
             .appendingPathComponent("PalmierPro", isDirectory: true)
             .appendingPathComponent("logs", isDirectory: true)
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
-        let url = dir.appendingPathComponent("engine-\(formatter.string(from: Date())).log")
+        let path = dir.appendingPathComponent("engine-\(formatter.string(from: Date())).log").path
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            if !FileManager.default.fileExists(atPath: url.path) {
-                FileManager.default.createFile(atPath: url.path, contents: nil)
-            }
-            let handle = try FileHandle(forWritingTo: url)
-            _ = handle.seekToEndOfFile()
-            return handle
         } catch {
             return nil
         }
+        // Opened shared so "Report a problem" can zip the live log; the
+        // default FileHandle open denies even readers.
+        let handle = path.withCString(encodedAs: UTF16.self) { raw in
+            CreateFileW(raw, DWORD(GENERIC_WRITE),
+                        DWORD(FILE_SHARE_READ | FILE_SHARE_WRITE), nil,
+                        DWORD(OPEN_ALWAYS), DWORD(FILE_ATTRIBUTE_NORMAL), nil)
+        }
+        guard handle != INVALID_HANDLE_VALUE else { return nil }
+        SetFilePointer(handle, 0, nil, DWORD(FILE_END))
+        return handle
     }()
 
     static let stderr: FileHandle? = {
@@ -40,10 +46,13 @@ private enum EngineLogDestination {
 /// See EngineLogDestination: never `print` (buffered, lost on a hard exit),
 /// never an unchecked standardError write (fatal without a console).
 public func engineLog(_ message: String) {
-    let line = Data((message + "\n").utf8)
+    var bytes = Array((message + "\n").utf8)
     EngineLogDestination.lock.lock()
-    EngineLogDestination.fileHandle?.write(line)
-    EngineLogDestination.stderr?.write(line)
+    if let file = EngineLogDestination.fileHandle {
+        var written: DWORD = 0
+        WriteFile(file, &bytes, DWORD(bytes.count), &written, nil)
+    }
+    EngineLogDestination.stderr?.write(Data(bytes))
     EngineLogDestination.lock.unlock()
 }
 

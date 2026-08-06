@@ -33,11 +33,26 @@ public static partial class LogShare {
             var files = Directory.GetFiles(logsDir, "*.log")
                 .OrderByDescending(File.GetLastWriteTime).Take(10);
             foreach (var file in files) {
-                AddText(zip, Path.GetFileName(file), Redact(File.ReadAllText(file)));
+                AddText(zip, Path.GetFileName(file), Redact(ReadShared(file)));
+                count++;
+            }
+            // Minidumps are the whole point of a crash report — the few most
+            // recent, capped so a dump-heavy folder stays uploadable.
+            foreach (var dump in Directory.GetFiles(logsDir, "*.dmp")
+                         .OrderByDescending(File.GetLastWriteTime).Take(3)) {
+                zip.CreateEntryFromFile(dump, Path.GetFileName(dump));
                 count++;
             }
         }
         return count;
+    }
+
+    /// The app holds its own logs open for the process lifetime; a bundle
+    /// collected while it runs still has to read them.
+    static string ReadShared(string path) {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     /// Uploads the bundle. Returns the shareable URL.
@@ -54,9 +69,10 @@ public static partial class LogShare {
         return (await resp.Content.ReadAsStringAsync(ct)).Trim();
     }
 
+    /// The release version ("0.1.4"), from the informational version stamped
+    /// at publish time — the assembly version is stuck at the csproj default.
     public static string AppVersion =>
-        typeof(LogShare).Assembly.GetName().Version is { } v
-            ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.1.0";
+        CrashLog.Version.Split('+')[0] is { Length: > 0 } v ? v : "0.1.0";
 
     /// Strips API-key-shaped strings so a bundle never carries credentials.
     public static string Redact(string text) =>
