@@ -99,11 +99,11 @@ public sealed class TimelineView : Control {
 
     // Gain slider geometry and dB range (the core's clamp), shared by the
     // strip's renderer, hit test, and hover cursor so they cannot disagree.
-    const double GainStripX = 10, GainStripWidth = 80, GainStripHeight = 14;
+    const double GainStripX = 10, GainStripWidth = 74, GainStripHeight = 14;
     const double GainMinDb = -96, GainMaxDb = 12;
     // Level meter geometry: a slim bar at the header's right edge, right of
     // the label/icon row; it covers the gain strip's last 4px when both show.
-    const double MeterX = 86, MeterWidth = 6, MeterInsetY = 4;
+    const double MeterX = 92, MeterWidth = 6, MeterInsetY = 4;
 
     /// The gain slider strip in an audio row's header: 80 wide, 14 tall,
     /// parked 2px above the row's bottom edge. Short rows (compact's uniform
@@ -116,7 +116,6 @@ public sealed class TimelineView : Control {
     /// The track whose header gain strip contains `p` (view coordinates).
     TrackState? GainStripAt(Point p) {
         if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X >= HeaderWidth) return null;
-        if (p.X >= MeterX) return null;  // the meter column owns those pixels
         double contentY = p.Y + vm.ScrollOffsetY;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
             if (GainStripRect(track, rowY, height) is { } strip && strip.Contains(new Point(p.X, contentY)))
@@ -308,11 +307,12 @@ public sealed class TimelineView : Control {
     void RenderTrack(DrawingContext ctx, Rect bounds, TrackState track, string label, double y, double height) {
         var rowRect = new Rect(0, y, bounds.Width, height);
         ctx.FillRectangle(new SolidColorBrush(SurfaceColor), rowRect);
-        ctx.DrawLine(new Pen(new SolidColorBrush(BorderColor)),
-            new Point(0, y + height), new Point(bounds.Width, y + height));
 
         // Header: name, link chain, then the eye/mute toggle — one row, as upstream.
         ctx.FillRectangle(new SolidColorBrush(RaisedColor), new Rect(0, y, HeaderWidth, height));
+        // Row separator after the header fill, or the header swallows it.
+        ctx.DrawLine(new Pen(new SolidColorBrush(BorderColor)),
+            new Point(0, y + height), new Point(bounds.Width, y + height));
         var name = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, LabelTypeface, 12, new SolidColorBrush(Colors.White)) {
             // A renamed track takes the sync glyph's space rather than running
@@ -764,9 +764,9 @@ public sealed class TimelineView : Control {
                 return;
             }
             // Header toggle zone: the eye/mute glyph at the right of the name
-            // row. The meter column (audio rows) is display, not a button.
+            // row. Right of the gain strip (audio rows) is display, not a button.
             if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled &&
-                !(toggled.Type == "audio" && p.X >= MeterX))
+                !(toggled.Type == "audio" && p.X >= GainStripX + GainStripWidth))
                 vm.RequestTrackToggle(toggled);
             // The empty column below the last track has exactly one meaning:
             // track management. A left click opens it like the right click does.
