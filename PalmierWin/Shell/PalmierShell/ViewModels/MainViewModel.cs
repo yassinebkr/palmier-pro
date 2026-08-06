@@ -719,8 +719,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
             if (audio != IntPtr.Zero) CoreApi.palmier_audio_set_playing(audio, playing ? 1 : 0, frame);
         };
         // PlayingChanged can fire on the render thread; the meter timer is UI-thread only.
+        // Source playback meters the source's own slots, not the timeline's:
+        // park the headers frozen instead of showing those levels on real tracks.
         session.PlayingChanged += (playing, _) =>
-            Dispatcher.UIThread.Post(() => Timeline.SetMetering(playing));
+            Dispatcher.UIThread.Post(() => Timeline.SetMetering(playing && !Viewer.ShowingSource));
         session.PlayheadLooped += frame => {
             if (audio != IntPtr.Zero) CoreApi.palmier_audio_seek(audio, frame);
         };

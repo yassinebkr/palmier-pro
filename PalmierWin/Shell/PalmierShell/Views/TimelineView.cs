@@ -22,6 +22,8 @@ public sealed class TimelineView : Control {
     internal static readonly Color VideoClipColor = Color.Parse("#1D5878");
     internal static readonly Color AudioClipColor = Color.Parse("#2E7765");
     internal static readonly Color TextClipColor = Color.Parse("#715486");
+    internal static readonly Color MeterAmberColor = Color.Parse("#E5A54F");
+    internal static readonly Color MeterClipColor = Color.Parse("#E54F4F");
 
     static readonly Typeface LabelTypeface = new("Inter");
 
@@ -97,6 +99,9 @@ public sealed class TimelineView : Control {
     // strip's renderer, hit test, and hover cursor so they cannot disagree.
     const double GainStripX = 10, GainStripWidth = 80, GainStripHeight = 14;
     const double GainMinDb = -96, GainMaxDb = 12;
+    // Level meter geometry: a slim bar at the header's right edge, right of
+    // the label/icon row; it covers the gain strip's last 4px when both show.
+    const double MeterX = 86, MeterWidth = 6, MeterInsetY = 4;
 
     /// The gain slider strip in an audio row's header: 80 wide, 14 tall,
     /// parked 2px above the row's bottom edge. Short rows (compact's uniform
@@ -170,11 +175,13 @@ public sealed class TimelineView : Control {
     void AttachViewModel(TimelineViewModel? next) {
         if (vm is not null) {
             vm.StateReloaded -= InvalidateVisual;
+            vm.MetersChanged -= InvalidateVisual;
             vm.PropertyChanged -= OnVmPropertyChanged;
         }
         vm = next;
         if (vm is not null) {
             vm.StateReloaded += InvalidateVisual;
+            vm.MetersChanged += InvalidateVisual;
             vm.PropertyChanged += OnVmPropertyChanged;
         }
         InvalidateVisual();
@@ -322,6 +329,16 @@ public sealed class TimelineView : Control {
         else
             RenderEyeIcon(ctx, iconRect, off: track.Hidden);
         if (gainStrip is { } strip) RenderGainStrip(ctx, track, strip);
+        if (track.Type == "audio" && vm?.State is { } meterState) {
+            // The engine meters slots by audio-track ordinal in timeline order.
+            int ordinal = -1, audioSeen = 0;
+            foreach (var t in meterState.Tracks) {
+                if (t.Type != "audio") continue;
+                if (t.Id == track.Id) { ordinal = audioSeen; break; }
+                audioSeen++;
+            }
+            if (ordinal >= 0) RenderMeter(ctx, vm.MeterFor(ordinal), y, height);
+        }
 
         using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, height));
         foreach (var clip in track.Clips) {
@@ -619,6 +636,33 @@ public sealed class TimelineView : Control {
     }
 
     static readonly SolidColorBrush WaveformBrush = new(Color.Parse("#9EFFFFFF"));
+
+    /// The per-track level meter: a bottom-up dB fill (accent below −12 dB,
+    /// amber to −3, red above or once clipped), a peak-hold tick, and a red
+    /// cap while the clip latch stands. Reads the frozen levels as-is when
+    /// paused; both sit at −60 (empty) until the first playback.
+    void RenderMeter(DrawingContext ctx, TrackMeters meter, double y, double height) {
+        var bar = new Rect(MeterX, y + MeterInsetY, MeterWidth, Math.Max(0, height - MeterInsetY * 2));
+        ctx.DrawRectangle(new SolidColorBrush(BorderColor), null, bar, 2, 2);
+        using var barClip = ctx.PushClip(bar);
+        double fillFrac = Math.Clamp((meter.LevelDb + 60) / 60, 0, 1);
+        if (fillFrac > 0) {
+            double fillH = fillFrac * bar.Height;
+            var fill = meter.Clipped || meter.LevelDb >= -3 ? MeterClipColor
+                : meter.LevelDb >= -12 ? MeterAmberColor
+                : Accent.Current;
+            ctx.FillRectangle(new SolidColorBrush(fill),
+                new Rect(bar.X, bar.Bottom - fillH, bar.Width, fillH));
+        }
+        double peakFrac = Math.Clamp((meter.PeakDb + 60) / 60, 0, 1);
+        if (peakFrac > 0) {
+            double peakY = bar.Bottom - peakFrac * bar.Height;
+            ctx.DrawLine(new Pen(WaveformBrush, 1), new Point(bar.X, peakY), new Point(bar.Right, peakY));
+        }
+        if (meter.Clipped)
+            ctx.FillRectangle(new SolidColorBrush(MeterClipColor),
+                new Rect(bar.X, bar.Y, bar.Width, 2));
+    }
 
     /// Draws dB-mapped peak bars across the rect, windowed to the clip's
     /// trimmed source range so a trimmed/split clip shows its actual audio.

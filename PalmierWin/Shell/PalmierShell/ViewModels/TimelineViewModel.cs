@@ -424,6 +424,9 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     readonly TrackMeters[] meters = new TrackMeters[64];
     readonly float[] meterPeaks = new float[64];
+    // The track id holding each audio ordinal; meter state follows the
+    // ordinal, so a change means the channel inherited another track's levels.
+    readonly string?[] meterTrackIds = new string?[64];
     readonly Stopwatch meterClock = new();
     DispatcherTimer? meterTimer;
 
@@ -486,6 +489,17 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public void Reload() {
         State = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+        // A removed track shifts later audio ordinals up; reset any channel
+        // whose ordinal changed hands so it drops the previous track's levels
+        // (clip latch included). Done here, not in the poll, so it also holds
+        // while paused.
+        var audioIds = State.Tracks.Where(t => t.Type == "audio").Select(t => t.Id).ToList();
+        for (int i = 0; i < meters.Length; i++) {
+            string? id = i < audioIds.Count ? audioIds[i] : null;
+            if (meterTrackIds[i] == id) continue;
+            meters[i].Reset();
+            meterTrackIds[i] = id;
+        }
         // Drop selections whose clips no longer exist (split, delete, undo).
         SelectedClipIds.RemoveWhere(id => State.FindClip(id) is null);
         if (SelectedClipId is not null && State.FindClip(SelectedClipId) is null)
