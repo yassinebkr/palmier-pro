@@ -413,6 +413,7 @@ public func palmierProjectTimelineName(_ handle: UnsafeMutableRawPointer?,
 /// Probes a media file via libavformat without decoding. Writes
 /// "width,height,fpsX100,totalFrames" (ASCII) into buf. totalFrames is -1
 /// when the container reports no duration. Returns 1 on success, 0 on failure.
+/// Audio-only files report 0,0,3000,frames at a synthetic 30 fps and fail when the container has no duration.
 @_cdecl("palmier_probe_media")
 public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
                               _ buf: UnsafeMutablePointer<CChar>?, _ bufSize: Int32) -> Int32 {
@@ -423,17 +424,20 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     defer { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
     guard avformat_find_stream_info(fmt, nil) >= 0 else { return 0 }
 
-    let vidx = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nil, 0)
-    guard vidx >= 0,
-          let streamsBase = fmt.pointee.streams,
-          Int(vidx) < Int(fmt.pointee.nb_streams),
-          let stream = streamsBase[Int(vidx)],
-          let par = stream.pointee.codecpar else { return 0 }
+    guard let (_, videoStream) = FFmpegDecoder.firstPlayableVideoStream(in: fmt),
+          let par = videoStream.pointee.codecpar else {
+        // No playable video stream: an audio-only file still imports, with
+        // zero dimensions and a 30 fps duration so the timeline can place it.
+        guard av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0 else { return 0 }
+        let seconds = fmt.pointee.duration > 0 ? Double(fmt.pointee.duration) / 1_000_000 : 0
+        guard seconds > 0 else { return 0 }
+        return writeCString("0,0,3000,\(Int((seconds * 30).rounded()))", into: buf, size: bufSize)
+    }
 
     let width = Int(par.pointee.width)
     let height = Int(par.pointee.height)
 
-    let rate = stream.pointee.avg_frame_rate
+    let rate = videoStream.pointee.avg_frame_rate
     let fps: Double = (rate.num > 0 && rate.den > 0) ? Double(rate.num) / Double(rate.den) : 30
     let fpsX100 = Int((fps * 100).rounded())
 
@@ -449,12 +453,11 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     return writeCString("\(width),\(height),\(fpsX100),\(totalFrames)", into: buf, size: bufSize)
 }
 
-/// Adds a clip for `mediaPath` at the end of the video track. When the
-/// source has an audio stream, a linked audio clip (shared linkGroupId, same
-/// placement) lands on the first audio track. Writes the new video clip's
-/// stable id into `idBuf` (NUL-terminated). Returns the clip's frame
-/// duration, or 0 on failure (invalid arguments, no video track, id buffer
-/// too small).
+/// Adds a clip for `mediaPath` at the end of its track — the video track
+/// (plus a linked audio twin when the source has audio), or the audio track
+/// alone for audio-only media. Writes the new clip's stable id into `idBuf`
+/// (NUL-terminated). Returns the clip's frame duration, or 0 on failure
+/// (invalid arguments, no matching track, id buffer too small).
 @_cdecl("palmier_timeline_add_clip")
 public func palmierTimelineAddClip(_ handle: UnsafeMutableRawPointer?,
                                    _ mediaPath: UnsafePointer<CChar>?, _ durationFrames: Int32,
@@ -484,6 +487,16 @@ private func addClip(_ handle: UnsafeMutableRawPointer?,
     var clip = Clip(mediaRef: path, startFrame: 0, durationFrames: Int(durationFrames))
     guard writeCString(clip.id, into: idBuf, size: idBufSize) == 1 else { return 0 }
     let added: Bool = ctx.withTimeline { timeline in
+        if !FFmpegAudioDecoder.hasVideoStream(path: path) {
+            // Audio-only media: one clip on the audio track, no video twin, no link.
+            guard let audioIndex = timeline.tracks.firstIndex(where: { $0.type == .audio }) else { return false }
+            var audioClip = clip
+            audioClip.mediaType = .audio
+            audioClip.sourceClipType = .audio
+            audioClip.startFrame = startFrame ?? timeline.tracks[audioIndex].endFrame
+            insertOverwriting(audioClip, into: &timeline.tracks[audioIndex].clips)
+            return true
+        }
         guard let trackIndex = timeline.tracks.firstIndex(where: { $0.type == .video }) else { return false }
         clip.startFrame = startFrame ?? timeline.tracks[trackIndex].endFrame
         if hasAudio, let audioIndex = timeline.tracks.firstIndex(where: { $0.type == .audio }) {

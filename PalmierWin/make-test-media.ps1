@@ -50,3 +50,57 @@ $outSilence = Join-Path $outDir "silence.mp4"
     -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outSilence
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outSilence"
+
+# Cover-art fixture: an h264+aac clip that also carries a PNG attached_pic
+# stream — the shape that broke probing of YouTube-style downloads.
+$png = Join-Path $outDir "cover.png"
+& $ffmpeg -y -f lavfi -i "color=c=red:size=64x64" -frames:v 1 $png
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+$outCover = Join-Path $outDir "coverart.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" -i $png `
+    -map 0:v -map 1:a -map 2:v -c:v:0 libx264 -pix_fmt yuv420p -c:a aac -c:v:1 png `
+    -disposition:v:1 attached_pic $outCover
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Remove-Item $png
+Write-Host "Generated $outCover"
+
+# Audio-only fixture: no video stream at all.
+$outAudio = Join-Path $outDir "audioonly.m4a"
+& $ffmpeg -y -f lavfi -i "sine=frequency=330:duration=3" -c:a aac $outAudio
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outAudio"
+
+# Known-level fixture: 440 Hz at exactly 0.5 amplitude, for waveform level checks.
+$outLoud = Join-Path $outDir "loudsine.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" -af "volume=0.5" `
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outLoud
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outLoud"
+
+# Attached-pic-only audio: an m4a whose ONLY video stream is cover art — the
+# YouTube-rip shape. The probe must report audio-only, not the cover's pixels.
+$png2 = Join-Path $outDir "cover2.png"
+& $ffmpeg -y -f lavfi -i "color=c=blue:size=64x64" -frames:v 1 $png2
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+$outCoverOnly = Join-Path $outDir "coveronly.m4a"
+& $ffmpeg -y -f lavfi -i "sine=frequency=220:duration=3" -i $png2 `
+    -map 0:a -map 1:v -c:a aac -c:v png -disposition:v:0 attached_pic $outCoverOnly
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Remove-Item $png2
+Write-Host "Generated $outCoverOnly"
+
+# Hi-res cover: a small real video plus a LARGE attached pic. FFmpeg's area
+# heuristic would decode the cover; the disposition-aware pick must not.
+$png3 = Join-Path $outDir "cover3.png"
+& $ffmpeg -y -f lavfi -i "color=c=green:size=1024x1024" -frames:v 1 $png3
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+$outHiRes = Join-Path $outDir "hirescover.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" -i $png3 `
+    -map 0:v -map 1:a -map 2:v -c:v:0 libx264 -pix_fmt yuv420p -c:a aac -c:v:1 png `
+    -disposition:v:1 attached_pic -shortest $outHiRes
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Remove-Item $png3
+Write-Host "Generated $outHiRes"

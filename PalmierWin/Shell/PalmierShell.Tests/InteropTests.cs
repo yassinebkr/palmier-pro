@@ -535,4 +535,85 @@ public class InteropTests {
     public void ProbeMedia_FailsForMissingFile() {
         Assert.Null(CoreApi.ProbeMedia(TestMediaPath("does-not-exist.mp4")));
     }
+
+    [Fact]
+    public void ProbeMedia_SkipsAttachedPicStreams() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("coverart.mp4"));
+        Assert.NotNull(probe);
+        Assert.Equal(320, probe.Value.Width);
+        Assert.Equal(240, probe.Value.Height);
+        Assert.Equal(30, probe.Value.Fps, 1);
+    }
+
+    [Fact]
+    public void ProbeMedia_AudioOnlyFileReportsZeroDimensionsAndDuration() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("audioonly.m4a"));
+        Assert.NotNull(probe);
+        Assert.Equal(0, probe.Value.Width);
+        Assert.Equal(0, probe.Value.Height);
+        Assert.True(probe.Value.TotalFrames >= 80 && probe.Value.TotalFrames <= 100,
+            $"3s at 30fps expected ~90 frames, got {probe.Value.TotalFrames}");
+    }
+
+    [Fact]
+    public void ProbeMedia_AudioPlusCoverArtProbesAsAudioOnly() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("coveronly.m4a"));
+        Assert.NotNull(probe);
+        Assert.Equal(0, probe.Value.Width);
+        Assert.Equal(0, probe.Value.Height);
+        Assert.True(probe.Value.TotalFrames >= 80 && probe.Value.TotalFrames <= 100,
+            $"3s at 30fps expected ~90 frames, got {probe.Value.TotalFrames}");
+    }
+
+    [Fact]
+    public void AddClip_AudioOnlyLandsOnAudioTrackWithoutVideoClip() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string? clipId = CoreApi.AddClip(project, TestMediaPath("audioonly.m4a"), 90);
+            Assert.NotNull(clipId);
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            var video = state.Tracks.Single(t => t.Type == "video");
+            var audio = state.Tracks.Single(t => t.Type == "audio");
+            Assert.Empty(video.Clips);
+            var clip = Assert.Single(audio.Clips);
+            Assert.Equal(clipId, clip.Id);
+            Assert.Equal("audio", clip.MediaType);
+            Assert.Equal(90, clip.DurationFrames);
+            Assert.Null(clip.LinkGroupId);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    [Fact]
+    public void ExtractFrame_HiResCoverArtDecodesTheVideoNotTheCover() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("hirescover.mp4"));
+        Assert.NotNull(probe);
+        Assert.Equal(320, probe.Value.Width);
+        var pixels = new byte[probe.Value.Width * probe.Value.Height * 4];
+        int ok = CoreApi.palmier_extract_frame(TestMediaPath("hirescover.mp4"), 0, 30, pixels, pixels.Length);
+        Assert.Equal(1, ok);
+        // The real video is the testsrc pattern (lots of color variance); the
+        // cover is a flat green PNG (near-zero variance). Guard against a
+        // decoder that picked the 1024x1024 attached pic.
+        int distinct = pixels.Take(4000).Distinct().Count();
+        Assert.True(distinct > 20, $"flat cover art decoded instead of video (distinct={distinct})");
+    }
+
+    [Fact]
+    public void AddClipAt_AudioOnlyHonorsExplicitStartFrame() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string? clipId = CoreApi.AddClipAt(project, TestMediaPath("audioonly.m4a"), 90, 30);
+            Assert.NotNull(clipId);
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            var audio = state.Tracks.Single(t => t.Type == "audio");
+            var clip = Assert.Single(audio.Clips);
+            Assert.Equal("audio", clip.MediaType);
+            Assert.Equal(30, clip.StartFrame);
+            Assert.Empty(state.Tracks.Single(t => t.Type == "video").Clips);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
 }
