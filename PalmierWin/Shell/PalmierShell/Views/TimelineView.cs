@@ -11,10 +11,7 @@ namespace PalmierShell.Views;
 /// Renders straight from the view model's TimelineState snapshot; all input
 /// (scrub, select, blade, zoom, scroll) is handled here.
 public sealed class TimelineView : Control {
-    const double RulerHeight = 24;
-    /// Row height follows the view model's density setting: upstream fits
-    /// roughly eight tracks where the roomy default fits three.
-    double TrackHeight => vm?.CompactRows == true ? 28 : 50;
+    internal const double RulerHeight = 24;
     internal const double HeaderWidth = 100;
     const double ClipCornerRadius = 4;
 
@@ -151,11 +148,8 @@ public sealed class TimelineView : Control {
 
         RenderRuler(ctx, bounds);
 
-        double y = RulerHeight;
-        foreach (var track in state.Tracks) {
-            RenderTrack(ctx, bounds, track, LabelFor(state, track), y);
-            y += TrackHeight;
-        }
+        foreach (var row in vm.Layout.Rows)
+            RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track), row.Y, row.Height);
 
         // The marked range: a wash over the tracks plus in/out brackets on the
         // ruler, like upstream's range selection.
@@ -240,14 +234,14 @@ public sealed class TimelineView : Control {
         }
     }
 
-    void RenderTrack(DrawingContext ctx, Rect bounds, TrackState track, string label, double y) {
-        var rowRect = new Rect(0, y, bounds.Width, TrackHeight);
+    void RenderTrack(DrawingContext ctx, Rect bounds, TrackState track, string label, double y, double height) {
+        var rowRect = new Rect(0, y, bounds.Width, height);
         ctx.FillRectangle(new SolidColorBrush(SurfaceColor), rowRect);
         ctx.DrawLine(new Pen(new SolidColorBrush(BorderColor)),
-            new Point(0, y + TrackHeight), new Point(bounds.Width, y + TrackHeight));
+            new Point(0, y + height), new Point(bounds.Width, y + height));
 
         // Header: name, link chain, then the eye/mute toggle — one row, as upstream.
-        ctx.FillRectangle(new SolidColorBrush(RaisedColor), new Rect(0, y, HeaderWidth, TrackHeight));
+        ctx.FillRectangle(new SolidColorBrush(RaisedColor), new Rect(0, y, HeaderWidth, height));
         var name = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, LabelTypeface, 12, new SolidColorBrush(Colors.White)) {
             // A renamed track takes the sync glyph's space rather than running
@@ -255,7 +249,7 @@ public sealed class TimelineView : Control {
             MaxTextWidth = track.Name is { Length: > 0 } ? 46 : 28,
             Trimming = TextTrimming.CharacterEllipsis,
         };
-        double rowMid = y + TrackHeight / 2;
+        double rowMid = y + height / 2;
         ctx.DrawText(name, new Point(12, rowMid - name.Height / 2));
         if (track.Name is not { Length: > 0 }) RenderLinkIcon(ctx, new Rect(44, rowMid - 5, 12, 10));
         var iconRect = new Rect(66, rowMid - 6, 14, 12);
@@ -264,18 +258,18 @@ public sealed class TimelineView : Control {
         else
             RenderEyeIcon(ctx, iconRect, off: track.Hidden);
 
-        using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, TrackHeight));
+        using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, height));
         foreach (var clip in track.Clips) {
             // A clip being dragged to another track draws there, not here.
             if (dragActive && clip.Id == dragClipId && dragTargetTrackId != track.Id) continue;
-            RenderClip(ctx, track, clip, y);
+            RenderClip(ctx, track, clip, y, height);
         }
         if (dragActive && dragTargetTrackId == track.Id && dragClipId is { } moving &&
             track.Clips.All(c => c.Id != moving) && vm?.State?.FindClip(moving) is { } incoming)
-            RenderClip(ctx, track, incoming, y);
+            RenderClip(ctx, track, incoming, y, height);
     }
 
-    void RenderClip(DrawingContext ctx, TrackState track, ClipState clip, double y) {
+    void RenderClip(DrawingContext ctx, TrackState track, ClipState clip, double y, double height) {
         int visualStart = clip.StartFrame;
         int visualDuration = clip.DurationFrames;
         if (dragActive && (clip.Id == dragClipId ||
@@ -301,7 +295,7 @@ public sealed class TimelineView : Control {
         double x = FrameToX(visualStart);
         double w = visualDuration * vm!.PixelsPerFrame;
         if (x + w < HeaderWidth || x > Bounds.Width) return;
-        var rect = new Rect(x, y + ClipPadY, Math.Max(2, w), TrackHeight - ClipPadY * 2);
+        var rect = new Rect(x, y + ClipPadY, Math.Max(2, w), height - ClipPadY * 2);
 
         var fill = track.Type == "audio" ? AudioClipColor
                  : clip.MediaType == "text" ? TextClipColor
@@ -859,11 +853,7 @@ public sealed class TimelineView : Control {
         return source is not null && track.Type == source.Type ? track : null;
     }
 
-    TrackState? TrackAt(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        return row >= 0 && row < state.Tracks.Count ? state.Tracks[row] : null;
-    }
+    TrackState? TrackAt(Point p) => vm?.Layout.TrackAt(p.Y);
 
     /// Vertical inset between a clip and its track row, shared by the renderer
     /// and every hit test so they cannot disagree about where a clip is.
@@ -872,10 +862,10 @@ public sealed class TimelineView : Control {
     /// The rect a clip is drawn in at rest (no live gesture applied) — the
     /// same geometry the renderer uses, so hit tests land on what is shown.
     Rect ClipRect(TrackState track, ClipState clip) {
-        int row = vm!.State!.Tracks.IndexOf(track);
-        double y = RulerHeight + row * TrackHeight;
+        double y = vm!.Layout.YOf(track.Id);
+        double height = vm.Layout.HeightOf(track.Id);
         return new Rect(FrameToX(clip.StartFrame), y + ClipPadY,
-                        clip.DurationFrames * vm.PixelsPerFrame, TrackHeight - ClipPadY * 2);
+                        clip.DurationFrames * vm.PixelsPerFrame, height - ClipPadY * 2);
     }
 
     /// 0/1 when `x` grabs the clip's left/right edge, else null.
@@ -898,10 +888,8 @@ public sealed class TimelineView : Control {
     /// The junction under a point, with its track — used by the context menu
     /// and the transition affordance as well as the roll drag.
     public (TrackState Track, ClipState Left, ClipState Right)? JunctionAt(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight || p.X < HeaderWidth) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        if (row < 0 || row >= state.Tracks.Count) return null;
-        var track = state.Tracks[row];
+        if (vm?.State is null || p.Y < RulerHeight || p.X < HeaderWidth) return null;
+        if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
         return JunctionUnderPointer(track, p.X) is { } cut ? (track, cut.Left, cut.Right) : null;
     }
 
@@ -970,10 +958,8 @@ public sealed class TimelineView : Control {
     }
 
     (TrackState Track, ClipState Clip)? HitTestClip(Point p) {
-        if (vm?.State is not { } state || p.Y < RulerHeight) return null;
-        int row = (int)((p.Y - RulerHeight) / TrackHeight);
-        if (row < 0 || row >= state.Tracks.Count) return null;
-        var track = state.Tracks[row];
+        if (vm?.State is null || p.Y < RulerHeight) return null;
+        if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
         int frame = XToFrame(p.X);
         var clip = track.Clips.FirstOrDefault(c => frame >= c.StartFrame && frame < c.EndFrame);
         return clip is null ? null : (track, clip);

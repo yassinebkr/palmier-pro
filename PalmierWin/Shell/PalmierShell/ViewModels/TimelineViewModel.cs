@@ -2,6 +2,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PalmierShell.Core;
+using PalmierShell.Views;
 
 namespace PalmierShell.ViewModels;
 
@@ -29,6 +30,14 @@ public sealed partial class TimelineViewModel : ObservableObject {
     [ObservableProperty] bool snapEnabled = true;
     /// Tighter rows so more tracks fit on screen.
     [ObservableProperty] bool compactRows;
+
+    /// Geometry for the current state; rebuilt on state reload / compact toggle.
+    public TrackLayout Layout { get; private set; } = new([], 0, _ => 50);
+
+    void RebuildLayout() => Layout = new TrackLayout(State?.Tracks ?? [], TimelineView.RulerHeight,
+        t => CompactRows ? 28 : t.RenderHeight);
+
+    partial void OnCompactRowsChanged(bool value) => RebuildLayout();
 
     /// Every selected clip. `SelectedClipId` stays the primary one — it is
     /// what the inspector edits — and is always a member of this set.
@@ -399,6 +408,7 @@ public sealed partial class TimelineViewModel : ObservableObject {
         SelectedClipIds.RemoveWhere(id => State.FindClip(id) is null);
         if (SelectedClipId is not null && State.FindClip(SelectedClipId) is null)
             SelectedClipId = SelectedClipIds.FirstOrDefault();
+        RebuildLayout();
         StateReloaded?.Invoke();
     }
 
