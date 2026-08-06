@@ -290,6 +290,31 @@ public class InteropTests {
     }
 
     [Fact]
+    public void AudioPeaks_RecordAndResetPerTrack() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            CoreApi.AddClip(project, TestMediaPath("testav.mp4"), 60);
+            IntPtr audio = CoreApi.palmier_audio_create(project);
+            if (audio == IntPtr.Zero) return;  // no output device (CI): contract is 0 entries
+            try {
+                var peaks = new float[8];
+                Assert.Equal(1, CoreApi.palmier_audio_set_playing(audio, 1, 0));
+                Thread.Sleep(300);  // let the callback mix a few buffers
+                int n = CoreApi.palmier_audio_track_peaks(audio, peaks, peaks.Length);
+                Assert.True(n >= 1);
+                Assert.True(peaks[0] > 0, $"expected signal in slot 0, got {peaks[0]}");
+                float first = peaks[0];
+                CoreApi.palmier_audio_track_peaks(audio, peaks, peaks.Length);
+                Assert.True(peaks[0] <= first, "reset-on-read must not return stale peaks");
+            } finally {
+                CoreApi.palmier_audio_destroy(audio);
+            }
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    [Fact]
     public void AddClipAt_PlacesClipAndLinkedAudioAtFrame() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
