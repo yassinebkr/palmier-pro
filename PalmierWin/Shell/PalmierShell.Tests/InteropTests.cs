@@ -265,6 +265,31 @@ public class InteropTests {
     }
 
     [Fact]
+    public void AudioMix_FoldsTrackGainIntoClipEntry() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            CoreApi.AddClip(project, TestMediaPath("testav.mp4"), 60);
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            var audioTrack = state.Tracks.Single(t => t.Type == "audio");
+            string clipId = audioTrack.Clips.Single().Id;
+            IntPtr audio = CoreApi.palmier_audio_create(project);
+            if (audio == IntPtr.Zero) return;  // no output device (CI): silent no-op by contract
+            try {
+                Assert.Equal(1.0, CoreApi.palmier_audio_clip_track_gain(audio, clipId));
+                Assert.Equal(1, CoreApi.palmier_track_set_gain_db(project, audioTrack.Id, -6));
+                Assert.Equal(1, CoreApi.palmier_audio_sync(audio));
+                double gain = CoreApi.palmier_audio_clip_track_gain(audio, clipId);
+                Assert.True(Math.Abs(gain - 0.5011872) < 0.01, $"expected ≈0.501, got {gain}");
+                Assert.True(double.IsNaN(CoreApi.palmier_audio_clip_track_gain(audio, "no-such-clip")));
+            } finally {
+                CoreApi.palmier_audio_destroy(audio);
+            }
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
+    [Fact]
     public void AddClipAt_PlacesClipAndLinkedAudioAtFrame() {
         IntPtr project = CoreApi.palmier_project_create();
         try {

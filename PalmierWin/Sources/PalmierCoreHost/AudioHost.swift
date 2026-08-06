@@ -28,6 +28,7 @@ final class AudioContext {
 
         var sources: [WinAudioEngine.ClipSource] = []
         for track in timeline.tracks where track.type == .audio && !track.muted {
+            let trackGain = VolumeScale.linearFromDb(track.gainDb)
             for clip in track.clips {
                 let volumePoints = (clip.volumeTrack?.keyframes ?? []).map {
                     WinAudioEngine.VolumePoint(frame: $0.frame, db: $0.value)
@@ -36,6 +37,7 @@ final class AudioContext {
                     id: clip.id, mediaRef: clip.mediaRef,
                     startFrame: clip.startFrame, durationFrames: clip.durationFrames,
                     trimStartFrame: clip.trimStartFrame, volume: clip.volume,
+                    trackGain: trackGain,
                     fadeInFrames: clip.fadeInFrames, fadeOutFrames: clip.fadeOutFrames,
                     volumeKeyframes: volumePoints))
             }
@@ -91,4 +93,14 @@ public func palmierAudioSync(_ handle: UnsafeMutableRawPointer?) -> Int32 {
     guard let handle else { return 0 }
     Unmanaged<AudioContext>.fromOpaque(handle).takeUnretainedValue().syncIfNeeded()
     return 1
+}
+
+/// Test seam: the track gain folded into `clipId`'s mix entry at the last
+/// sync, or NaN when the clip is not in the mix.
+@_cdecl("palmier_audio_clip_track_gain")
+public func palmierAudioClipTrackGain(_ handle: UnsafeMutableRawPointer?, _ clipId: UnsafePointer<CChar>?) -> Double {
+    guard let handle, let clipId else { return .nan }
+    let ctx = Unmanaged<AudioContext>.fromOpaque(handle).takeUnretainedValue()
+    ctx.syncIfNeeded()
+    return ctx.engine.trackGain(forClipId: String(cString: clipId)) ?? .nan
 }

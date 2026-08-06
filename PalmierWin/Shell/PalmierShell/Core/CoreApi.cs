@@ -367,6 +367,9 @@ public static partial class CoreApi {
     [LibraryImport(Dll)] public static partial int palmier_audio_set_playing(IntPtr audio, int playing, int frame);
     [LibraryImport(Dll)] public static partial int palmier_audio_seek(IntPtr audio, int frame);
     [LibraryImport(Dll)] public static partial int palmier_audio_sync(IntPtr audio);
+    /// Test seam: track gain folded into the clip's mix entry (NaN when not mixed).
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial double palmier_audio_clip_track_gain(IntPtr audio, string clipId);
 
     /// Min/max pairs (2*columns floats), or null when the media has no audio.
     public static float[]? GetWaveform(string path, int columns) {
