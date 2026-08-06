@@ -175,7 +175,7 @@ public extension Track {
             syncLocked: (try? c.decode(Bool.self, forKey: .syncLocked)) ?? true,
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
-                .map { min(max($0, displayHeightRange.lowerBound), displayHeightRange.upperBound) } ?? 44,
+                .map { min(max($0, Track.displayHeightRange.lowerBound), Track.displayHeightRange.upperBound) } ?? 44,
             name: try? c.decode(String.self, forKey: .name)
         )
     }
