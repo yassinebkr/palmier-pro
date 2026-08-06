@@ -81,6 +81,7 @@ public sealed class TimelineView : Control {
     /// the model as a "grow".
     (TrackState Track, double Height)? ResizeEdgeAt(double y) {
         if (vm?.State is null || vm.CompactRows) return null;
+        if (y < TimelineMath.RulerHeight) return null;  // the ruler is chrome, not content
         double contentY = y + vm.ScrollOffsetY;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
             if (Math.Abs(contentY - (rowY + height)) <= EdgeGrabWidth) return (track, height);
@@ -900,7 +901,9 @@ public sealed class TimelineView : Control {
     // Pointer-side lookups take view y; the layout speaks content y, so the
     // scroll offset is added back at the door (here, JunctionAt, HitTestClip,
     // ResizeEdgeAt) rather than at every caller.
-    TrackState? TrackAt(Point p) => vm is null ? null : vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY);
+    TrackState? TrackAt(Point p) => vm is null || p.Y < TimelineMath.RulerHeight
+        ? null
+        : vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY);
 
     /// Vertical inset between a clip and its track row, shared by the renderer
     /// and every hit test so they cannot disagree about where a clip is.
@@ -1244,7 +1247,7 @@ public sealed class TimelineView : Control {
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e) {
         base.OnPointerWheelChanged(e);
         if (vm is null) return;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) {
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && !e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
             // Shift scrolls the rows vertically under the fixed ruler.
             vm.ScrollOffsetY = Math.Clamp(vm.ScrollOffsetY - e.Delta.Y * 60, 0, vm.MaxScrollOffsetY);
         } else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) {

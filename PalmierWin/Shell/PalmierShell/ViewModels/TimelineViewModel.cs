@@ -27,7 +27,15 @@ public sealed partial class TimelineViewModel : ObservableObject {
     public double ViewportWidth { get; set; } = 1;
     /// Clip-area height in DIPs, reported by the view. Plain for the same
     /// reason as ViewportWidth.
-    public double ViewportHeight { get; set; } = 1;
+    double viewportHeightField = 1;
+    public double ViewportHeight {
+        get => viewportHeightField;
+        set {
+            viewportHeightField = value;
+            // A taller window shrinks the scrollable range; don't strand the view.
+            ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, MaxScrollOffsetY);
+        }
+    }
     /// Furthest the rows may scroll up: the content bottom sits one
     /// screenful deep, so shorter content allows no scroll at all.
     public double MaxScrollOffsetY =>
