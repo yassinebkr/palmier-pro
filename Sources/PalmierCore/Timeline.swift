@@ -119,6 +119,9 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
     /// The one display-height bound every setter and decode shares.
     public static let displayHeightRange: ClosedRange<Double> = 32...200
 
+    /// Per-track gain in dB; 0 = unity. Older files decode to unity.
+    public var gainDb: Double = 0
+
     public init(
         id: String = UUID().uuidString,
         type: ClipType,
@@ -127,6 +130,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
         syncLocked: Bool = true,
         clips: [Clip] = [],
         displayHeight: Double = 44,
+        gainDb: Double = 0,
         name: String? = nil
     ) {
         self.id = id
@@ -136,6 +140,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
         self.syncLocked = syncLocked
         self.clips = clips
         self.displayHeight = displayHeight
+        self.gainDb = gainDb
         self.name = name
     }
 
@@ -160,7 +165,7 @@ public struct Track: Codable, Sendable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, muted, hidden, syncLocked, clips, displayHeight, name
+        case id, type, muted, hidden, syncLocked, clips, displayHeight, gainDb, name
     }
 }
 
@@ -176,6 +181,7 @@ public extension Track {
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
                 .map { min(max($0, Track.displayHeightRange.lowerBound), Track.displayHeightRange.upperBound) } ?? 44,
+            gainDb: (try? c.decode(Double.self, forKey: .gainDb)) ?? 0,
             name: try? c.decode(String.self, forKey: .name)
         )
     }

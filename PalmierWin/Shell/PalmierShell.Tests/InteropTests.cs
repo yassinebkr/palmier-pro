@@ -680,4 +680,26 @@ public class InteropTests {
             CoreApi.palmier_project_destroy(project);
         }
     }
+
+    [Fact]
+    public void SetTrackGainDb_RoundTripsClampsAndRefuses() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string audioId = TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Type == "audio").Id;
+            Assert.Equal(1, CoreApi.palmier_track_set_gain_db(project, audioId, -6));
+            Assert.Equal(-6, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).GainDb);
+            Assert.Equal(1, CoreApi.palmier_track_set_gain_db(project, audioId, 40));
+            Assert.Equal(12, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).GainDb);
+            Assert.Equal(1, CoreApi.palmier_track_set_gain_db(project, audioId, -120));
+            Assert.Equal(-96, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).GainDb);
+            Assert.Equal(0, CoreApi.palmier_track_set_gain_db(project, "no-such-track", -6));
+            Assert.Equal(0, CoreApi.palmier_track_set_gain_db(project, audioId, double.NaN));
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
 }

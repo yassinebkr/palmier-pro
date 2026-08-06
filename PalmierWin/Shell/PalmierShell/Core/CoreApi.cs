@@ -286,6 +286,8 @@ public static partial class CoreApi {
     public static partial int palmier_track_set_hidden(IntPtr project, string trackId, int hidden);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int palmier_track_set_display_height(IntPtr project, string trackId, double height);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int palmier_track_set_gain_db(IntPtr project, string trackId, double gainDb);
 
     [LibraryImport(Dll)] public static partial IntPtr palmier_agent_create(IntPtr project);
     [LibraryImport(Dll)] public static partial void palmier_agent_destroy(IntPtr agent);

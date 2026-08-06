@@ -1056,6 +1056,21 @@ public func palmierTrackSetDisplayHeight(_ handle: UnsafeMutableRawPointer?, _ t
     }
 }
 
+/// Sets a track's gain in dB, clamped to [-96, 12]. Returns 1, or 0 for an
+/// unknown track or a non-finite gain.
+@_cdecl("palmier_track_set_gain_db")
+public func palmierTrackSetGainDb(_ handle: UnsafeMutableRawPointer?, _ trackId: UnsafePointer<CChar>?,
+                                  _ gainDb: Double) -> Int32 {
+    guard let ctx = projectContext(handle), let trackId else { return 0 }
+    let id = String(cString: trackId)
+    guard gainDb.isFinite else { return 0 }
+    return ctx.withTimeline { timeline in
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == id }) else { return 0 }
+        timeline.tracks[index].gainDb = min(12, max(-96, gainDb))
+        return 1
+    }
+}
+
 /// Renames a track. An empty or whitespace-only name clears the custom name,
 /// so the track falls back to its derived label (V1, A2…). Returns 1, or 0 for
 /// an unknown track.
