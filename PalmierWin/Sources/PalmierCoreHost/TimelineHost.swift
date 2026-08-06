@@ -1040,6 +1040,21 @@ public func palmierTrackSetHidden(_ handle: UnsafeMutableRawPointer?, _ trackId:
     }
 }
 
+/// Sets a track's display height, clamped to [32, 200]. Returns 1, or 0 for an
+/// unknown track or a non-finite height.
+@_cdecl("palmier_track_set_display_height")
+public func palmierTrackSetDisplayHeight(_ handle: UnsafeMutableRawPointer?, _ trackId: UnsafePointer<CChar>?,
+                                         _ height: Double) -> Int32 {
+    guard let ctx = projectContext(handle), let trackId else { return 0 }
+    let id = String(cString: trackId)
+    guard height.isFinite else { return 0 }
+    return ctx.withTimeline { timeline in
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == id }) else { return 0 }
+        timeline.tracks[index].displayHeight = min(200, max(32, height))
+        return 1
+    }
+}
+
 /// Renames a track. An empty or whitespace-only name clears the custom name,
 /// so the track falls back to its derived label (V1, A2…). Returns 1, or 0 for
 /// an unknown track.

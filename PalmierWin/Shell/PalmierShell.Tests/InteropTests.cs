@@ -658,4 +658,25 @@ public class InteropTests {
             CoreApi.palmier_project_destroy(project);
         }
     }
+
+    [Fact]
+    public void SetTrackDisplayHeight_RoundTripsAndClamps() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string audioId = TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Type == "audio").Id;
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 120));
+            Assert.Equal(120, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 10));
+            Assert.Equal(32, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(1, CoreApi.palmier_track_set_display_height(project, audioId, 500));
+            Assert.Equal(200, TimelineState.Parse(CoreApi.GetTimelineJson(project))
+                .Tracks.Single(t => t.Id == audioId).DisplayHeight);
+            Assert.Equal(0, CoreApi.palmier_track_set_display_height(project, "no-such-track", 100));
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
 }
