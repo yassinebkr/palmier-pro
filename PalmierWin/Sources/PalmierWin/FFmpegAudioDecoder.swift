@@ -49,6 +49,12 @@ public final class FFmpegAudioDecoder {
         return FFmpegDecoder.firstPlayableVideoStream(in: fmt) != nil
     }
 
+    /// Container duration in 48 kHz sample frames; nil when it reports none.
+    public var estimatedSampleFrames: Int? {
+        guard let fmt, fmt.pointee.duration > 0 else { return nil }
+        return Int(Double(fmt.pointee.duration) / 1_000_000 * Double(Self.sampleRate))
+    }
+
     public init(path: String) throws {
         var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
         let openResult = path.withCString { avformat_open_input(&fmtCtx, $0, nil, nil) }

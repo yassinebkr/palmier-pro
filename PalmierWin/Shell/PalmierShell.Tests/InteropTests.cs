@@ -616,4 +616,34 @@ public class InteropTests {
             CoreApi.palmier_project_destroy(project);
         }
     }
+
+    [Fact]
+    public void Waveform_KnownLevelSinePeaksAtHalfScale() {
+        var wave = CoreApi.GetWaveform(TestMediaPath("loudsine.mp4"), 400);
+        Assert.NotNull(wave);
+        float max = wave.Max(Math.Abs);
+        Assert.True(max > 0.45f && max < 0.60f, $"expected ~0.5 peak, got {max}");
+    }
+
+    [Fact]
+    public void Waveform_PairsAreOrderedAndBounded() {
+        var wave = CoreApi.GetWaveform(TestMediaPath("testav.mp4"), 256);
+        Assert.NotNull(wave);
+        Assert.Equal(512, wave!.Length);
+        for (int i = 0; i < wave.Length; i += 2) {
+            Assert.True(wave[i] <= wave[i + 1], $"pair {i / 2} inverted");
+            Assert.True(wave[i] >= -1f && wave[i + 1] <= 1f, $"pair {i / 2} out of range");
+        }
+    }
+
+    [Fact]
+    public void Waveform_ClickLandsInItsTimeColumn() {
+        var wave = CoreApi.GetWaveform(TestMediaPath("click.mp4"), 400);
+        Assert.NotNull(wave);
+        float Peak(int col) => Math.Max(Math.Abs(wave[col * 2]), Math.Abs(wave[col * 2 + 1]));
+        float center = Enumerable.Range(180, 41).Max(Peak);   // t≈1.0s of 2s → cols ~200
+        float early = Enumerable.Range(0, 195).Max(Peak);     // silence before the burst
+        Assert.True(center > 0.05f, $"center peak {center}");
+        Assert.True(early < 0.02f, $"early peak {early} — burst smeared left");
+    }
 }

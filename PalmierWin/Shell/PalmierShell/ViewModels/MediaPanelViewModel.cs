@@ -316,6 +316,14 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
             if (thumb is not null)
                 item.Thumbnail = ThumbnailBitmaps.FromTiles(thumb.Value.Tiles, 0);
         }
+        // Warm the waveform cache in the background (bounded inside the
+        // cache) so the first timeline paint of this media already has peaks.
+        double audioSeconds = probe.Value.Fps > 0 && probe.Value.TotalFrames > 0
+            ? probe.Value.TotalFrames / probe.Value.Fps : 0;
+        if (audioSeconds > 0) {
+            int columns = WaveformCache.ColumnsFor(audioSeconds);
+            _ = Task.Run(() => WaveformCache.GetAsync(path, columns));
+        }
     }
 
     [RelayCommand]
