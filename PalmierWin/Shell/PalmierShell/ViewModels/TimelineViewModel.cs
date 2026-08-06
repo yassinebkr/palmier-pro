@@ -358,11 +358,11 @@ public sealed partial class TimelineViewModel : ObservableObject {
     public WaveformData? WaveformFor(string mediaPath) {
         if (waveforms.TryGetValue(mediaPath, out var wf)) return wf;
         waveforms[mediaPath] = null;
-        _ = Task.Run(() => {
+        _ = Task.Run(async () => {
             var probe = CoreApi.ProbeMedia(mediaPath);
             double seconds = probe is { Fps: > 0, TotalFrames: > 0 } p ? p.TotalFrames / p.Fps : 0;
             int columns = seconds > 0 ? Math.Clamp((int)Math.Ceiling(seconds * 200), 256, 240_000) : 2048;
-            var wave = CoreApi.GetWaveform(mediaPath, columns);
+            var wave = await WaveformCache.GetAsync(mediaPath, columns);
             if (wave is null) return;
             int sourceFrames = seconds > 0 ? Math.Max(1, (int)Math.Round(seconds * TimelineFps)) : 0;
             Dispatcher.UIThread.Post(() => {
