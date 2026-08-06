@@ -381,6 +381,12 @@ public sealed partial class TimelineViewModel : ObservableObject {
     public void RequestTrackResize(string trackId, int height) =>
         TrackResizeRequested?.Invoke(trackId, height);
 
+    /// Fired when a header gain drag (or double-tap reset) ends with a new dB.
+    public event Action<string, double>? TrackGainRequested;
+
+    public void RequestTrackGain(string trackId, double db) =>
+        TrackGainRequested?.Invoke(trackId, db);
+
     public sealed record WaveformData(float[] MinMax, int SourceFrames);
 
     readonly Dictionary<string, WaveformData?> waveforms = new();

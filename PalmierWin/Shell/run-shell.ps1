@@ -20,4 +20,4 @@ $env:PATH = @(
     $env:PATH
 ) -join ";"
 
-& "$repo\PalmierWin\Shell\PalmierShell\bin\Debug\net9.0-windows\PalmierShell.exe" @args
+& "$repo\PalmierWin\Shell\PalmierShell\bin\Debug\net9.0-windows\PalmierShell.exe" --no-update @args

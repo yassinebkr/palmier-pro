@@ -84,6 +84,9 @@ public sealed record TrackState(string Id, string Type, bool Muted, bool Hidden,
     /// RenderHeight falls back to the per-type default as defense-in-depth.
     public double DisplayHeight { get; init; }
 
+    /// Per-track gain in dB; 0 = unity (also what older files decode to).
+    public double GainDb { get; init; }
+
     /// Height this track renders at: the persisted height, or the per-type
     /// default when unset; clamped to the model's [32, 200].
     public double RenderHeight =>

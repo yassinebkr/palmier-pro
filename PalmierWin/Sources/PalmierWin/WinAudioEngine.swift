@@ -37,11 +37,13 @@ public final class WinAudioEngine: @unchecked Sendable {
         public let durationFrames: Int
         public let trimStartFrame: Int
         public let volume: Double
+        /// Linear track gain, folded in alongside `volume` at mix time.
+        public let trackGain: Double
         public let fadeInFrames: Int
         public let fadeOutFrames: Int
         public let volumeKeyframes: [VolumePoint]
         public init(id: String, mediaRef: String, startFrame: Int, durationFrames: Int,
-                    trimStartFrame: Int, volume: Double,
+                    trimStartFrame: Int, volume: Double, trackGain: Double = 1,
                     fadeInFrames: Int = 0, fadeOutFrames: Int = 0,
                     volumeKeyframes: [VolumePoint] = []) {
             self.id = id
@@ -50,6 +52,7 @@ public final class WinAudioEngine: @unchecked Sendable {
             self.durationFrames = durationFrames
             self.trimStartFrame = trimStartFrame
             self.volume = volume
+            self.trackGain = trackGain
             self.fadeInFrames = fadeInFrames
             self.fadeOutFrames = fadeOutFrames
             self.volumeKeyframes = volumeKeyframes
@@ -245,6 +248,14 @@ public final class WinAudioEngine: @unchecked Sendable {
         stateLock.unlock()
     }
 
+    /// The track gain stored on `clipId`'s mix entry, or nil when the clip is
+    /// not in the mix. Test seam for the sync path.
+    public func trackGain(forClipId clipId: String) -> Double? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return clips.first(where: { $0.source.id == clipId })?.source.trackGain
+    }
+
     public func setPlaying(_ play: Bool, atFrame frame: Int) {
         stateLock.lock()
         playing = play
@@ -408,9 +419,10 @@ public final class WinAudioEngine: @unchecked Sendable {
             } / Self.channels
             guard got > 0 else { continue }
 
-            // Static volume × keyframe envelope × linear fade envelope, all
-            // evaluated at the chunk's midpoint (≤ ~10 ms — inaudible steps).
-            var gain = Float(clip.source.volume)
+            // Static volume × track gain × keyframe envelope × linear fade
+            // envelope, all evaluated at the chunk's midpoint (≤ ~10 ms —
+            // inaudible steps).
+            var gain = Float(clip.source.volume * clip.source.trackGain)
             let midSample = mixStart + Int64(got) / 2 - clipStart
             let rel = Double(midSample) * Double(timelineFps) / Double(Self.sampleRate)
             if !clip.source.volumeKeyframes.isEmpty {

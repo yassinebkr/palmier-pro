@@ -63,6 +63,16 @@ public sealed class TrackLayoutTests {
     }
 
     [Fact]
+    public void MissingGainDbKeyDeserializesToUnity() {
+        const string json = """
+        {"id":"t","name":"T","fps":30,"width":1920,"height":1080,
+         "tracks":[{"clips":[],"displayHeight":50,"hidden":false,"id":"a1","muted":false,"type":"audio"}]}
+        """;
+        var state = TimelineState.Parse(json);
+        Assert.Equal(0, state.Tracks[0].GainDb);
+    }
+
+    [Fact]
     public void MissingDisplayHeightKeyDeserializesToDefault() {
         const string json = """
         {"id":"t","name":"T","fps":30,"width":1920,"height":1080,

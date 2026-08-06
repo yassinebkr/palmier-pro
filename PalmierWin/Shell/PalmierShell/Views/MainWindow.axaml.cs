@@ -319,8 +319,13 @@ public partial class MainWindow : Window {
             await UpdateDialog.ShowAsync(this, demo, Close);
             return;
         }
+#if !DEBUG
         updateStartup.Start();
-        // Dev flag: no update checks (screenshot/test runs must not self-update).
+#endif
+        // Dev builds never poll for updates — a 0.1.0 dev version would
+        // always "update" to the latest release and stop being the dev
+        // build. --update-demo still opens the dialog on demand, and
+        // --no-update stays as the belt-and-braces kill switch.
         if (args.Contains("--no-update")) {
             updateStartup.Stop();
             updateDaily.Stop();
