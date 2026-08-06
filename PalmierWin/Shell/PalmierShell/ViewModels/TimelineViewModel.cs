@@ -355,6 +355,12 @@ public sealed partial class TimelineViewModel : ObservableObject {
         TrackToggleRequested?.Invoke(track.Id, track.Type == "audio",
             track.Type == "audio" ? !track.Muted : !track.Hidden);
 
+    /// Fired when a header edge drag ends with a new track height.
+    public event Action<string, int>? TrackResizeRequested;
+
+    public void RequestTrackResize(string trackId, int height) =>
+        TrackResizeRequested?.Invoke(trackId, height);
+
     public sealed record WaveformData(float[] MinMax, int SourceFrames);
 
     readonly Dictionary<string, WaveformData?> waveforms = new();

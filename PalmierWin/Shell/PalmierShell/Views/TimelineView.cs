@@ -62,11 +62,23 @@ public sealed class TimelineView : Control {
     int loopDragFrame;
     bool loopDragActive;
 
+    // Track-resize drag state (Select tool, grabbed the header's bottom edge).
+    string? resizeTrackId;
+    double resizeStartY, resizeOriginalHeight, resizePreviewHeight;
+
     /// 0/1 when `x` grabs the loop range's start/end edge, else null.
     int? LoopEdgeUnderPointer(double x) {
         if (vm?.HasLoop != true || vm.Tool != TimelineTool.Select) return null;
         if (Math.Abs(x - FrameToX(vm.LoopStart!.Value)) <= EdgeGrabWidth) return 0;
         if (Math.Abs(x - FrameToX(vm.LoopEnd!.Value)) <= EdgeGrabWidth) return 1;
+        return null;
+    }
+
+    /// The (track, row height) whose bottom edge is within grab range of `y`.
+    (TrackState Track, double Height)? ResizeEdgeAt(double y) {
+        if (vm?.State is null) return null;
+        foreach (var (track, rowY, height) in vm.Layout.Rows)
+            if (Math.Abs(y - (rowY + height)) <= EdgeGrabWidth) return (track, height);
         return null;
     }
 
@@ -147,8 +159,16 @@ public sealed class TimelineView : Control {
 
         RenderRuler(ctx, bounds);
 
-        foreach (var row in vm.Layout.Rows)
-            RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track), row.Y, row.Height);
+        // A live header resize previews the grabbed row at its drag height;
+        // the layout only rebuilds once the release commits the new height.
+        double resizeDelta = resizeTrackId is not null ? resizePreviewHeight - resizeOriginalHeight : 0;
+        bool belowResized = false;
+        foreach (var row in vm.Layout.Rows) {
+            bool armed = row.Track.Id == resizeTrackId;
+            RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track),
+                row.Y + (belowResized ? resizeDelta : 0), armed ? resizePreviewHeight : row.Height);
+            belowResized |= armed;
+        }
 
         // The marked range: a wash over the tracks plus in/out brackets on the
         // ruler, like upstream's range selection.
@@ -603,6 +623,15 @@ public sealed class TimelineView : Control {
             return;
         }
         if (p.X < HeaderWidth) {
+            // Track bottom edge in the header: drag to resize the row (Select tool).
+            if (vm.Tool == TimelineTool.Select && ResizeEdgeAt(p.Y) is { } edge) {
+                resizeTrackId = edge.Track.Id;
+                resizeOriginalHeight = edge.Height;
+                resizePreviewHeight = edge.Height;
+                resizeStartY = p.Y;
+                e.Pointer.Capture(this);
+                return;
+            }
             // Header toggle zone: the eye/mute glyph at the right of the name row.
             if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
                 vm.RequestTrackToggle(toggled);
@@ -994,6 +1023,11 @@ public sealed class TimelineView : Control {
             }
             return;
         }
+        if (resizeTrackId is not null) {
+            resizePreviewHeight = Math.Clamp(resizeOriginalHeight + (p.Y - resizeStartY), 32, 200);
+            InvalidateVisual();
+            return;
+        }
         if (scrubbing) {
             vm.Scrub(XToFrame(p.X));
             return;
@@ -1080,6 +1114,13 @@ public sealed class TimelineView : Control {
             Cursor = Cursor.Default;
             return;
         }
+        // In the header only a row's bottom edge is a handle: it resizes.
+        if (p.X < HeaderWidth) {
+            Cursor = ResizeEdgeAt(p.Y) is not null
+                ? new Cursor(StandardCursorType.SizeNorthSouth)
+                : Cursor.Default;
+            return;
+        }
         // A cut reads as a roll handle; a lone edge reads as a trim handle.
         bool overJunction = JunctionAt(p) is not null;
         bool overEdge = HitTestClip(p) is { } h && EdgeUnderPointer(h.Clip, p.X) is not null;
@@ -1118,6 +1159,8 @@ public sealed class TimelineView : Control {
             else if (dragDeltaFrames != 0)
                 vm?.RequestMove(id, dragOriginalStart + dragDeltaFrames);
         }
+        if (resizeTrackId is { } rtid && Math.Abs(resizePreviewHeight - resizeOriginalHeight) > 0.5)
+            vm?.RequestTrackResize(rtid, (int)Math.Round(resizePreviewHeight));
         DisarmGesture();
         e.Pointer.Capture(null);
         InvalidateVisual();
@@ -1147,7 +1190,8 @@ public sealed class TimelineView : Control {
     bool DisarmGesture() {
         bool armed = scrubbing || rollLeftId is not null || trimClipId is not null
                      || dragClipId is not null || envelopeActive || fadeActive
-                     || loopDragEdge >= 0;
+                     || loopDragEdge >= 0 || resizeTrackId is not null;
+        resizeTrackId = null;
         loopDragEdge = -1;
         loopDragActive = false;
         envelopeClipId = null;

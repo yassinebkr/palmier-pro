@@ -68,6 +68,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Media.RemoveItemRequested += item => _ = RemoveMediaItemAsync(item);
         Timeline.BladeRequested += OnBlade;
         Timeline.TrackToggleRequested += OnTrackToggle;
+        Timeline.TrackResizeRequested += (trackId, height) => {
+            Undo.Execute("Resize Track",
+                () => CoreApi.palmier_track_set_display_height(Project, trackId, height) == 1);
+            Timeline.Reload();
+        };
         Timeline.MediaDropped += (path, frame) => {
             var item = Media.Items.FirstOrDefault(i => i.Path == path);
             if (item is null) return;
