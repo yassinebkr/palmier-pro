@@ -1050,7 +1050,8 @@ public func palmierTrackSetDisplayHeight(_ handle: UnsafeMutableRawPointer?, _ t
     guard height.isFinite else { return 0 }
     return ctx.withTimeline { timeline in
         guard let index = timeline.tracks.firstIndex(where: { $0.id == id }) else { return 0 }
-        timeline.tracks[index].displayHeight = min(200, max(32, height))
+        timeline.tracks[index].displayHeight = min(Track.displayHeightRange.upperBound,
+                                                   max(Track.displayHeightRange.lowerBound, height))
         return 1
     }
 }

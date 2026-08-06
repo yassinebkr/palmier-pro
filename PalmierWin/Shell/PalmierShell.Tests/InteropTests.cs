@@ -675,6 +675,7 @@ public class InteropTests {
             Assert.Equal(200, TimelineState.Parse(CoreApi.GetTimelineJson(project))
                 .Tracks.Single(t => t.Id == audioId).DisplayHeight);
             Assert.Equal(0, CoreApi.palmier_track_set_display_height(project, "no-such-track", 100));
+            Assert.Equal(0, CoreApi.palmier_track_set_display_height(project, audioId, double.NaN));
         } finally {
             CoreApi.palmier_project_destroy(project);
         }
