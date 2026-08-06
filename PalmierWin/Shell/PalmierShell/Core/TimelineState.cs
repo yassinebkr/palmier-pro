@@ -79,7 +79,9 @@ public sealed record TrackState(string Id, string Type, bool Muted, bool Hidden,
     /// User-given name; null means the derived label (V1, A2…).
     public string? Name { get; init; }
 
-    /// Per-track height from the model; 0 when an older file lacks the key.
+    /// Per-track height from the model. Old files decode to PalmierCore's 44
+    /// on the engine side; 0 is only reachable from hand-written JSON, where
+    /// RenderHeight falls back to the per-type default as defense-in-depth.
     public double DisplayHeight { get; init; }
 
     /// Height this track renders at: the persisted height, or the per-type

@@ -10,7 +10,7 @@ import PalmierWin
 
 extension Track {
     /// New host tracks are born at the per-type product height; PalmierCore's
-    /// 44 default is upstream's "unset" sentinel.
+    /// 44 default predates per-type heights and stays a real, honored value.
     init(productType type: ClipType) {
         self.init(type: type, displayHeight: type == .audio ? 72 : 50)
     }
@@ -387,12 +387,12 @@ public func palmierProjectSetPreviewSource(_ handle: UnsafeMutableRawPointer?,
     guard let frames = sourceDurationFrames(path: mediaPath), frames > 0 else { return 0 }
 
     var source = Timeline(name: "Source")
-    var video = Track(type: .video)
+    var video = Track(productType: .video)
     var clip = Clip(mediaRef: mediaPath, startFrame: 0, durationFrames: frames)
     video.clips = [clip]
     source.tracks = [video]
     if FFmpegAudioDecoder.hasAudioStream(path: mediaPath) {
-        var audio = Track(type: .audio)
+        var audio = Track(productType: .audio)
         clip.id = UUID().uuidString
         clip.mediaType = .audio
         clip.sourceClipType = .audio

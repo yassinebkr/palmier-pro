@@ -53,6 +53,7 @@ public sealed class TrackLayoutTests {
     [Theory]
     [InlineData(0, "audio", 72)]     // unset → per-type default
     [InlineData(0, "video", 50)]
+    [InlineData(44, "audio", 44)]    // upstream default is a real height, honored
     [InlineData(-10, "video", 50)]   // negative counts as unset
     [InlineData(10, "audio", 32)]    // clamped to the model's floor
     [InlineData(500, "video", 200)]  // and ceiling
