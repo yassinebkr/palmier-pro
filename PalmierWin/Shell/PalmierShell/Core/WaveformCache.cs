@@ -6,6 +6,7 @@ namespace PalmierShell.Core;
 /// Disk-cached, semaphore-bounded waveform extraction. One extraction per
 /// media ever: the raw min/max floats persist under Waveforms/, keyed by
 /// path+size+mtime+columns+algorithm version, so a reload skips decoding.
+/// Callers invoke off the UI thread — the cache-hit path reads synchronously.
 public static class WaveformCache {
     /// Test seam: redirects the cache directory. Never set in production code.
     public static string? DirectoryOverride;
@@ -20,13 +21,29 @@ public static class WaveformCache {
         "PalmierPro", "Waveforms");
 
     static readonly SemaphoreSlim Gate = new(2);
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<float[]?>> InFlight = new();
 
     public static async Task<float[]?> GetAsync(string path, int columns, CancellationToken ct = default) {
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
         string file = Path.Combine(Dir, Key(path, columns) + ".wf");
         if (TryRead(file, columns, out var cached)) return cached;
+        // Identical requests share one decode; the gate stays for distinct media.
+        // The shared task carries the first caller's ct: if that caller cancels,
+        // later awaiters of the same task may see OperationCanceledException.
+        var task = InFlight.GetOrAdd(file, _ => DecodeGated(file, path, columns, ct));
+        try {
+            return await task;
+        } finally {
+            InFlight.TryRemove(file, out _);
+        }
+    }
+
+    static async Task<float[]?> DecodeGated(string file, string path, int columns, CancellationToken ct) {
         await Gate.WaitAsync(ct);
         try {
-            if (TryRead(file, columns, out cached)) return cached;  // filled while we waited
+            if (TryRead(file, columns, out var cached)) return cached;  // filled while we waited
+            // ct only cancels pre-start; a mid-decode cancellation still completes
+            // and caches — the work outlives the caller.
             var floats = await Task.Run(
                 () => (DecodeOverride ?? CoreApi.GetWaveform)(path, columns), ct);
             if (floats is null) return null;

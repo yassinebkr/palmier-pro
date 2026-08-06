@@ -33,7 +33,6 @@ public sealed class WaveformCacheTests : IDisposable {
 
     [Fact]
     public async Task CorruptCacheFileIsTreatedAsMiss() {
-        Directory.CreateDirectory(dir);
         int calls = 0;
         WaveformCache.DecodeOverride = (_, cols) => { calls++; return new float[cols * 2]; };
         _ = await WaveformCache.GetAsync(media, 64);
@@ -58,6 +57,27 @@ public sealed class WaveformCacheTests : IDisposable {
         WaveformCache.DecodeOverride = (_, _) => { calls++; return null; };
         Assert.Null(await WaveformCache.GetAsync(media, 64));
         Assert.Empty(Directory.EnumerateFiles(dir, "*.wf"));
+    }
+
+    [Fact]
+    public async Task ConcurrentSameKeySharesOneDecode() {
+        int calls = 0;
+        WaveformCache.DecodeOverride = (_, cols) => {
+            Interlocked.Increment(ref calls);
+            Thread.Sleep(50);
+            return new float[cols * 2];
+        };
+        var results = await Task.WhenAll(
+            WaveformCache.GetAsync(media, 64),
+            WaveformCache.GetAsync(media, 64),
+            WaveformCache.GetAsync(media, 64));
+        Assert.Equal(1, calls);
+        Assert.All(results, r => Assert.NotNull(r));
+    }
+
+    [Fact]
+    public async Task ZeroColumnsIsRejected() {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => WaveformCache.GetAsync(media, 0));
     }
 
     [Fact]
