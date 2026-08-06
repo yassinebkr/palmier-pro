@@ -45,7 +45,8 @@ Name: "{autodesktop}\PalmierWin"; Filename: "{app}\PalmierShell.exe"; WorkingDir
 Name: "{group}\PalmierWin"; Filename: "{app}\PalmierShell.exe"
 
 [Run]
-Filename: "{app}\PalmierShell.exe"; Description: "Launch PalmierWin"; Flags: nowait postinstall skipifsilent
+; Auto-updates install silently — relaunch afterwards or the app stays gone.
+Filename: "{app}\PalmierShell.exe"; Description: "Launch PalmierWin"; Flags: nowait postinstall
 
 [Code]
 var

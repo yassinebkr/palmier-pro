@@ -66,11 +66,16 @@ if (-not (Test-Path $VkLib)) {
 } else { Write-Host "==> vulkan-1.lib present, skipping" }
 
 # --- 3. FFmpeg shared dev build (BtbN, GPL) ----------------------------------
+# Pinned autobuild, never "latest": the tag moves daily and silently diverged
+# dev (avcodec-62) from CI (avcodec-63) — same source, different decode stack.
+# Verified byte-identical to the v0.1.3 install. Bump deliberately.
+$FFmpegZip = "https://github.com/BtbN/FFmpeg-Builds/releases/download/" +
+             "autobuild-2026-08-05-15-18/ffmpeg-N-125972-ge13b2e00e8-win64-gpl-shared.zip"
 $FFRoot = Join-Path $ThirdParty "ffmpeg"
 if (-not (Test-Path (Join-Path $FFRoot "include/libavformat"))) {
     Write-Host "==> fetching BtbN FFmpeg shared build"
     $zip = Join-Path $ThirdParty "ffmpeg-shared.zip"
-    Invoke-Native "curl.exe" @("-sL", "-o", $zip, "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip")
+    Invoke-Native "curl.exe" @("-sL", "-o", $zip, $FFmpegZip)
     # The zip's top dir is ffmpeg-master-latest-win64-gpl-shared. Extract into
     # ThirdParty, then move that single child to ThirdParty/ffmpeg (same-volume
     # move — metadata-only, works across runner volumes unlike TEMP->workspace).

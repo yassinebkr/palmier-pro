@@ -1,11 +1,50 @@
 import Foundation
+import WinSDK
 
-/// Engine diagnostics go to stderr, never `print`. Swift's stdout is fully
-/// buffered when it is a pipe, so every diagnostic written with `print` is lost
-/// unless the process exits cleanly — which a hung or force-killed preview
-/// never does. stderr is unbuffered, so these survive the case they exist for.
+/// Engine diagnostics: appended to engine-<date>.log next to the shell's own
+/// logs, and mirrored to stderr when one exists. The log file is the durable
+/// destination — a GUI launch (shortcut, explorer) has no stderr at all, and
+/// writing FileHandle.standardError then is not a no-op but a fatal Swift
+/// assertion that took the whole process down.
+private enum EngineLogDestination {
+    static let fileHandle: FileHandle? = {
+        guard let appData = ProcessInfo.processInfo.environment["APPDATA"] else { return nil }
+        let dir = URL(fileURLWithPath: appData)
+            .appendingPathComponent("PalmierPro", isDirectory: true)
+            .appendingPathComponent("logs", isDirectory: true)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        let url = dir.appendingPathComponent("engine-\(formatter.string(from: Date())).log")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            _ = handle.seekToEndOfFile()
+            return handle
+        } catch {
+            return nil
+        }
+    }()
+
+    static let stderr: FileHandle? = {
+        guard let raw = GetStdHandle(STD_ERROR_HANDLE),
+              raw != INVALID_HANDLE_VALUE else { return nil }
+        return FileHandle.standardError
+    }()
+
+    static let lock = NSLock()
+}
+
+/// See EngineLogDestination: never `print` (buffered, lost on a hard exit),
+/// never an unchecked standardError write (fatal without a console).
 public func engineLog(_ message: String) {
-    FileHandle.standardError.write(Data((message + "\n").utf8))
+    let line = Data((message + "\n").utf8)
+    EngineLogDestination.lock.lock()
+    EngineLogDestination.fileHandle?.write(line)
+    EngineLogDestination.stderr?.write(line)
+    EngineLogDestination.lock.unlock()
 }
 
 /// Per-second preview health counters, printed only when

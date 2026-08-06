@@ -4,10 +4,11 @@ using PalmierShell.Core;
 
 namespace PalmierShell.Views;
 
-/// Offers a newer build: release notes, then Update / Later / Skip. Update
-/// downloads the installer into the dialog's own progress bar, launches it,
-/// and asks the main window to close. A failed download is an inline error,
-/// never a crash or a dead dialog.
+/// Installs a newer build the moment one exists: the dialog opens already
+/// downloading, shows the release notes and the progress bar, then runs the
+/// installer silently and asks the main window to close. There is no
+/// Later/Skip during the beta — a failed download is an inline error, never
+/// a crash or a dead dialog.
 public partial class UpdateDialog : Window {
     void OnTitleBarPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e) {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
@@ -25,12 +26,10 @@ public partial class UpdateDialog : Window {
         this.requestClose = requestClose;
         InitializeComponent();
         if (info is null) return;
-        TitleText.Text = $"PalmierWin v{info.Version} is available";
+        TitleText.Text = $"Updating PalmierWin to v{info.Version}";
         NotesText.Text = Excerpt(info.Notes);
-        AddButton("Skip this version", OnSkip);
-        AddButton("Later", OnLater);
-        AddButton("Update", OnUpdate, emphasised: true);
         Closing += (_, _) => downloadCts.Cancel();
+        Opened += (_, _) => Download();
     }
 
     static string Excerpt(string notes) {
@@ -46,27 +45,7 @@ public partial class UpdateDialog : Window {
         await dialog.ShowDialog(owner);
     }
 
-    void AddButton(string text, Action onClick, bool emphasised = false) {
-        var button = new Button { Content = text, FontSize = 12, MinWidth = 76 };
-        if (emphasised) button.Classes.Add("primary");
-        button.Click += (_, _) => onClick();
-        Buttons.Children.Add(button);
-    }
-
-    async void OnSkip() {
-        string version = info.Version.ToString();
-        await Task.Run(() => SettingsStore.Update(s => s with { UpdateSkipVersion = version }));
-        SessionLog.Event("update", $"skipped v{version}");
-        Close();
-    }
-
-    async void OnLater() {
-        await Task.Run(() => SettingsStore.Update(s =>
-            s with { UpdateSnoozeUntil = DateTimeOffset.UtcNow.AddDays(1) }));
-        Close();
-    }
-
-    async void OnUpdate() {
+    async void Download() {
         if (downloading) return;
         downloading = true;
         Buttons.IsVisible = false;
@@ -79,10 +58,13 @@ public partial class UpdateDialog : Window {
         });
         try {
             string path = await UpdateChecker.DownloadAsync(info, progress, downloadCts.Token);
-            StatusText.Text = "Opening installer…";
+            StatusText.Text = "Installing…";
             SessionLog.Event("update", $"launching {path}");
+            // Silent: shortcut and logs keep their installer defaults, the app
+            // is closed via its mutex, and the postinstall entry relaunches it.
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) {
                 UseShellExecute = true,
+                Arguments = "/VERYSILENT /NORESTART",
             });
             Close();
             requestClose();
@@ -95,7 +77,9 @@ public partial class UpdateDialog : Window {
             ErrorText.IsVisible = true;
             Buttons.Children.Clear();
             Buttons.IsVisible = true;
-            AddButton("Close", Close);
+            var close = new Button { Content = "Close", FontSize = 12, MinWidth = 76 };
+            close.Click += (_, _) => Close();
+            Buttons.Children.Add(close);
         } finally {
             downloading = false;
         }

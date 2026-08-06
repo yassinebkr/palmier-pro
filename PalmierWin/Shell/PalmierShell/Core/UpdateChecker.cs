@@ -35,14 +35,16 @@ public static class UpdateChecker {
         return Version.TryParse(info, out var v) ? v : new Version(0, 0, 0);
     }
 
-    /// Returns the update to offer, or null when there is nothing to show:
-    /// no network, no newer release, skipped, or snoozed.
-    public static async Task<UpdateInfo?> CheckAsync(AppSettings settings, CancellationToken ct = default) {
+    /// Returns the update to install, or null when there is none: no network,
+    /// no newer release, or a malformed payload. Updates are not optional
+    /// during the beta: a newer Windows build installs itself, so deferrals
+    /// (skip/snooze) no longer suppress anything.
+    public static async Task<UpdateInfo?> CheckAsync(CancellationToken ct = default) {
         string? json = FetchOverride is { } fetch
             ? await fetch(ct).ConfigureAwait(false)
             : await FetchReleasesAsync(ct).ConfigureAwait(false);
         if (json is null) return null;
-        return SelectUpdate(json, CurrentVersion, settings, DateTimeOffset.UtcNow);
+        return SelectUpdate(json, CurrentVersion);
     }
 
     static async Task<string?> FetchReleasesAsync(CancellationToken ct) {
@@ -59,9 +61,8 @@ public static class UpdateChecker {
     }
 
     /// Pure selection over the releases JSON: the newest win tag above
-    /// `current` that carries an installer asset, honouring skip and snooze.
-    public static UpdateInfo? SelectUpdate(string releasesJson, Version current,
-                                           AppSettings settings, DateTimeOffset now) {
+    /// `current` that carries an installer asset.
+    public static UpdateInfo? SelectUpdate(string releasesJson, Version current) {
         UpdateInfo? best = null;
         try {
             using var doc = JsonDocument.Parse(releasesJson);
@@ -70,8 +71,6 @@ public static class UpdateChecker {
                 if (!release.TryGetProperty("tag_name", out var tagProp)) continue;
                 if (!TryParseTag(tagProp.GetString() ?? "", out var version)) continue;
                 if (version <= current) continue;
-                if (settings.UpdateSkipVersion.Length > 0 &&
-                    version.ToString() == settings.UpdateSkipVersion) continue;
                 if (FindInstallerUrl(release) is not { } url) continue;
                 string notes = release.TryGetProperty("body", out var body)
                     ? body.GetString() ?? "" : "";
@@ -81,8 +80,6 @@ public static class UpdateChecker {
         } catch (JsonException) {
             return null;
         }
-        if (best is null) return null;
-        if (settings.UpdateSnoozeUntil is { } until && until > now) return null;
         return best;
     }
 

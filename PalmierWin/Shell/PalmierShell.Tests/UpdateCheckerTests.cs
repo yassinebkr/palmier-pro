@@ -7,7 +7,6 @@ namespace PalmierShell.Tests;
 /// itself is behind FetchOverride and never runs here.
 public sealed class UpdateCheckerTests {
     static readonly Version Current = new(0, 1, 0);
-    static readonly DateTimeOffset Now = new(2026, 8, 1, 12, 0, 0, TimeSpan.Zero);
 
     static string Release(string tag, string? asset = "PalmierWin-Setup-0.2.0.exe", string notes = "notes") {
         string assets = asset is null ? "[]"
@@ -37,7 +36,7 @@ public sealed class UpdateCheckerTests {
             Release("v0.3.0"),                          // mac build: not a candidate
             Release("v0.2.0-win"),
             Release("v0.1.5-win"));
-        var info = UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now);
+        var info = UpdateChecker.SelectUpdate(json, Current);
         Assert.Equal(new Version(0, 2, 0), info!.Version);
     }
 
@@ -45,48 +44,19 @@ public sealed class UpdateCheckerTests {
     public void PrereleasesAreCandidates() {
         // Every Windows build is a GitHub prerelease; the flag must not filter them out.
         string json = Releases(Release("v0.2.0-win"));
-        Assert.NotNull(UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now));
+        Assert.NotNull(UpdateChecker.SelectUpdate(json, Current));
     }
 
     [Fact]
     public void EqualVersionIsNotAnUpdate() {
         string json = Releases(Release("v0.1.0-win"));
-        Assert.Null(UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now));
+        Assert.Null(UpdateChecker.SelectUpdate(json, Current));
     }
 
     [Fact]
     public void OlderVersionIsNotAnUpdate() {
         string json = Releases(Release("v0.1.0-win"));
-        Assert.Null(UpdateChecker.SelectUpdate(json, new Version(0, 2, 0), AppSettings.Default, Now));
-    }
-
-    [Fact]
-    public void SkippedVersionIsNotOffered() {
-        var settings = AppSettings.Default with { UpdateSkipVersion = "0.2.0" };
-        string json = Releases(Release("v0.2.0-win"));
-        Assert.Null(UpdateChecker.SelectUpdate(json, Current, settings, Now));
-    }
-
-    [Fact]
-    public void NewerThanSkippedIsStillOffered() {
-        var settings = AppSettings.Default with { UpdateSkipVersion = "0.2.0" };
-        string json = Releases(Release("v0.2.0-win"), Release("v0.3.0-win", "PalmierWin-Setup-0.3.0.exe"));
-        var info = UpdateChecker.SelectUpdate(json, Current, settings, Now);
-        Assert.Equal(new Version(0, 3, 0), info!.Version);
-    }
-
-    [Fact]
-    public void ActiveSnoozeSuppressesThePrompt() {
-        var settings = AppSettings.Default with { UpdateSnoozeUntil = Now.AddHours(1) };
-        string json = Releases(Release("v0.2.0-win"));
-        Assert.Null(UpdateChecker.SelectUpdate(json, Current, settings, Now));
-    }
-
-    [Fact]
-    public void ExpiredSnoozeLetsThePromptThrough() {
-        var settings = AppSettings.Default with { UpdateSnoozeUntil = Now.AddHours(-1) };
-        string json = Releases(Release("v0.2.0-win"));
-        Assert.NotNull(UpdateChecker.SelectUpdate(json, Current, settings, Now));
+        Assert.Null(UpdateChecker.SelectUpdate(json, new Version(0, 2, 0)));
     }
 
     [Fact]
@@ -94,14 +64,14 @@ public sealed class UpdateCheckerTests {
         string json = Releases(
             Release("v0.3.0-win", asset: null),   // notes-only release
             Release("v0.2.0-win"));
-        var info = UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now);
+        var info = UpdateChecker.SelectUpdate(json, Current);
         Assert.Equal(new Version(0, 2, 0), info!.Version);
     }
 
     [Fact]
     public void NotesAndDownloadUrlComeFromTheRelease() {
         string json = Releases(Release("v0.2.0-win", notes: "bug fixes"));
-        var info = UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now);
+        var info = UpdateChecker.SelectUpdate(json, Current);
         Assert.Equal("bug fixes", info!.Notes);
         Assert.Equal("https://example.com/PalmierWin-Setup-0.2.0.exe", info.DownloadUrl);
         Assert.Equal("v0.2.0-win", info.Tag);
@@ -113,14 +83,14 @@ public sealed class UpdateCheckerTests {
     [InlineData("[]")]
     [InlineData("[{\"no_tag\":true}]")]
     public void MalformedPayloadsMeanNoUpdate(string json) {
-        Assert.Null(UpdateChecker.SelectUpdate(json, Current, AppSettings.Default, Now));
+        Assert.Null(UpdateChecker.SelectUpdate(json, Current));
     }
 
     [Fact]
     public async Task CheckAsyncUsesTheFetchSeam() {
         UpdateChecker.FetchOverride = _ => Task.FromResult<string?>(Releases(Release("v99.0.0-win")));
         try {
-            var info = await UpdateChecker.CheckAsync(AppSettings.Default);
+            var info = await UpdateChecker.CheckAsync();
             Assert.Equal(new Version(99, 0, 0), info!.Version);
         } finally {
             UpdateChecker.FetchOverride = null;
@@ -131,15 +101,15 @@ public sealed class UpdateCheckerTests {
     public async Task CheckAsyncWithNoFetchResultMeansNoUpdate() {
         UpdateChecker.FetchOverride = _ => Task.FromResult<string?>(null);
         try {
-            Assert.Null(await UpdateChecker.CheckAsync(AppSettings.Default));
+            Assert.Null(await UpdateChecker.CheckAsync());
         } finally {
             UpdateChecker.FetchOverride = null;
         }
     }
 }
 
-/// Snooze and skip must survive a restart — they persist in the settings file.
-/// Same collection as the other settings tests: PathOverride is process-global.
+/// The settings file from older builds still round-trips — its update fields
+/// are simply no longer read by the checker.
 [Collection("settings-file")]
 public sealed class UpdateSettingsPersistenceTests : IDisposable {
     readonly string path = Path.Combine(
@@ -223,8 +193,7 @@ public class UpdateCheckerAssetTests {
 [{"tag_name":"v0.2.0-win","body":"notes","prerelease":false,
  "assets":[{"name":"PalmierWin-Setup.exe","browser_download_url":"https://example.com/PalmierWin-Setup.exe"}]}]
 """;
-        var info = UpdateChecker.SelectUpdate(json, new Version(0, 1, 0), AppSettings.Default,
-            new DateTimeOffset(2026, 8, 1, 12, 0, 0, TimeSpan.Zero));
+        var info = UpdateChecker.SelectUpdate(json, new Version(0, 1, 0));
         Assert.Equal("https://example.com/PalmierWin-Setup.exe", info!.DownloadUrl);
     }
 }
