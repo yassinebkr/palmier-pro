@@ -293,6 +293,7 @@ Rule: **any drop target that spans an area containing other drop targets must us
 ## Git and pull requests
 
 - Commit and PR titles use a concise lowercase category prefix in brackets, followed by an imperative summary: `[fix] Prevent stale export completion`.
+- Commit messages, PR bodies, and docs describe the change, not the process that produced it. Never write verification-process adjectives like "screenshot-verified", "pixel-verified", or "live-verified" — evidence belongs in the conversation, not the permanent record. Testing sections name what was run (commands, counts), plainly.
 - Use the narrowest accurate category, such as `[fix]`, `[perf]`, `[feat]`, `[agent]`, `[ui]`, `[refactor]`, `[test]`, `[docs]`, `[build]`, `[ci]`, `[telemetry]`, or `[cleanup]`. Combine categories only when both are essential, for example `[fix/perf]`.
 - Keep commits focused. Do not mix unrelated cleanup or formatting into a feature or fix commit.
 - PR bodies must include:
