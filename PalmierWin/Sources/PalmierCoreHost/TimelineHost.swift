@@ -424,18 +424,8 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     defer { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
     guard avformat_find_stream_info(fmt, nil) >= 0 else { return 0 }
 
-    // Cover art is a video stream too; only a non-attached_pic stream is playable video.
-    var stream: UnsafeMutablePointer<AVStream>? = nil
-    if let streamsBase = fmt.pointee.streams {
-        for i in 0..<Int(fmt.pointee.nb_streams) {
-            guard let s = streamsBase[i], let p = s.pointee.codecpar,
-                  p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
-                  (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 else { continue }
-            stream = s
-            break
-        }
-    }
-    guard let videoStream = stream, let par = videoStream.pointee.codecpar else {
+    guard let (_, videoStream) = FFmpegDecoder.firstPlayableVideoStream(in: fmt),
+          let par = videoStream.pointee.codecpar else {
         // No playable video stream: an audio-only file still imports, with
         // zero dimensions and a 30 fps duration so the timeline can place it.
         guard av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0 else { return 0 }
@@ -463,12 +453,11 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     return writeCString("\(width),\(height),\(fpsX100),\(totalFrames)", into: buf, size: bufSize)
 }
 
-/// Adds a clip for `mediaPath` at the end of the video track. When the
-/// source has an audio stream, a linked audio clip (shared linkGroupId, same
-/// placement) lands on the first audio track. Writes the new video clip's
-/// stable id into `idBuf` (NUL-terminated). Returns the clip's frame
-/// duration, or 0 on failure (invalid arguments, no video track, id buffer
-/// too small).
+/// Adds a clip for `mediaPath` at the end of its track — the video track
+/// (plus a linked audio twin when the source has audio), or the audio track
+/// alone for audio-only media. Writes the new clip's stable id into `idBuf`
+/// (NUL-terminated). Returns the clip's frame duration, or 0 on failure
+/// (invalid arguments, no matching track, id buffer too small).
 @_cdecl("palmier_timeline_add_clip")
 public func palmierTimelineAddClip(_ handle: UnsafeMutableRawPointer?,
                                    _ mediaPath: UnsafePointer<CChar>?, _ durationFrames: Int32,

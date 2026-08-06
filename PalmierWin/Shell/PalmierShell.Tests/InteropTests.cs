@@ -576,6 +576,7 @@ public class InteropTests {
             var audio = state.Tracks.Single(t => t.Type == "audio");
             Assert.Empty(video.Clips);
             var clip = Assert.Single(audio.Clips);
+            Assert.Equal(clipId, clip.Id);
             Assert.Equal("audio", clip.MediaType);
             Assert.Equal(90, clip.DurationFrames);
             Assert.Null(clip.LinkGroupId);
@@ -597,5 +598,22 @@ public class InteropTests {
         // decoder that picked the 1024x1024 attached pic.
         int distinct = pixels.Take(4000).Distinct().Count();
         Assert.True(distinct > 20, $"flat cover art decoded instead of video (distinct={distinct})");
+    }
+
+    [Fact]
+    public void AddClipAt_AudioOnlyHonorsExplicitStartFrame() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string? clipId = CoreApi.AddClipAt(project, TestMediaPath("audioonly.m4a"), 90, 30);
+            Assert.NotNull(clipId);
+            var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+            var audio = state.Tracks.Single(t => t.Type == "audio");
+            var clip = Assert.Single(audio.Clips);
+            Assert.Equal("audio", clip.MediaType);
+            Assert.Equal(30, clip.StartFrame);
+            Assert.Empty(state.Tracks.Single(t => t.Type == "video").Clips);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
     }
 }

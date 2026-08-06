@@ -1,6 +1,7 @@
 import CFFmpeg
 import Foundation
 import PalmierCore
+import PalmierWin
 
 // FCPXML export ABI: serializes the project's active timeline to Final Cut
 // Pro XML (v1.10, the broadest version Resolve 18+ / FCP 10.6+ accept) and
@@ -571,11 +572,7 @@ private final class FcpxmlWriter {
 
         var info = MediaInfo()
         info.hasAudio = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0
-        let vidx = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nil, 0)
-        if vidx >= 0,
-           let streamsBase = fmt.pointee.streams,
-           Int(vidx) < Int(fmt.pointee.nb_streams),
-           let stream = streamsBase[Int(vidx)],
+        if let (_, stream) = FFmpegDecoder.firstPlayableVideoStream(in: fmt),
            let par = stream.pointee.codecpar {
             info.hasVideo = true
             info.width = Int(par.pointee.width)

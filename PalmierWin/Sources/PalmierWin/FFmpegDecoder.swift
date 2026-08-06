@@ -50,6 +50,23 @@ public final class FFmpegDecoder {
     private var packet: UnsafeMutablePointer<AVPacket>?
     private var streamIndex: Int32 = -1
 
+    /// The first playable (non-attached-pic) video stream in an opened,
+    /// stream-info'd format context — the ONE stream-selection rule the
+    /// probe, the decoder, and stream probes all share.
+    public static func firstPlayableVideoStream(
+        in fmt: UnsafeMutablePointer<AVFormatContext>
+    ) -> (index: Int, stream: UnsafeMutablePointer<AVStream>)? {
+        guard let streamsBase = fmt.pointee.streams else { return nil }
+        for i in 0..<Int(fmt.pointee.nb_streams) {
+            guard let s = streamsBase[i], let p = s.pointee.codecpar else { continue }
+            if p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
+               (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 {
+                return (i, s)
+            }
+        }
+        return nil
+    }
+
     public init(path: String) throws {
         var fmtCtx: UnsafeMutablePointer<AVFormatContext>? = nil
         let openResult = path.withCString { p in avformat_open_input(&fmtCtx, p, nil, nil) }
@@ -61,33 +78,12 @@ public final class FFmpegDecoder {
             throw DecodeError.openFailed(-1)
         }
 
-        // av_find_best_stream can pick a large attached pic over the real video; skip cover art.
-        var vidx: Int32 = -1
-        if let streamsBase = fmtCtx.pointee.streams {
-            for i in 0..<Int(fmtCtx.pointee.nb_streams) {
-                guard let s = streamsBase[i], let p = s.pointee.codecpar,
-                      p.pointee.codec_type == AVMEDIA_TYPE_VIDEO,
-                      (s.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC) == 0 else { continue }
-                vidx = Int32(i)
-                break
-            }
-        }
-        guard vidx >= 0 else {
-            var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
-            throw DecodeError.noVideoStream
-        }
-        self.streamIndex = vidx
-
-        // AVFormatContext.streams[vidx]->codecpar (the modern accessor; the
-        // legacy av_stream_get_codec_parameters helper isn't exposed by the
-        // importer as a function).
-        guard let streamsBase = fmtCtx.pointee.streams,
-              Int(vidx) < Int(fmtCtx.pointee.nb_streams),
-              let stream = streamsBase[Int(vidx)],
+        guard let (vidx, stream) = Self.firstPlayableVideoStream(in: fmtCtx),
               let par = stream.pointee.codecpar else {
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
             throw DecodeError.noVideoStream
         }
+        self.streamIndex = Int32(vidx)
         let codecId = par.pointee.codec_id
         guard let decoder = avcodec_find_decoder(codecId) else {
             var f: UnsafeMutablePointer<AVFormatContext>? = fmtCtx; avformat_close_input(&f); self.fmt = nil
