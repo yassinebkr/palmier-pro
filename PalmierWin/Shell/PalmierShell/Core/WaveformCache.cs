@@ -23,6 +23,11 @@ public static class WaveformCache {
     static readonly SemaphoreSlim Gate = new(2);
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<float[]?>> InFlight = new();
 
+    /// The one columns-per-duration rule every caller shares — the cache key
+    /// embeds the count, so two spellings of it would never hit the same file.
+    public static int ColumnsFor(double seconds) =>
+        seconds > 0 ? Math.Clamp((int)Math.Ceiling(seconds * 200), 256, 240_000) : 2048;
+
     public static async Task<float[]?> GetAsync(string path, int columns, CancellationToken ct = default) {
         ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
         string file = Path.Combine(Dir, Key(path, columns) + ".wf");

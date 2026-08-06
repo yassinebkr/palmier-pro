@@ -321,7 +321,7 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
         double audioSeconds = probe.Value.Fps > 0 && probe.Value.TotalFrames > 0
             ? probe.Value.TotalFrames / probe.Value.Fps : 0;
         if (audioSeconds > 0) {
-            int columns = Math.Clamp((int)Math.Ceiling(audioSeconds * 200), 256, 240_000);
+            int columns = WaveformCache.ColumnsFor(audioSeconds);
             _ = Task.Run(() => WaveformCache.GetAsync(path, columns));
         }
     }
