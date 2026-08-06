@@ -117,7 +117,10 @@ public static class UpdateChecker {
     /// are deleted on failure or cancellation.
     public static async Task<string> DownloadAsync(UpdateInfo info, IProgress<int> progress,
                                                    CancellationToken ct) {
-        string path = Path.Combine(Path.GetTempPath(), $"PalmierWin-Setup-{info.Version}.exe");
+        // Unique per process: two instances updating at once (a dev build
+        // next to the installed app) must not fight over one file.
+        string path = Path.Combine(Path.GetTempPath(),
+            $"PalmierWin-Setup-{info.Version}-{Environment.ProcessId}.exe");
         try {
             using var request = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
             request.Headers.UserAgent.ParseAdd($"PalmierWin/{CurrentVersion}");
