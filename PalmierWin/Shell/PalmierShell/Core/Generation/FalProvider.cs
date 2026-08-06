@@ -11,26 +11,10 @@ public sealed class FalProvider : IGenerationProvider {
     public string Name => "fal.ai";
     public string KeyHint => "fal.ai/dashboard/keys";
 
-    /// Seedance 2.0 takes 4–15 s and 480p/720p on both tiers. The image-to-
-    /// video endpoints are the ones that accept a first and last frame — the
-    /// text-to-video ones ignore them, so they are listed separately rather
-    /// than switched behind the user's back.
-    static readonly int[] SeedanceDurations = [4, 5, 6, 8, 10, 12, 15];
-    static readonly string[] SeedanceResolutions = ["720p", "480p"];
-
-    public IReadOnlyList<GenerationModel> Models { get; } = [
-        new("bytedance/seedance-2.0/image-to-video", "Seedance 2.0 · first/last frame",
-            SeedanceDurations) { Frames = FrameInput.FirstLast, Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/text-to-video", "Seedance 2.0 · text only",
-            SeedanceDurations) { Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/fast/image-to-video", "Seedance 2.0 Fast · first/last frame",
-            SeedanceDurations) { Frames = FrameInput.FirstLast, Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/fast/text-to-video", "Seedance 2.0 Fast · text only",
-            SeedanceDurations) { Resolutions = SeedanceResolutions },
-        new("fal-ai/kling-video/v2.1/standard/text-to-video", "Kling 2.1 Standard", [5, 10]),
-        new("fal-ai/veo3/fast", "Veo 3 Fast", [8]),
-        new("fal-ai/minimax/hailuo-02/standard/text-to-video", "Hailuo 02", [6, 10]),
-    ];
+    /// The image-to-video endpoints are the ones that accept a first and last
+    /// frame — the text-to-video ones ignore them, so they are listed
+    /// separately in the manifest rather than switched behind the user's back.
+    public IReadOnlyList<GenerationModel> Models => ModelManifest.For("fal");
 
     /// How the endpoint takes stills. An id we do not curate gets None: we
     /// have not read its schema, so we send it no frame fields.

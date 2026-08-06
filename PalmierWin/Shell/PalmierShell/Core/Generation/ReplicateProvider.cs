@@ -22,54 +22,10 @@ public sealed class ReplicateProvider : IGenerationProvider {
     /// Face rejection is a conditional input classifier ("may contain a real
     /// person"), not a blanket ban — identifiable faces in stills can be
     /// flagged on any mode, and the flag surfaces as the opaque "(E005)".
-    public IReadOnlyList<GenerationModel> Models => All;
+    public IReadOnlyList<GenerationModel> Models => ModelManifest.For("replicate");
 
-    static readonly GenerationModel[] All = [
-        new("bytedance/seedance-2.0", "Seedance 2.0", [4, 5, 6, 8, 10, 12, 15]) {
-            // The endpoint also offers 1080p and 4k; they are not listed until
-            // there is a verified per-second rate, because an unpriced option
-            // defeats the estimate the Generate button sits next to.
-            Frames = FrameInput.FirstLast, Resolutions = ["720p", "480p"],
-            SynthesisesAudio = true,
-            // Reference-to-video: up to 9 images and 3 videos (15 s combined),
-            // addressed as [Image1]/[Video1] in the prompt. The schema forbids
-            // combining them with image/last_frame_image.
-            MaxReferenceImages = 9, MaxReferenceVideos = 3,
-            FramesAndReferencesExclusive = true,
-        },
-        // Seedance 1.x takes the same first/last frame pair; kept as the
-        // fallback when 2.0's input moderation flags a frame.
-        new("bytedance/seedance-1.5-pro", "Seedance 1.5 Pro", [4, 5, 6, 8, 10, 12]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["720p", "480p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("bytedance/seedance-1-pro", "Seedance 1 Pro", [4, 5, 6, 8, 10, 12]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["1080p", "720p", "480p"],
-        },
-        // Kling 3.0 takes the same pair under Kuaishou's names, start_image
-        // and end_image, and quality is a mode rather than a resolution:
-        // standard is 720p, pro is 1080p. A 4k mode exists but is not offered
-        // without a verified rate. Duration is any whole second from 3 to 15.
-        new("kwaivgi/kling-v3-video", "Kling 3.0",
-            [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["1080p", "720p"],
-            SynthesisesAudio = true,
-        },
-        new("kwaivgi/kling-v2.1", "Kling 2.1", [5, 10]),
-        // Veo 3 starts from a still but has no last-frame field, so it can
-        // open on a frame yet cannot land a transition.
-        new("google/veo-3", "Veo 3", [4, 6, 8]) {
-            Frames = FrameInput.FirstOnly, Resolutions = ["720p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("google/veo-3-fast", "Veo 3 Fast", [4, 6, 8]) {
-            Frames = FrameInput.FirstOnly, Resolutions = ["720p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("minimax/video-01", "MiniMax Video-01", [6]),
-    ];
-
-    static GenerationModel? Curated(string modelId) => All.FirstOrDefault(m => m.Id == modelId);
+    static GenerationModel? Curated(string modelId) =>
+        ModelManifest.For("replicate").FirstOrDefault(m => m.Id == modelId);
 
     /// How the endpoint takes stills; None for any id we do not curate.
     static FrameInput Frames(string modelId) => Curated(modelId)?.Frames ?? FrameInput.None;

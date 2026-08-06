@@ -19,9 +19,20 @@ public enum FrameInput {
 /// One video model a provider exposes. `Durations` are the clip lengths the
 /// model accepts, in seconds.
 public sealed record GenerationModel(string Id, string Name, int[] Durations) {
-    /// How this endpoint takes reference stills. Default None: a model whose
-    /// schema we have not read must not be sent fields it may reject.
-    public FrameInput Frames { get; init; } = FrameInput.None;
+    /// The manifest's capability labels. The stills labels are the contract
+    /// with the request builders: "firstLastFrame" (dedicated first/last
+    /// fields), "firstFrame" (an opening frame only), "references" (an array
+    /// the prompt addresses as [Image1]…). A model with none of them takes
+    /// text only — a schema we have not read must not be sent fields it may
+    /// reject.
+    public string[] Capabilities { get; init; } = [];
+
+    /// How this endpoint takes reference stills, from its capabilities.
+    public FrameInput Frames =>
+        Capabilities.Contains("firstLastFrame", StringComparer.OrdinalIgnoreCase) ? FrameInput.FirstLast :
+        Capabilities.Contains("firstFrame", StringComparer.OrdinalIgnoreCase) ? FrameInput.FirstOnly :
+        Capabilities.Contains("references", StringComparer.OrdinalIgnoreCase) ? FrameInput.References :
+        FrameInput.None;
 
     public bool AcceptsFrames => Frames != FrameInput.None;
 
