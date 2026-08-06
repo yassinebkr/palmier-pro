@@ -30,6 +30,19 @@ public sealed class TrackLayoutTests {
     }
 
     [Fact]
+    public void RowAtReturnsTheFullRowTuple() {
+        var v = Track("video", 50); var a = Track("audio", 72);
+        var layout = new TrackLayout([v, a], top: 24, t => t.RenderHeight);
+        Assert.Null(layout.RowAt(23.9));
+        var row = layout.RowAt(74);
+        Assert.NotNull(row);
+        Assert.Equal(a.Id, row!.Value.Track.Id);
+        Assert.Equal(74, row.Value.Y);
+        Assert.Equal(72, row.Value.Height);
+        Assert.Null(layout.RowAt(146));
+    }
+
+    [Fact]
     public void HeightOfOverrideAppliesUniformly() {
         var v = Track("video", 50); var a = Track("audio", 72);
         var layout = new TrackLayout([v, a], top: 0, _ => 28);
@@ -40,6 +53,7 @@ public sealed class TrackLayoutTests {
     [Theory]
     [InlineData(0, "audio", 72)]     // unset → per-type default
     [InlineData(0, "video", 50)]
+    [InlineData(-10, "video", 50)]   // negative counts as unset
     [InlineData(10, "audio", 32)]    // clamped to the model's floor
     [InlineData(500, "video", 200)]  // and ceiling
     [InlineData(96, "video", 96)]    // exact value passes through
@@ -51,7 +65,7 @@ public sealed class TrackLayoutTests {
     public void MissingDisplayHeightKeyDeserializesToDefault() {
         const string json = """
         {"id":"t","name":"T","fps":30,"width":1920,"height":1080,
-         "tracks":[{"clips":[],"displayHeight":0,"hidden":false,"id":"v1","muted":false,"type":"video"},
+         "tracks":[{"clips":[],"hidden":false,"id":"v1","muted":false,"type":"video"},
                    {"clips":[],"displayHeight":96,"hidden":false,"id":"a1","muted":false,"type":"audio"}]}
         """;
         var state = TimelineState.Parse(json);

@@ -23,9 +23,11 @@ public sealed class TrackLayout {
     public double YOf(string trackId) => Rows.First(r => r.Track.Id == trackId).Y;
     public double HeightOf(string trackId) => Rows.First(r => r.Track.Id == trackId).Height;
 
-    public TrackState? TrackAt(double y) {
-        foreach (var (track, rowY, rowH) in Rows)
-            if (y >= rowY && y < rowY + rowH) return track;
+    public TrackState? TrackAt(double y) => RowAt(y)?.Track;
+
+    public (TrackState Track, double Y, double Height)? RowAt(double y) {
+        foreach (var row in Rows)
+            if (y >= row.Y && y < row.Y + row.Height) return row;
         return null;
     }
 }
