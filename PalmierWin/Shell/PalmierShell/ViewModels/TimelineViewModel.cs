@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -417,7 +418,47 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public TimelineViewModel(IntPtr project) {
         this.project = project;
+        for (int i = 0; i < meters.Length; i++) meters[i] = new TrackMeters();
         Reload();
+    }
+
+    readonly TrackMeters[] meters = new TrackMeters[64];
+    readonly float[] meterPeaks = new float[64];
+    readonly Stopwatch meterClock = new();
+    DispatcherTimer? meterTimer;
+
+    /// Fired ~30×/s while playing so the header meters redraw. High-frequency:
+    /// subscribe only the timeline header meter, nothing else.
+    public event Action? MetersChanged;
+
+    public TrackMeters MeterFor(int audioTrackOrdinal) => meters[audioTrackOrdinal];
+
+    /// The audio context the poll reads peaks from, set once by its owner.
+    /// Zero means the app runs silent: the poll ticks zeros.
+    public IntPtr AudioHandle { get; set; }
+
+    /// Starts/stops the peak poll with playback (UI thread). Pausing freezes
+    /// the meters; the ballistics resume from the frozen levels on play.
+    public void SetMetering(bool playing) {
+        if (!playing) { meterTimer?.Stop(); return; }
+        if (meterTimer is null) {
+            meterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            meterTimer.Tick += (_, _) => PollMeters();
+        }
+        meterClock.Restart();
+        meterTimer.Start();
+    }
+
+    void PollMeters() {
+        double dt = meterClock.Elapsed.TotalSeconds;
+        meterClock.Restart();
+        int n = AudioHandle == IntPtr.Zero
+            ? 0
+            : CoreApi.palmier_audio_track_peaks(AudioHandle, meterPeaks, meterPeaks.Length);
+        // Slots at/past the count are trailing clip-less tracks: silence (E1).
+        for (int i = 0; i < meters.Length; i++)
+            meters[i].Tick(i < n ? meterPeaks[i] : 0f, dt);
+        MetersChanged?.Invoke();
     }
 
     public int TotalFrames => State?.TotalFrames ?? 0;
