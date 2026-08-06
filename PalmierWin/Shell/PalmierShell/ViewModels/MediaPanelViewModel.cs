@@ -36,7 +36,7 @@ public sealed partial class MediaItemViewModel : ObservableObject {
         HoverFraction = fraction;
         Hovering = true;
         if (hoverStrip is null) {
-            if (!hoverStripLoading) {
+            if (Width > 0 && !hoverStripLoading) {
                 hoverStripLoading = true;
                 _ = Task.Run(() => {
                     var result = CoreApi.GetThumbnails(Path, 8);
@@ -249,7 +249,10 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
         var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions {
             Title = "Import media",
             AllowMultiple = true,
-            FileTypeFilter = [new FilePickerFileType("Video") { Patterns = ["*.mp4", "*.mov", "*.mkv", "*.m4v"] }],
+            FileTypeFilter = [
+                new FilePickerFileType("Video") { Patterns = ["*.mp4", "*.mov", "*.mkv", "*.m4v"] },
+                new FilePickerFileType("Audio") { Patterns = ["*.m4a", "*.mp3", "*.wav", "*.aac"] },
+            ],
         });
         foreach (var file in files) {
             string? path = file.TryGetLocalPath();
