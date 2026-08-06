@@ -67,6 +67,11 @@ public sealed class TimelineView : Control {
     double resizeStartY, resizeOriginalHeight, resizePreviewHeight;
     bool resizeActive;
 
+    // Track-gain drag state (Select tool, grabbed the header's gain slider).
+    string? gainDragTrackId;
+    double gainDragDbPreview, gainDragStartDb;
+    bool gainDragActive;
+
     /// 0/1 when `x` grabs the loop range's start/end edge, else null.
     int? LoopEdgeUnderPointer(double x) {
         if (vm?.HasLoop != true || vm.Tool != TimelineTool.Select) return null;
@@ -85,6 +90,29 @@ public sealed class TimelineView : Control {
         double contentY = y + vm.ScrollOffsetY;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
             if (Math.Abs(contentY - (rowY + height)) <= EdgeGrabWidth) return (track, height);
+        return null;
+    }
+
+    // Gain slider geometry and dB range (the core's clamp), shared by the
+    // strip's renderer, hit test, and hover cursor so they cannot disagree.
+    const double GainStripX = 10, GainStripWidth = 80, GainStripHeight = 14;
+    const double GainMinDb = -96, GainMaxDb = 12;
+
+    /// The gain slider strip in an audio row's header: 80 wide, 14 tall,
+    /// parked 2px above the row's bottom edge. Short rows (compact's uniform
+    /// 28 included) and video rows have no strip.
+    static Rect? GainStripRect(TrackState track, double rowY, double height) =>
+        track.Type == "audio" && height >= 56
+            ? new Rect(GainStripX, rowY + height - GainStripHeight - 2, GainStripWidth, GainStripHeight)
+            : null;
+
+    /// The track whose header gain strip contains `p` (view coordinates).
+    TrackState? GainStripAt(Point p) {
+        if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X >= HeaderWidth) return null;
+        double contentY = p.Y + vm.ScrollOffsetY;
+        foreach (var (track, rowY, height) in vm.Layout.Rows)
+            if (GainStripRect(track, rowY, height) is { } strip && strip.Contains(new Point(p.X, contentY)))
+                return track;
         return null;
     }
 
@@ -282,7 +310,10 @@ public sealed class TimelineView : Control {
             MaxTextWidth = track.Name is { Length: > 0 } ? 46 : 28,
             Trimming = TextTrimming.CharacterEllipsis,
         };
-        double rowMid = y + height / 2;
+        // An audio row with a gain strip centers the label row in the top
+        // 40px; everything else centers in the full row height.
+        var gainStrip = GainStripRect(track, y, height);
+        double rowMid = gainStrip is not null ? y + 20 : y + height / 2;
         ctx.DrawText(name, new Point(12, rowMid - name.Height / 2));
         if (track.Name is not { Length: > 0 }) RenderLinkIcon(ctx, new Rect(44, rowMid - 5, 12, 10));
         var iconRect = new Rect(66, rowMid - 6, 14, 12);
@@ -290,6 +321,7 @@ public sealed class TimelineView : Control {
             RenderSpeakerIcon(ctx, iconRect, off: track.Muted);
         else
             RenderEyeIcon(ctx, iconRect, off: track.Hidden);
+        if (gainStrip is { } strip) RenderGainStrip(ctx, track, strip);
 
         using var clipRegion = ctx.PushClip(new Rect(HeaderWidth, y, bounds.Width - HeaderWidth, height));
         foreach (var clip in track.Clips) {
@@ -565,6 +597,27 @@ public sealed class TimelineView : Control {
         }
     }
 
+    /// The per-track gain slider: the accent fill spans from the 0 dB detent
+    /// to the value, with a live dB readout while a drag rides the strip.
+    void RenderGainStrip(DrawingContext ctx, TrackState track, Rect strip) {
+        double db = gainDragTrackId == track.Id ? gainDragDbPreview : track.GainDb;
+        double barY = strip.Y + strip.Height / 2;
+        ctx.DrawRectangle(new SolidColorBrush(BorderColor), null,
+            new Rect(strip.X, barY - 2, strip.Width, 4), 2, 2);
+        double zeroX = strip.X + strip.Width * (0 - GainMinDb) / (GainMaxDb - GainMinDb);
+        double valueX = strip.X + strip.Width * (db - GainMinDb) / (GainMaxDb - GainMinDb);
+        ctx.FillRectangle(new SolidColorBrush(TimecodeColor),
+            new Rect(Math.Min(zeroX, valueX), barY - 1.5, Math.Abs(valueX - zeroX), 3));
+        // Subtle tick at the 0 dB detent.
+        ctx.DrawLine(new Pen(IconOffBrush, 1), new Point(zeroX, barY - 4), new Point(zeroX, barY + 4));
+        if (gainDragTrackId == track.Id) {
+            var readout = new FormattedText($"{db:+0.0;-0.0} dB",
+                System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                LabelTypeface, 10, new SolidColorBrush(Colors.White));
+            ctx.DrawText(readout, new Point(strip.X + 1, strip.Y - readout.Height));
+        }
+    }
+
     static readonly SolidColorBrush WaveformBrush = new(Color.Parse("#9EFFFFFF"));
 
     /// Draws dB-mapped peak bars across the rect, windowed to the clip's
@@ -646,6 +699,20 @@ public sealed class TimelineView : Control {
                 resizeOriginalHeight = edge.Height;
                 resizePreviewHeight = edge.Height;
                 resizeStartY = p.Y;
+                e.Pointer.Capture(this);
+                return;
+            }
+            // Header gain strip: drag adjusts the track's dB (Select tool).
+            if (vm.Tool == TimelineTool.Select && GainStripAt(p) is { } gainTrack) {
+                // A double-tap resets the track to unity instead of arming.
+                if (e.ClickCount == 2) {
+                    if (gainTrack.GainDb != 0) vm.RequestTrackGain(gainTrack.Id, 0);
+                    return;
+                }
+                gainDragTrackId = gainTrack.Id;
+                gainDragStartDb = gainTrack.GainDb;
+                gainDragDbPreview = gainTrack.GainDb;
+                gainDragActive = false;
                 e.Pointer.Capture(this);
                 return;
             }
@@ -1054,6 +1121,17 @@ public sealed class TimelineView : Control {
             }
             return;
         }
+        if (gainDragTrackId is not null) {
+            double frac = Math.Clamp((p.X - GainStripX) / GainStripWidth, 0, 1);
+            double raw = GainMinDb + frac * (GainMaxDb - GainMinDb);
+            if (Math.Abs(raw) < 0.5) raw = 0;   // snap to unity near the detent
+            if (!gainDragActive && Math.Abs(raw - gainDragStartDb) > 0.5) gainDragActive = true;
+            if (gainDragActive) {
+                gainDragDbPreview = raw;
+                InvalidateVisual();
+            }
+            return;
+        }
         if (scrubbing) {
             vm.Scrub(XToFrame(p.X));
             return;
@@ -1140,11 +1218,13 @@ public sealed class TimelineView : Control {
             Cursor = Cursor.Default;
             return;
         }
-        // In the header only a row's bottom edge is a handle: it resizes.
+        // In the header a row's bottom edge resizes; the gain strip slides.
         if (p.X < HeaderWidth) {
             Cursor = ResizeEdgeAt(p.Y) is not null
                 ? new Cursor(StandardCursorType.SizeNorthSouth)
-                : Cursor.Default;
+                : GainStripAt(p) is not null
+                    ? new Cursor(StandardCursorType.SizeWestEast)
+                    : Cursor.Default;
             return;
         }
         // A cut reads as a roll handle; a lone edge reads as a trim handle.
@@ -1188,6 +1268,8 @@ public sealed class TimelineView : Control {
         if (resizeTrackId is { } rtid && resizeActive &&
             Math.Abs(resizePreviewHeight - resizeOriginalHeight) > 0.5)
             vm?.RequestTrackResize(rtid, (int)Math.Round(resizePreviewHeight));
+        if (gainDragTrackId is { } gid && gainDragActive && Math.Abs(gainDragDbPreview - gainDragStartDb) > 0.1)
+            vm?.RequestTrackGain(gid, gainDragDbPreview);
         DisarmGesture();
         e.Pointer.Capture(null);
         InvalidateVisual();
@@ -1217,10 +1299,15 @@ public sealed class TimelineView : Control {
     bool DisarmGesture() {
         bool armed = scrubbing || rollLeftId is not null || trimClipId is not null
                      || dragClipId is not null || envelopeActive || fadeActive
-                     || loopDragEdge >= 0 || resizeTrackId is not null;
+                     || loopDragEdge >= 0 || resizeTrackId is not null
+                     || gainDragTrackId is not null;
         resizeTrackId = null;
         resizeActive = false;
         resizePreviewHeight = 0;
+        gainDragTrackId = null;
+        gainDragStartDb = 0;
+        gainDragDbPreview = 0;
+        gainDragActive = false;
         loopDragEdge = -1;
         loopDragActive = false;
         envelopeClipId = null;

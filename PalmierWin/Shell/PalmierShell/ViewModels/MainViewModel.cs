@@ -73,6 +73,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
                 () => CoreApi.palmier_track_set_display_height(Project, trackId, height) == 1);
             Timeline.Reload();
         };
+        Timeline.TrackGainRequested += (trackId, db) => {
+            Undo.Execute("Track Volume",
+                () => CoreApi.palmier_track_set_gain_db(Project, trackId, db) == 1);
+            Timeline.Reload();
+        };
         Timeline.MediaDropped += (path, frame) => {
             var item = Media.Items.FirstOrDefault(i => i.Path == path);
             if (item is null) return;
