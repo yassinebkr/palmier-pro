@@ -81,8 +81,9 @@ public sealed class TimelineView : Control {
     /// the model as a "grow".
     (TrackState Track, double Height)? ResizeEdgeAt(double y) {
         if (vm?.State is null || vm.CompactRows) return null;
+        double contentY = y + vm.ScrollOffsetY;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
-            if (Math.Abs(y - (rowY + height)) <= EdgeGrabWidth) return (track, height);
+            if (Math.Abs(contentY - (rowY + height)) <= EdgeGrabWidth) return (track, height);
         return null;
     }
 
@@ -167,11 +168,19 @@ public sealed class TimelineView : Control {
         // the layout only rebuilds once the release commits the new height.
         double resizeDelta = resizeTrackId is not null ? resizePreviewHeight - resizeOriginalHeight : 0;
         bool belowResized = false;
-        foreach (var row in vm.Layout.Rows) {
-            bool armed = row.Track.Id == resizeTrackId;
-            RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track),
-                row.Y + (belowResized ? resizeDelta : 0), armed ? resizePreviewHeight : row.Height);
-            belowResized |= armed;
+        // Rows scroll vertically under the ruler, which is already painted —
+        // the clip keeps them out of its band. The offset applies once here
+        // so every per-row visual shares it.
+        using (ctx.PushClip(new Rect(0, TimelineMath.RulerHeight, bounds.Width,
+                   Math.Max(0, bounds.Height - TimelineMath.RulerHeight)))) {
+            foreach (var row in vm.Layout.Rows) {
+                bool armed = row.Track.Id == resizeTrackId;
+                double rowY = row.Y - vm.ScrollOffsetY + (belowResized ? resizeDelta : 0);
+                double rowHeight = armed ? resizePreviewHeight : row.Height;
+                belowResized |= armed;
+                if (rowY + rowHeight < TimelineMath.RulerHeight || rowY > bounds.Height) continue;
+                RenderTrack(ctx, bounds, row.Track, LabelFor(state, row.Track), rowY, rowHeight);
+            }
         }
 
         // The marked range: a wash over the tracks plus in/out brackets on the
@@ -610,7 +619,10 @@ public sealed class TimelineView : Control {
         base.OnSizeChanged(e);
         // The zoom anchor and the overview strip need to know how much of the
         // timeline one screen holds.
-        if (vm is not null) vm.ViewportWidth = Math.Max(1, e.NewSize.Width - HeaderWidth);
+        if (vm is not null) {
+            vm.ViewportWidth = Math.Max(1, e.NewSize.Width - HeaderWidth);
+            vm.ViewportHeight = Math.Max(1, e.NewSize.Height - TimelineMath.RulerHeight);
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
@@ -885,7 +897,10 @@ public sealed class TimelineView : Control {
         return source is not null && track.Type == source.Type ? track : null;
     }
 
-    TrackState? TrackAt(Point p) => vm?.Layout.TrackAt(p.Y);
+    // Pointer-side lookups take view y; the layout speaks content y, so the
+    // scroll offset is added back at the door (here, JunctionAt, HitTestClip,
+    // ResizeEdgeAt) rather than at every caller.
+    TrackState? TrackAt(Point p) => vm is null ? null : vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY);
 
     /// Vertical inset between a clip and its track row, shared by the renderer
     /// and every hit test so they cannot disagree about where a clip is.
@@ -894,7 +909,7 @@ public sealed class TimelineView : Control {
     /// The rect a clip is drawn in at rest (no live gesture applied) — the
     /// same geometry the renderer uses, so hit tests land on what is shown.
     Rect ClipRect(TrackState track, ClipState clip) {
-        double y = vm!.Layout.YOf(track.Id);
+        double y = vm!.Layout.YOf(track.Id) - vm.ScrollOffsetY;
         double height = vm.Layout.HeightOf(track.Id);
         return new Rect(FrameToX(clip.StartFrame), y + ClipPadY,
                         clip.DurationFrames * vm.PixelsPerFrame, height - ClipPadY * 2);
@@ -921,7 +936,7 @@ public sealed class TimelineView : Control {
     /// and the transition affordance as well as the roll drag.
     public (TrackState Track, ClipState Left, ClipState Right)? JunctionAt(Point p) {
         if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X < HeaderWidth) return null;
-        if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
+        if (vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY) is not { } track) return null;
         return JunctionUnderPointer(track, p.X) is { } cut ? (track, cut.Left, cut.Right) : null;
     }
 
@@ -991,7 +1006,7 @@ public sealed class TimelineView : Control {
 
     (TrackState Track, ClipState Clip)? HitTestClip(Point p) {
         if (vm?.State is null || p.Y < TimelineMath.RulerHeight) return null;
-        if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
+        if (vm.Layout.TrackAt(p.Y + vm.ScrollOffsetY) is not { } track) return null;
         int frame = XToFrame(p.X);
         var clip = track.Clips.FirstOrDefault(c => frame >= c.StartFrame && frame < c.EndFrame);
         return clip is null ? null : (track, clip);
@@ -1229,7 +1244,10 @@ public sealed class TimelineView : Control {
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e) {
         base.OnPointerWheelChanged(e);
         if (vm is null) return;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) {
+            // Shift scrolls the rows vertically under the fixed ruler.
+            vm.ScrollOffsetY = Math.Clamp(vm.ScrollOffsetY - e.Delta.Y * 60, 0, vm.MaxScrollOffsetY);
+        } else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
             // Zoom about the cursor: keep the frame under the pointer fixed.
             var p = e.GetPosition(this);
             double frameAtCursor = (p.X - HeaderWidth + vm.ScrollOffsetX) / vm.PixelsPerFrame;

@@ -19,11 +19,19 @@ public sealed partial class TimelineViewModel : ObservableObject {
     [ObservableProperty] int playheadFrame;
     [ObservableProperty] double pixelsPerFrame = 4.0;
     [ObservableProperty] double scrollOffsetX;
+    [ObservableProperty] double scrollOffsetY;
     /// Clip-area width in DIPs, reported by the view. Zoom anchoring and the
     /// overview strip read it. Plain on purpose: it is written during layout
     /// and read during paint, so a change notification would repaint
     /// mid-render.
     public double ViewportWidth { get; set; } = 1;
+    /// Clip-area height in DIPs, reported by the view. Plain for the same
+    /// reason as ViewportWidth.
+    public double ViewportHeight { get; set; } = 1;
+    /// Furthest the rows may scroll up: the content bottom sits one
+    /// screenful deep, so shorter content allows no scroll at all.
+    public double MaxScrollOffsetY =>
+        Math.Max(0, Layout.Bottom - TimelineMath.RulerHeight - ViewportHeight);
     [ObservableProperty] string? selectedClipId;
     [ObservableProperty] TimelineTool tool = TimelineTool.Select;
     [ObservableProperty] bool snapEnabled = true;
@@ -33,8 +41,12 @@ public sealed partial class TimelineViewModel : ObservableObject {
     /// Geometry for the current state; rebuilt on state reload / compact toggle.
     public TrackLayout Layout { get; private set; } = new([], 0, _ => 50);
 
-    void RebuildLayout() => Layout = new TrackLayout(State?.Tracks ?? [], TimelineMath.RulerHeight,
-        t => CompactRows ? 28 : t.RenderHeight);
+    void RebuildLayout() {
+        Layout = new TrackLayout(State?.Tracks ?? [], TimelineMath.RulerHeight,
+            t => CompactRows ? 28 : t.RenderHeight);
+        // A shrink (track removed, compact toggle) must not strand scrolled rows.
+        ScrollOffsetY = Math.Clamp(ScrollOffsetY, 0, MaxScrollOffsetY);
+    }
 
     partial void OnCompactRowsChanged(bool value) => RebuildLayout();
 
