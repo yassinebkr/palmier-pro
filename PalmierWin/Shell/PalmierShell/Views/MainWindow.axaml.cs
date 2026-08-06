@@ -74,8 +74,9 @@ public partial class MainWindow : Window {
         exportPump.Tick += (_, _) => viewModel.Exports.Tick();
         exportPump.Start();
 
-        // Update checks: once shortly after startup, then daily.
-        updateDaily = new DispatcherTimer { Interval = TimeSpan.FromHours(24) };
+        // Update checks: once shortly after startup, then hourly — during the
+        // beta a new build should land the moment it is published.
+        updateDaily = new DispatcherTimer { Interval = TimeSpan.FromHours(1) };
         updateDaily.Tick += async (_, _) => await CheckForUpdateAsync();
         updateStartup = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         updateStartup.Tick += async (_, _) => {
@@ -103,8 +104,7 @@ public partial class MainWindow : Window {
     async Task CheckForUpdateAsync() {
         if (updatePromptOpen) return;
         try {
-            var settings = await Task.Run(() => SettingsStore.Load());
-            if (await UpdateChecker.CheckAsync(settings) is not { } info) return;
+            if (await UpdateChecker.CheckAsync() is not { } info) return;
             SessionLog.Event("update", $"v{info.Version} available");
             updatePromptOpen = true;
             try {
