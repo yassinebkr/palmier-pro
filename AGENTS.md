@@ -37,6 +37,7 @@ Use `swift build --traits BundledSpeech` for changes that touch MLX, speech anal
 - The user-selectable accent drives accent details AND `Button.primary` fills (rest/hover/pressed shades computed in `Core/Accent.cs`); green/red are state indicators only.
 - Every inspector/commit path goes through intent APIs on the host; one coherent user intent = one undo entry; failed/no-op intents create none.
 - UI verification needs a real run + screenshot (see `PalmierWin/.build/uix.ps1` driving conventions); never claim UI passes without a screenshot or the user's confirmation.
+- Debug builds never poll for updates (a 0.1.0 dev version would always "update" to the latest release and stop being the dev build); `--update-demo` still exercises the dialog, and `run-shell.ps1` passes `--no-update` for good measure.
 - A running PalmierShell.exe locks `PalmierCoreHost.dll` and `bin/` — close it before rebuilding; never kill an instance you didn't start.
 
 ## Engineering approach
