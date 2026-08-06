@@ -24,6 +24,8 @@ public sealed class TimelineView : Control {
     internal static readonly Color TextClipColor = Color.Parse("#715486");
     internal static readonly Color MeterAmberColor = Color.Parse("#E5A54F");
     internal static readonly Color MeterClipColor = Color.Parse("#E54F4F");
+    // Meters are state indicators, so green/red are fixed — never the accent.
+    internal static readonly Color MeterSafeColor = Color.Parse("#8FBF3F");
 
     static readonly Typeface LabelTypeface = new("Inter");
 
@@ -114,6 +116,7 @@ public sealed class TimelineView : Control {
     /// The track whose header gain strip contains `p` (view coordinates).
     TrackState? GainStripAt(Point p) {
         if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X >= HeaderWidth) return null;
+        if (p.X >= MeterX) return null;  // the meter column owns those pixels
         double contentY = p.Y + vm.ScrollOffsetY;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
             if (GainStripRect(track, rowY, height) is { } strip && strip.Contains(new Point(p.X, contentY)))
@@ -650,7 +653,7 @@ public sealed class TimelineView : Control {
             double fillH = fillFrac * bar.Height;
             var fill = meter.Clipped || meter.LevelDb >= -3 ? MeterClipColor
                 : meter.LevelDb >= -12 ? MeterAmberColor
-                : Accent.Current;
+                : MeterSafeColor;
             ctx.FillRectangle(new SolidColorBrush(fill),
                 new Rect(bar.X, bar.Bottom - fillH, bar.Width, fillH));
         }
@@ -760,8 +763,10 @@ public sealed class TimelineView : Control {
                 e.Pointer.Capture(this);
                 return;
             }
-            // Header toggle zone: the eye/mute glyph at the right of the name row.
-            if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
+            // Header toggle zone: the eye/mute glyph at the right of the name
+            // row. The meter column (audio rows) is display, not a button.
+            if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled &&
+                !(toggled.Type == "audio" && p.X >= MeterX))
                 vm.RequestTrackToggle(toggled);
             // The empty column below the last track has exactly one meaning:
             // track management. A left click opens it like the right click does.
