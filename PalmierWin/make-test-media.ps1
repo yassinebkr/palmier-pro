@@ -50,3 +50,31 @@ $outSilence = Join-Path $outDir "silence.mp4"
     -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outSilence
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outSilence"
+
+# Cover-art fixture: an h264+aac clip that also carries a PNG attached_pic
+# stream — the shape that broke probing of YouTube-style downloads.
+$png = Join-Path $outDir "cover.png"
+& $ffmpeg -y -f lavfi -i "color=c=red:size=64x64" -frames:v 1 $png
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+$outCover = Join-Path $outDir "coverart.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" -i $png `
+    -map 0:v -map 1:a -map 2:v -c:v:0 libx264 -pix_fmt yuv420p -c:a aac -c:v:1 png `
+    -disposition:v:1 attached_pic $outCover
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Remove-Item $png
+Write-Host "Generated $outCover"
+
+# Audio-only fixture: no video stream at all.
+$outAudio = Join-Path $outDir "audioonly.m4a"
+& $ffmpeg -y -f lavfi -i "sine=frequency=330:duration=3" -c:a aac $outAudio
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outAudio"
+
+# Known-level fixture: 440 Hz at exactly 0.5 amplitude, for waveform level checks.
+$outLoud = Join-Path $outDir "loudsine.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=2:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=2" -af "volume=0.5" `
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outLoud
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outLoud"
