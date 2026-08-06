@@ -181,7 +181,8 @@ public extension Track {
             clips: (try? c.decode([Clip].self, forKey: .clips)) ?? [],
             displayHeight: (try? c.decode(Double.self, forKey: .displayHeight))
                 .map { min(max($0, Track.displayHeightRange.lowerBound), Track.displayHeightRange.upperBound) } ?? 44,
-            gainDb: (try? c.decode(Double.self, forKey: .gainDb)) ?? 0,
+            gainDb: (try? c.decode(Double.self, forKey: .gainDb))
+                .map { min(max($0, -96), 12) } ?? 0,
             name: try? c.decode(String.self, forKey: .name)
         )
     }
