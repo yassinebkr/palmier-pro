@@ -320,6 +320,11 @@ public partial class MainWindow : Window {
             return;
         }
         updateStartup.Start();
+        // Dev flag: no update checks (screenshot/test runs must not self-update).
+        if (args.Contains("--no-update")) {
+            updateStartup.Stop();
+            updateDaily.Stop();
+        }
         bool addToTimeline = args.Contains("--add-to-timeline");
         foreach (var path in args.Where(a => !a.StartsWith("--") && File.Exists(a))) {
             await viewModel.Media.ImportFileAsync(Path.GetFullPath(path));
