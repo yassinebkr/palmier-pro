@@ -78,3 +78,15 @@ $outLoud = Join-Path $outDir "loudsine.mp4"
     -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outLoud
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outLoud"
+
+# Attached-pic-only audio: an m4a whose ONLY video stream is cover art — the
+# YouTube-rip shape. The probe must report audio-only, not the cover's pixels.
+$png2 = Join-Path $outDir "cover2.png"
+& $ffmpeg -y -f lavfi -i "color=c=blue:size=64x64" -frames:v 1 $png2
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+$outCoverOnly = Join-Path $outDir "coveronly.m4a"
+& $ffmpeg -y -f lavfi -i "sine=frequency=220:duration=3" -i $png2 `
+    -map 0:a -map 1:v -c:a aac -c:v png -disposition:v:0 attached_pic $outCoverOnly
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Remove-Item $png2
+Write-Host "Generated $outCoverOnly"
