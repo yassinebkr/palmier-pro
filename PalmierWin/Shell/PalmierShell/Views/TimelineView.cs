@@ -11,7 +11,6 @@ namespace PalmierShell.Views;
 /// Renders straight from the view model's TimelineState snapshot; all input
 /// (scrub, select, blade, zoom, scroll) is handled here.
 public sealed class TimelineView : Control {
-    internal const double RulerHeight = 24;
     internal const double HeaderWidth = 100;
     const double ClipCornerRadius = 4;
 
@@ -162,11 +161,11 @@ public sealed class TimelineView : Control {
             }
             var bracket = new Pen(new SolidColorBrush(TimecodeColor), 2);
             if (vm.RangeStart is not null && x0 >= HeaderWidth) {
-                ctx.DrawLine(bracket, new Point(x0, 0), new Point(x0, RulerHeight));
+                ctx.DrawLine(bracket, new Point(x0, 0), new Point(x0, TimelineMath.RulerHeight));
                 ctx.DrawLine(bracket, new Point(x0, 2), new Point(x0 + 5, 2));
             }
             if (vm.RangeEnd is not null && x1 >= HeaderWidth) {
-                ctx.DrawLine(bracket, new Point(x1, 0), new Point(x1, RulerHeight));
+                ctx.DrawLine(bracket, new Point(x1, 0), new Point(x1, TimelineMath.RulerHeight));
                 ctx.DrawLine(bracket, new Point(x1 - 5, 2), new Point(x1, 2));
             }
         }
@@ -186,22 +185,22 @@ public sealed class TimelineView : Control {
             }
             var tick = new Pen(accent, 2);
             if (loopStart is not null && lx0 >= HeaderWidth)
-                ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, RulerHeight));
+                ctx.DrawLine(tick, new Point(lx0, 0), new Point(lx0, TimelineMath.RulerHeight));
             if (loopEnd is not null && lx1 >= HeaderWidth)
-                ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, RulerHeight));
+                ctx.DrawLine(tick, new Point(lx1, 0), new Point(lx1, TimelineMath.RulerHeight));
         }
 
         if (snapGuideFrame is { } snapFrame) {
             double sx = FrameToX(snapFrame);
             if (sx >= HeaderWidth)
                 ctx.DrawLine(new Pen(new SolidColorBrush(TimecodeColor), 1),
-                    new Point(sx, RulerHeight), new Point(sx, bounds.Height));
+                    new Point(sx, TimelineMath.RulerHeight), new Point(sx, bounds.Height));
         }
         if (vm.Tool == TimelineTool.Blade && bladeHoverFrame is { } bladeFrame) {
             double bx = FrameToX(bladeFrame);
             if (bx >= HeaderWidth)
                 ctx.DrawLine(new Pen(new SolidColorBrush(Color.Parse("#CCFFFFFF")), 1),
-                    new Point(bx, RulerHeight), new Point(bx, bounds.Height));
+                    new Point(bx, TimelineMath.RulerHeight), new Point(bx, bounds.Height));
         }
 
         RenderPlayhead(ctx, bounds);
@@ -209,7 +208,7 @@ public sealed class TimelineView : Control {
 
     void RenderRuler(DrawingContext ctx, Rect bounds) {
         ctx.FillRectangle(new SolidColorBrush(RaisedColor),
-            new Rect(0, 0, bounds.Width, RulerHeight));
+            new Rect(0, 0, bounds.Width, TimelineMath.RulerHeight));
 
         double ppf = vm!.PixelsPerFrame;
         // Major tick every second; thin out labels when zoomed far out.
@@ -224,7 +223,7 @@ public sealed class TimelineView : Control {
             if (x < HeaderWidth) continue;
             int second = f / framesPerMajor;
             bool labeled = second % labelEvery == 0;
-            ctx.DrawLine(tickPen, new Point(x, labeled ? 6 : 14), new Point(x, RulerHeight));
+            ctx.DrawLine(tickPen, new Point(x, labeled ? 6 : 14), new Point(x, TimelineMath.RulerHeight));
             if (labeled) {
                 var text = new FormattedText(FormatTimecode(f), System.Globalization.CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, LabelTypeface, 10,
@@ -605,11 +604,11 @@ public sealed class TimelineView : Control {
         }
         if (p.X < HeaderWidth) {
             // Header toggle zone: the eye/mute glyph at the right of the name row.
-            if (p.Y >= RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
+            if (p.Y >= TimelineMath.RulerHeight && p.X >= 62 && TrackAt(p) is { } toggled)
                 vm.RequestTrackToggle(toggled);
             // The empty column below the last track has exactly one meaning:
             // track management. A left click opens it like the right click does.
-            else if (p.Y >= RulerHeight && TrackAt(p) is null)
+            else if (p.Y >= TimelineMath.RulerHeight && TrackAt(p) is null)
                 ShowTrackMenu(p);
             return;
         }
@@ -888,7 +887,7 @@ public sealed class TimelineView : Control {
     /// The junction under a point, with its track — used by the context menu
     /// and the transition affordance as well as the roll drag.
     public (TrackState Track, ClipState Left, ClipState Right)? JunctionAt(Point p) {
-        if (vm?.State is null || p.Y < RulerHeight || p.X < HeaderWidth) return null;
+        if (vm?.State is null || p.Y < TimelineMath.RulerHeight || p.X < HeaderWidth) return null;
         if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
         return JunctionUnderPointer(track, p.X) is { } cut ? (track, cut.Left, cut.Right) : null;
     }
@@ -958,7 +957,7 @@ public sealed class TimelineView : Control {
     }
 
     (TrackState Track, ClipState Clip)? HitTestClip(Point p) {
-        if (vm?.State is null || p.Y < RulerHeight) return null;
+        if (vm?.State is null || p.Y < TimelineMath.RulerHeight) return null;
         if (vm.Layout.TrackAt(p.Y) is not { } track) return null;
         int frame = XToFrame(p.X);
         var clip = track.Clips.FirstOrDefault(c => frame >= c.StartFrame && frame < c.EndFrame);

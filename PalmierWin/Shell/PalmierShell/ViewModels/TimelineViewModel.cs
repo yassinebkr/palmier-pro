@@ -2,7 +2,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PalmierShell.Core;
-using PalmierShell.Views;
 
 namespace PalmierShell.ViewModels;
 
@@ -34,7 +33,7 @@ public sealed partial class TimelineViewModel : ObservableObject {
     /// Geometry for the current state; rebuilt on state reload / compact toggle.
     public TrackLayout Layout { get; private set; } = new([], 0, _ => 50);
 
-    void RebuildLayout() => Layout = new TrackLayout(State?.Tracks ?? [], TimelineView.RulerHeight,
+    void RebuildLayout() => Layout = new TrackLayout(State?.Tracks ?? [], TimelineMath.RulerHeight,
         t => CompactRows ? 28 : t.RenderHeight);
 
     partial void OnCompactRowsChanged(bool value) => RebuildLayout();
