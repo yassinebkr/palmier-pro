@@ -95,7 +95,7 @@ public func palmierAudioSync(_ handle: UnsafeMutableRawPointer?) -> Int32 {
     return 1
 }
 
-/// Test seam: the track gain folded into `clipId`'s mix entry at the last
+/// Test seam: the track gain folded into `clipId`'s mix entry at the current
 /// sync, or NaN when the clip is not in the mix.
 @_cdecl("palmier_audio_clip_track_gain")
 public func palmierAudioClipTrackGain(_ handle: UnsafeMutableRawPointer?, _ clipId: UnsafePointer<CChar>?) -> Double {
