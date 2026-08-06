@@ -65,6 +65,7 @@ public sealed class TimelineView : Control {
     // Track-resize drag state (Select tool, grabbed the header's bottom edge).
     string? resizeTrackId;
     double resizeStartY, resizeOriginalHeight, resizePreviewHeight;
+    bool resizeActive;
 
     /// 0/1 when `x` grabs the loop range's start/end edge, else null.
     int? LoopEdgeUnderPointer(double x) {
@@ -75,8 +76,11 @@ public sealed class TimelineView : Control {
     }
 
     /// The (track, row height) whose bottom edge is within grab range of `y`.
+    /// Compact rows are a uniform display override, so there is no per-track
+    /// edge to resize — arming one would write a layout-height shrink into
+    /// the model as a "grow".
     (TrackState Track, double Height)? ResizeEdgeAt(double y) {
-        if (vm?.State is null) return null;
+        if (vm?.State is null || vm.CompactRows) return null;
         foreach (var (track, rowY, height) in vm.Layout.Rows)
             if (Math.Abs(y - (rowY + height)) <= EdgeGrabWidth) return (track, height);
         return null;
@@ -1024,8 +1028,12 @@ public sealed class TimelineView : Control {
             return;
         }
         if (resizeTrackId is not null) {
-            resizePreviewHeight = Math.Clamp(resizeOriginalHeight + (p.Y - resizeStartY), 32, 200);
-            InvalidateVisual();
+            double rawHeight = resizeOriginalHeight + (p.Y - resizeStartY);
+            if (!resizeActive && Math.Abs(rawHeight - resizeOriginalHeight) > 2) resizeActive = true;
+            if (resizeActive) {
+                resizePreviewHeight = Math.Clamp(rawHeight, 32, 200);
+                InvalidateVisual();
+            }
             return;
         }
         if (scrubbing) {
@@ -1159,7 +1167,8 @@ public sealed class TimelineView : Control {
             else if (dragDeltaFrames != 0)
                 vm?.RequestMove(id, dragOriginalStart + dragDeltaFrames);
         }
-        if (resizeTrackId is { } rtid && Math.Abs(resizePreviewHeight - resizeOriginalHeight) > 0.5)
+        if (resizeTrackId is { } rtid && resizeActive &&
+            Math.Abs(resizePreviewHeight - resizeOriginalHeight) > 0.5)
             vm?.RequestTrackResize(rtid, (int)Math.Round(resizePreviewHeight));
         DisarmGesture();
         e.Pointer.Capture(null);
@@ -1192,6 +1201,8 @@ public sealed class TimelineView : Control {
                      || dragClipId is not null || envelopeActive || fadeActive
                      || loopDragEdge >= 0 || resizeTrackId is not null;
         resizeTrackId = null;
+        resizeActive = false;
+        resizePreviewHeight = 0;
         loopDragEdge = -1;
         loopDragActive = false;
         envelopeClipId = null;
