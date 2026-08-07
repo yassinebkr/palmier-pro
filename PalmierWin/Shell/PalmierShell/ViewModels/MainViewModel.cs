@@ -2,6 +2,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PalmierShell.Core;
+using PalmierShell.Core.Mcp;
 
 namespace PalmierShell.ViewModels;
 
@@ -17,13 +18,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     public InspectorViewModel Inspector { get; }
     public AgentViewModel Agent { get; }
     public ExportQueue Exports { get; }
+    /// The MCP server lifecycle (agent mode, approval gate); McpPanel is its
+    /// face when the mode is external.
+    public McpHost Mcp { get; }
+    public McpPanelViewModel McpPanel { get; }
 
     EngineSession? engine;
     IntPtr audio;
     IntPtr agentHandle;
     bool followingEngine;
 
-    public MainViewModel() {
+    public MainViewModel(int mcpPort = McpServer.DefaultPort) {
         Project = CoreApi.palmier_project_create();
         audio = CoreApi.palmier_audio_create(Project);  // Zero: no output device; app runs silent
         Timeline = new TimelineViewModel(Project);
@@ -41,6 +46,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         // The project is resolved lazily so a queued job always encodes the
         // current project, even across New/Open while it waits.
         Exports = new ExportQueue(new CoreExportRunner(), () => Project);
+        string appVersion = typeof(App).Assembly.GetName().Version is { } v
+            ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.1.0";
+        Mcp = new McpHost(new McpTools(() => Project, Timeline, () => Media.Items, Undo),
+                          async work => await Dispatcher.UIThread.InvokeAsync(work),
+                          appVersion, mcpPort);
+        McpPanel = new McpPanelViewModel(Mcp);
         // Clip selection and library selection are mutually exclusive.
         Timeline.PropertyChanged += (_, e) => {
             if (e.PropertyName != nameof(TimelineViewModel.SelectedClipId)) return;
@@ -209,12 +220,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         UserInitial = UserBadge.Initial(settings.UserName);
         NeedsWelcome = string.IsNullOrWhiteSpace(settings.UserName);
         Timeline.SnapEnabled = settings.SnapEnabled;
+        Mcp.ApplySettings(settings);
         PreferencesReady = true;
         PreferencesApplied?.Invoke();
+        preferencesLoaded.TrySetResult();
     }
 
     /// Lets the timeline toolbar refresh its snap button once preferences land.
     public event Action? PreferencesApplied;
+
+    readonly TaskCompletionSource preferencesLoaded =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// Awaitable form of PreferencesApplied, for ordered startup and tests.
+    public Task PreferencesLoaded => preferencesLoaded.Task;
 
     /// True once the settings read has landed, so the shell can decide on the
     /// first-run welcome dialog without racing it.
@@ -1062,11 +1081,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
 
     int disposed;
 
-    /// Shutdown order matters: stop the agent poller before its handle dies,
-    /// stop the render loop before the project it composites dies. Called
-    /// from the window's Closed event; safe to call twice.
+    /// Shutdown order matters: stop the MCP server and the agent poller
+    /// before their handles die, stop the render loop before the project it
+    /// composites dies. Called from the window's Closed event; safe to call
+    /// twice.
     public void Dispose() {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+        Mcp.Shutdown();
+        McpPanel.Dispose();
         Agent.Shutdown();
         Media.Generate.CancelAll();
         engine?.Dispose();

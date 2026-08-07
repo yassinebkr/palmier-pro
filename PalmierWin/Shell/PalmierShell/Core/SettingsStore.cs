@@ -7,6 +7,9 @@ namespace PalmierShell.Core;
 public sealed record AppSettings(string Provider, string Model) {
     public static readonly AppSettings Default = new("anthropic", "claude-opus-5");
 
+    public const string AgentModeInline = "inline";
+    public const string AgentModeExternal = "external";
+
     /// API keys by provider id. Encrypted individually at rest.
     public IReadOnlyDictionary<string, string> Keys { get; init; } =
         new Dictionary<string, string>();
@@ -27,6 +30,14 @@ public sealed record AppSettings(string Provider, string Model) {
     /// The composer's prompt builder section; expanded until the user folds it.
     public bool PromptBuilderExpanded { get; init; } = true;
 
+    /// Who drives the editing tools: the built-in chat agent, or an external
+    /// MCP client through the loopback server.
+    public string AgentMode { get; init; } = AgentModeInline;
+
+    /// MCP client names the user approved; their future sessions skip the
+    /// pending gate.
+    public IReadOnlyList<string> ApprovedMcpClients { get; init; } = [];
+
     /// "Later" on an update prompt suppresses it until this moment.
     public DateTimeOffset? UpdateSnoozeUntil { get; init; }
 
@@ -45,6 +56,10 @@ public sealed record AppSettings(string Provider, string Model) {
         var models = new Dictionary<string, string>(Models) { [provider] = model };
         return this with { Models = models };
     }
+
+    public AppSettings WithApprovedMcpClient(string name) =>
+        ApprovedMcpClients.Contains(name) ? this
+            : this with { ApprovedMcpClients = [..ApprovedMcpClients, name] };
 }
 
 /// Persists app settings under %APPDATA%\PalmierPro. API keys are encrypted
@@ -72,6 +87,8 @@ public static class SettingsStore {
         public string UserName { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
         public bool PromptBuilderExpanded { get; init; } = true;
+        public string AgentMode { get; init; } = AppSettings.AgentModeInline;
+        public List<string> ApprovedMcpClients { get; init; } = new();
         public DateTimeOffset? UpdateSnoozeUntil { get; init; }
         public string UpdateSkipVersion { get; init; } = "";
     }
@@ -100,6 +117,8 @@ public static class SettingsStore {
                 UserName = persisted.UserName,
                 SnapEnabled = persisted.SnapEnabled,
                 PromptBuilderExpanded = persisted.PromptBuilderExpanded,
+                AgentMode = persisted.AgentMode,
+                ApprovedMcpClients = [..persisted.ApprovedMcpClients],
                 UpdateSnoozeUntil = persisted.UpdateSnoozeUntil,
                 UpdateSkipVersion = persisted.UpdateSkipVersion,
             };
@@ -128,6 +147,8 @@ public static class SettingsStore {
                     UserName = settings.UserName,
                     SnapEnabled = settings.SnapEnabled,
                     PromptBuilderExpanded = settings.PromptBuilderExpanded,
+                    AgentMode = settings.AgentMode,
+                    ApprovedMcpClients = [..settings.ApprovedMcpClients],
                     UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
                     UpdateSkipVersion = settings.UpdateSkipVersion,
                 }));

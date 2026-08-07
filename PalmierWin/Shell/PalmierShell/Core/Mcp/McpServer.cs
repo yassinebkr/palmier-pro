@@ -15,8 +15,8 @@ public enum McpServerState { Stopped, Running, Busy, Failed }
 /// time, because timeline mutations touch observable state.
 ///
 /// Lifecycle: Start/Stop are idempotent; a taken port reports Busy, any other
-/// bind failure Failed — no exception escapes. MainWindow stops the server
-/// ahead of engine teardown; a handler abandoned mid-flight is caught by the
+/// bind failure Failed — no exception escapes. McpHost stops the server ahead
+/// of engine teardown; a handler abandoned mid-flight is caught by the
 /// core's dead-handle guards and CallTool's catch, never a crash.
 public sealed class McpServer : IDisposable {
     public const int DefaultPort = 19789;
@@ -31,6 +31,9 @@ public sealed class McpServer : IDisposable {
     readonly McpTools tools;
     readonly Func<Func<object?>, Task<object?>> invokeOnUi;
     readonly string version;
+    /// Decides whether a client's initialize goes live immediately; null (the
+    /// --mcp dev path and tests) approves every client.
+    readonly Func<string, bool>? isClientApproved;
     readonly ConcurrentDictionary<string, McpSession> sessions = new();
     /// One tool executes at a time even when requests arrive in parallel; the
     /// direct-execution seam used in tests has no UI thread to serialize them.
@@ -41,24 +44,34 @@ public sealed class McpServer : IDisposable {
 
     public McpServerState State { get; private set; } = McpServerState.Stopped;
 
-    /// The bound port — after Start with port 0, the ephemeral port chosen.
+    /// The bound port — after a failed Start, the port it tried to bind.
     public int Port { get; private set; }
 
-    /// Live sessions, oldest connection first. Slice 2's panel renders this.
+    /// The port the next Start will try (0: an ephemeral one, chosen then).
+    public int RequestedPort => requestedPort;
+
+    /// Raised from listener threads when the session set or a session's call
+    /// log changes: connect, accept, drop, tool call. Not raised for Stop —
+    /// the owner reports lifecycle transitions itself.
+    public event Action? Changed;
+
+    /// Live sessions, oldest connection first. The connection panel renders this.
     public IReadOnlyList<McpSession> Sessions =>
         sessions.Values.OrderBy(s => s.ConnectedAt).ToList();
 
     public McpServer(int port, McpTools tools, Func<Func<object?>, Task<object?>> invokeOnUi,
-                     string version = "0.1.0") {
+                     string version = "0.1.0", Func<string, bool>? isClientApproved = null) {
         requestedPort = port;
         this.tools = tools;
         this.invokeOnUi = invokeOnUi;
         this.version = version;
+        this.isClientApproved = isClientApproved;
     }
 
     public void Start() {
         if (State == McpServerState.Running) return;
         int port = requestedPort == 0 ? ReserveFreePort() : requestedPort;
+        Port = port;  // reported even on failure, so a Busy state names the port
         var candidate = new HttpListener();
         // Loopback only: the editor must never be reachable from the LAN.
         candidate.Prefixes.Add($"http://127.0.0.1:{port}/");
@@ -77,7 +90,6 @@ public sealed class McpServer : IDisposable {
             return;
         }
         listener = candidate;
-        Port = port;
         State = McpServerState.Running;
         loopCts = new CancellationTokenSource();
         acceptLoop = Task.Run(() => AcceptLoop(candidate, loopCts.Token));
@@ -108,6 +120,24 @@ public sealed class McpServer : IDisposable {
     public void Dispose() {
         Stop();
         toolGate.Dispose();
+    }
+
+    /// The panel's Accept: a pending session goes live. False when the id is
+    /// already gone (dropped, pruned, or the server restarted).
+    public bool AcceptSession(string id) {
+        if (!sessions.TryGetValue(id, out var session)) return false;
+        session.Pending = false;
+        SessionLog.Event("mcp", $"session approved: {session.ClientName}");
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// The panel's Deny and Disconnect share one mechanic: the session is
+    /// dropped, and the client's next request reads the 404 as "re-initialize".
+    public bool DropSession(string id) {
+        if (!sessions.TryRemove(id, out _)) return false;
+        Changed?.Invoke();
+        return true;
     }
 
     /// Asks http.sys for a free loopback port by way of a throwaway socket.
@@ -220,6 +250,11 @@ public sealed class McpServer : IDisposable {
         if (!hasId)
             return (202, null, null);
 
+        // The approval gate: a pending session may ping (and re-initialize),
+        // but tool discovery and execution wait for the user's Accept.
+        if (session is { Pending: true } && method is "tools/list" or "tools/call")
+            return RpcError(id, -32001, "Waiting for user approval in PalmierWin");
+
         switch (method) {
             case "initialize":
                 return Initialize(request);
@@ -240,10 +275,14 @@ public sealed class McpServer : IDisposable {
         var clientInfo = (request["params"] as JsonObject)?["clientInfo"] as JsonObject;
         string ClientField(string key) =>
             clientInfo?[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
-        var session = new McpSession(sessionId, ClientField("name"), ClientField("version"));
+        var session = new McpSession(sessionId, ClientField("name"), ClientField("version")) {
+            Pending = isClientApproved?.Invoke(ClientField("name")) == false,
+        };
         sessions[sessionId] = session;
         SessionLog.Event("mcp",
-            $"session started: {session.ClientName} {session.ClientVersion}".TrimEnd());
+            $"session started: {session.ClientName} {session.ClientVersion}".TrimEnd() +
+            (session.Pending ? " (pending approval)" : ""));
+        Changed?.Invoke();
         var result = new JsonObject {
             // Clamped echo: 2025-06-18 is the only version this server speaks.
             ["protocolVersion"] = ProtocolVersion,
@@ -281,6 +320,7 @@ public sealed class McpServer : IDisposable {
         }
         session.Record(new McpSession.ToolCall(name, result.Summary, !result.IsError,
                                                DateTimeOffset.UtcNow));
+        Changed?.Invoke();
         return RpcResult(id, new JsonObject {
             ["content"] = new JsonArray {
                 new JsonObject { ["type"] = "text", ["text"] = result.Text },
