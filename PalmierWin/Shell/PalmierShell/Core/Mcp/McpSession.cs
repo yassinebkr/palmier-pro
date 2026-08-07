@@ -12,6 +12,12 @@ public sealed class McpSession {
     public string ClientVersion { get; }
     public DateTimeOffset ConnectedAt { get; } = DateTimeOffset.UtcNow;
 
+    /// Waiting on the user's Accept in the connection panel; the server
+    /// refuses tools/list and tools/call while this is set. Read on listener
+    /// threads, flipped once (true → false) by Accept — Volatile, like below.
+    public bool Pending { get => Volatile.Read(ref pending); internal set => Volatile.Write(ref pending, value); }
+    bool pending;
+
     long lastActivityTicks = DateTimeOffset.UtcNow.UtcTicks;
 
     /// Ticks behind Volatile: DateTimeOffset is two words, so a plain

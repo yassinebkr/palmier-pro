@@ -5,7 +5,7 @@
         xmlns:core="clr-namespace:PalmierShell.Core"
         x:Class="PalmierShell.Views.SettingsWindow"
         x:DataType="vm:AgentViewModel"
-        Title="Settings" Width="460" Height="470" CanResize="False"
+        Title="Settings" Width="460" Height="540" CanResize="False"
         WindowStartupLocation="CenterOwner"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
@@ -53,6 +53,14 @@
       </TabItem>
       <TabItem Header="AI" FontSize="12">
         <StackPanel Margin="8,4" Spacing="4">
+          <TextBlock Classes="section" Text="AI AGENT"/>
+          <RadioButton x:Name="AgentModeInline" FontSize="12"
+                       Content="Built-in agent (provider, key, and model below)"/>
+          <RadioButton x:Name="AgentModeExternal" FontSize="12"
+                       Content="External MCP client (Claude Desktop…)"/>
+          <!-- Live server state; the mode radios apply immediately. -->
+          <TextBlock x:Name="AgentModeStatus" FontSize="10" Margin="0,2,0,0"
+                     Foreground="{StaticResource ThemeTextMutedBrush}" Text="Off"/>
           <TextBlock Classes="section" Text="PROVIDER"/>
           <ComboBox x:Name="ProviderBox" HorizontalAlignment="Stretch" FontSize="12"
                     ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}">

@@ -56,10 +56,9 @@ public partial class MainWindow : Window {
         ApplyLayout(Program.Layout);
         Closing += OnClosing;
         Closed += (_, _) => {
-            // Stop the listener before the engine handles die (the agent
-            // shutdown ordering); a request abandoned mid-flight is refused
-            // by the core's dead-handle guards, not saved by this ordering.
-            mcpServer?.Stop();
+            // The MCP server stops inside Dispose, before the engine handles
+            // die (the agent shutdown ordering); a request abandoned
+            // mid-flight is refused by the core's dead-handle guards.
             viewModel.Dispose();
         };
         Opened += OnOpened;
@@ -139,8 +138,10 @@ public partial class MainWindow : Window {
         var choice = await WelcomeDialog.ShowAsync(this);
         if (choice is null) return;  // closed: nothing saved, asked again next launch
         viewModel.SetUserName(choice.Name);
-        await Task.Run(() => SettingsStore.Update(s =>
-            s with { UserName = choice.Name, Accent = choice.AccentHex }));
+        var updated = await Task.Run(() => SettingsStore.Update(s =>
+            s with { UserName = choice.Name, Accent = choice.AccentHex,
+                     AgentMode = choice.AgentMode }));
+        viewModel.Mcp.ApplySettings(updated);
     }
 
     /// Borderless windows are sized past the screen edges when maximized;
@@ -338,8 +339,9 @@ public partial class MainWindow : Window {
             updateDaily.Stop();
         }
         // Dev flag: --mcp [--mcp-port N] serves the editor's tools to external
-        // MCP clients (Claude Desktop et al.) on 127.0.0.1.
-        if (args.Contains("--mcp")) StartMcpServer(args);
+        // MCP clients (Claude Desktop et al.) on 127.0.0.1 — external mode for
+        // this session only, every client pre-approved, nothing persisted.
+        if (args.Contains("--mcp")) viewModel.Mcp.StartDevServer(ParseMcpPort(args));
         // Model manifest sync: data, not app updates — runs in every build,
         // quiet unless the model list actually changed.
         _ = Task.Run(() => viewModel.Media.Generate.StartupSyncAsync());
@@ -360,26 +362,12 @@ public partial class MainWindow : Window {
         }
     }
 
-    McpServer? mcpServer;
-
-    void StartMcpServer(string[] args) {
-        int port = McpServer.DefaultPort;
+    static int ParseMcpPort(string[] args) {
         if (Array.IndexOf(args, "--mcp-port") is var portAt && portAt >= 0 &&
             int.TryParse(args.ElementAtOrDefault(portAt + 1), out int parsed) &&
             parsed is > 0 and < 65536)
-            port = parsed;
-        var tools = new McpTools(() => viewModel.Project, viewModel.Timeline,
-                                 () => viewModel.Media.Items, viewModel.Undo);
-        string version = typeof(App).Assembly.GetName().Version is { } v
-            ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.1.0";
-        mcpServer = new McpServer(port, tools,
-            async work => await Dispatcher.UIThread.InvokeAsync(work), version);
-        mcpServer.Start();
-        SessionLog.Event("mcp", mcpServer.State switch {
-            McpServerState.Running => $"listening on http://127.0.0.1:{mcpServer.Port}/mcp",
-            McpServerState.Busy => $"port {port} busy — MCP server not started",
-            _ => $"MCP server failed to start on port {port}",
-        });
+            return parsed;
+        return McpServer.DefaultPort;
     }
 
     void OnViewerTabClose(object? sender, PointerPressedEventArgs e) {

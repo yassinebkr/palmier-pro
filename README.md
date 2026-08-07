@@ -31,6 +31,21 @@ The Windows app is real and running. What works today:
 
 Architecture: the shell talks to the Swift core in-proc through a thin `@_cdecl` C ABI (`PalmierCoreHost.dll`) — no COM, no WinUI 3. See [`docs/windows-port-proposal.md`](docs/windows-port-proposal.md) for the port's foundations and the `PalmierWin/` directory for the engine.
 
+## Connect an external agent (MCP)
+
+The editing tools can be driven by an external MCP client instead of the built-in chat agent: pick *Settings → AI → AI agent → External MCP client*, then approve the client in the left panel when it connects. The server listens on `127.0.0.1:19789` (loopback only) and speaks streamable-HTTP JSON-RPC at `/mcp`. Claude Desktop needs the stdio→HTTP shim at `mcpb/server/index.js` — add this to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "palmierwin": {
+      "command": "node",
+      "args": ["C:\\path\\to\\palmier-pro\\mcpb\\server\\index.js"]
+    }
+  }
+}
+```
+
 ## Building
 
 Requirements: Swift 6.3.3+ (`x86_64-unknown-windows-msvc`), .NET 9 SDK, MSVC Build Tools, an NVIDIA/AMD/Intel GPU with Vulkan.

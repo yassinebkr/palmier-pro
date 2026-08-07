@@ -4,11 +4,11 @@ using PalmierShell.Core;
 
 namespace PalmierShell.Views;
 
-/// First run only: collect the name behind the top-right badge and an accent.
-/// The accent previews live; closing without Continue saves nothing, so the
-/// dialog comes back next launch.
+/// First run only: collect the name behind the top-right badge, an accent,
+/// and which agent drives the tools. The accent previews live; closing
+/// without Continue saves nothing, so the dialog comes back next launch.
 public partial class WelcomeDialog : Window {
-    public sealed record Choice(string Name, string AccentHex);
+    public sealed record Choice(string Name, string AccentHex, string AgentMode);
 
     readonly string accentOnOpen;
     string accentHex;
@@ -26,7 +26,7 @@ public partial class WelcomeDialog : Window {
         Closed += (_, _) => { if (result is null) Accent.Apply(accentOnOpen); };
     }
 
-    /// Returns the chosen name and accent, or null when the dialog was closed.
+    /// Returns the chosen name, accent, and agent mode — or null when closed.
     public static async Task<Choice?> ShowAsync(Window owner) {
         var dialog = new WelcomeDialog();
         await dialog.ShowDialog(owner);
@@ -50,7 +50,9 @@ public partial class WelcomeDialog : Window {
     void Commit() {
         string name = NameBox.Text?.Trim() ?? "";
         if (name.Length == 0) return;
-        result = new Choice(name, accentHex);
+        string mode = ModeExternal.IsChecked == true
+            ? AppSettings.AgentModeExternal : AppSettings.AgentModeInline;
+        result = new Choice(name, accentHex, mode);
         Close();
     }
 
