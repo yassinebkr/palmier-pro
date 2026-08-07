@@ -34,6 +34,9 @@ public static class LocationContext {
 
     /// A tag made only of coordinate characters is still coordinates even when
     /// it does not parse — it must never fall through into a prompt as "text".
+    /// NMEA/DMS forms (48.85N, °'″) pass as free text by design: iPhone
+    /// ISO6709, the documented source, is decimal, and the resolved text is
+    /// always shown in the UI before it is sent.
     public static bool LooksLikeCoordinates(string tag) {
         string trimmed = tag.Trim();
         if (trimmed.Length == 0) return false;
@@ -58,6 +61,7 @@ public sealed class GeocodeService {
     readonly object gate = new();
     readonly Dictionary<string, Task<string?>> inflight = new();
     readonly HashSet<string> sessionFailures = new();
+    int tmpCounter;
     Dictionary<string, string>? diskCache;
 
     public GeocodeService(HttpMessageHandler? handler = null, string? cacheDirectory = null) {
@@ -85,32 +89,44 @@ public sealed class GeocodeService {
                 return Task.FromResult<string?>(hit);
             if (sessionFailures.Contains(key)) return Task.FromResult<string?>(null);
             if (inflight.TryGetValue(key, out Task<string?>? pending)) return pending;
-            var task = ResolveAsync(key, coords.Lat, coords.Lon, ct);
-            inflight[key] = task;
-            return task;
+            // Registered before any work runs: even a synchronously
+            // completing lookup must join this flight, not duplicate it.
+            var completion = new TaskCompletionSource<string?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            inflight[key] = completion.Task;
+            _ = CompleteAsync(completion, key, coords.Lat, coords.Lon, ct);
+            return completion.Task;
         }
     }
 
     static string Key(double lat, double lon) =>
         FormattableString.Invariant($"{lat:F3},{lon:F3}");
 
-    async Task<string?> ResolveAsync(string key, double lat, double lon, CancellationToken ct) {
+    async Task CompleteAsync(TaskCompletionSource<string?> completion, string key,
+                             double lat, double lon, CancellationToken ct) {
+        string? result;
         try {
-            var cache = await CacheAsync().ConfigureAwait(false);
-            lock (gate) {
-                if (cache.TryGetValue(key, out string? hit)) return hit;
-            }
-            string? place = await FetchAsync(lat, lon, ct).ConfigureAwait(false);
-            if (place is null) {
-                lock (gate) sessionFailures.Add(key);
-                return null;
-            }
-            lock (gate) cache[key] = place;
-            WriteCacheAtomic(cache);
-            return place;
-        } finally {
-            lock (gate) inflight.Remove(key);
+            result = await ResolveAsync(key, lat, lon, ct).ConfigureAwait(false);
+        } catch {
+            result = null;   // every failure reads as "unavailable", never thrown
         }
+        lock (gate) inflight.Remove(key);
+        completion.TrySetResult(result);
+    }
+
+    async Task<string?> ResolveAsync(string key, double lat, double lon, CancellationToken ct) {
+        var cache = await CacheAsync().ConfigureAwait(false);
+        lock (gate) {
+            if (cache.TryGetValue(key, out string? hit)) return hit;
+        }
+        string? place = await FetchAsync(lat, lon, ct).ConfigureAwait(false);
+        if (place is null) {
+            lock (gate) sessionFailures.Add(key);
+            return null;
+        }
+        lock (gate) cache[key] = place;
+        WriteCacheAtomic(cache);
+        return place;
     }
 
     /// The cache file reads once per service, off the caller's thread.
@@ -188,7 +204,9 @@ public sealed class GeocodeService {
         lock (gate) json = JsonSerializer.Serialize(cache);
         try {
             Directory.CreateDirectory(cacheDir);
-            string tmp = CachePath + "." + Environment.ProcessId + ".tmp";
+            // Unique per writer: two keys resolving at once must not share a tmp file.
+            string tmp = $"{CachePath}.{Environment.ProcessId}." +
+                         $"{Interlocked.Increment(ref tmpCounter)}.tmp";
             File.WriteAllText(tmp, json);
             File.Move(tmp, CachePath, true);
         } catch {

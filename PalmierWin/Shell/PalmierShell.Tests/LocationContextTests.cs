@@ -115,23 +115,29 @@ public class LocationContextTests {
 
     [Fact]
     public async Task GeocodeComposesCityAndCountry() {
-        var geo = new GeocodeService(new StubHandler(ParisJson), TempDir());
+        var dir = TempDir();
+        var geo = new GeocodeService(new StubHandler(ParisJson), dir);
         Assert.Equal("Paris, France", await geo.DescribeAsync(ParisTag));
+        Cleanup(dir);
     }
 
     [Fact]
     public async Task GeocodeFallsBackThroughTheAddressFields() {
         const string json = """{"address":{"village":"Giverny","country":"France"}}""";
-        var geo = new GeocodeService(new StubHandler(json), TempDir());
+        var dir = TempDir();
+        var geo = new GeocodeService(new StubHandler(json), dir);
         Assert.Equal("Giverny, France", await geo.DescribeAsync(ParisTag));
+        Cleanup(dir);
     }
 
     [Fact]
     public async Task GeocodeFallsBackToATruncatedDisplayName() {
         const string json =
             """{"display_name":"Eiffel Tower, Avenue Anatole France, 75007 Paris, France"}""";
-        var geo = new GeocodeService(new StubHandler(json), TempDir());
+        var dir = TempDir();
+        var geo = new GeocodeService(new StubHandler(json), dir);
         Assert.Equal("Eiffel Tower, Avenue Anatole France", await geo.DescribeAsync(ParisTag));
+        Cleanup(dir);
     }
 
     [Fact]

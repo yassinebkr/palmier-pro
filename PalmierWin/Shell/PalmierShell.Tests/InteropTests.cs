@@ -111,6 +111,20 @@ public class InteropTests {
         Assert.Equal("+48.8566+002.3522/", probe.Value.Location);
     }
 
+    /// The probe line of location-tagged media carries a fifth field; the
+    /// host's duration parse must tolerate it, or the source monitor, trim
+    /// clamping and duration-less clip adds all break on GPS footage.
+    [Fact]
+    public void SetPreviewSource_AcceptsLocationTaggedMedia() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            Assert.True(CoreApi.palmier_project_set_preview_source(
+                project, TestMediaPath("gps.mp4")) > 0);
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
     [Fact]
     public void SplitClip_ProducesTwoContiguousClipsPlayingSameSource() {
         IntPtr project = CoreApi.palmier_project_create();

@@ -465,20 +465,36 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     return writeCString("\(width),\(height),\(fpsX100),\(totalFrames)\(location)", into: buf, size: bufSize)
 }
 
+/// Numeric fields of a `palmierProbeMedia` line, tolerating the optional
+/// trailing location field: the tag is always last and can never contain a
+/// comma (the probe flattens it), and `split` omits empty subsequences, so
+/// "four or more fields, Int fields 2 and 3" is the whole contract.
+func parseProbeLine(_ line: String) -> (fpsX100: Int, totalFrames: Int)? {
+    let parts = line.split(separator: ",")
+    guard parts.count >= 4, let fpsX100 = Int(parts[2]), let totalFrames = Int(parts[3]) else {
+        return nil
+    }
+    return (fpsX100, totalFrames)
+}
+
 /// Format-level location tag (iPhone ISO6709, or the generic "location" key),
-/// comma-prefixed for the probe line; empty when absent. Commas and newlines
-/// inside the tag are flattened so the single-line ASCII contract holds, and
-/// the tag is capped so a 128-byte buffer always fits the full probe line.
+/// comma-prefixed for the probe line; empty when absent. Commas become
+/// semicolons (the shell splits the line on them), and the tag is reduced to
+/// printable ASCII and capped at 56 characters (= bytes) so a 128-byte client
+/// buffer always fits the full single-line probe line.
 private func probeLocationTag(_ fmt: UnsafeMutablePointer<AVFormatContext>) -> String {
     guard fmt.pointee.metadata != nil else { return "" }
     for key in ["com.apple.quicktime.location.ISO6709", "location"] {
         guard let entry = key.withCString({ av_dict_get(fmt.pointee.metadata, $0, nil, 0) }),
               let raw = entry.pointee.value else { continue }
-        let tag = String(cString: raw)
+        // Lossy decode: String(cString:) assumes well-formed UTF-8.
+        let bytes = UnsafeRawBufferPointer(start: UnsafeRawPointer(raw), count: strlen(raw))
+        let printable = String(decoding: bytes, as: UTF8.self)
             .replacingOccurrences(of: ",", with: ";")
-            .replacingOccurrences(of: "\n", with: " ")
+            .utf8.filter { $0 >= 0x20 && $0 <= 0x7E }
+        let tag = String(decoding: printable, as: UTF8.self)
             .trimmingCharacters(in: .whitespaces)
-        if !tag.isEmpty { return ",\(String(tag.prefix(60)))" }
+        if !tag.isEmpty { return ",\(String(tag.prefix(56)))" }
     }
     return ""
 }
@@ -679,12 +695,10 @@ func sourceDurationFrames(path: String) -> Int? {
     mediaDurationLock.unlock()
     var buf = [CChar](repeating: 0, count: 128)
     var frames = -1
-    if palmierProbeMedia(path, &buf, 128) == 1 {
-        let parts = String(cString: buf).split(separator: ",")
-        if parts.count == 4, let fpsX100 = Int(parts[2]), let total = Int(parts[3]),
-           fpsX100 > 0, total > 0 {
-            frames = Int((Double(total) / (Double(fpsX100) / 100.0) * 30.0).rounded())
-        }
+    if palmierProbeMedia(path, &buf, 128) == 1,
+       let probe = parseProbeLine(String(cString: buf)),
+       probe.fpsX100 > 0, probe.totalFrames > 0 {
+        frames = Int((Double(probe.totalFrames) / (Double(probe.fpsX100) / 100.0) * 30.0).rounded())
     }
     mediaDurationLock.lock()
     mediaDurationCache[path] = frames
