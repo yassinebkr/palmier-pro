@@ -57,6 +57,9 @@ public sealed partial class InspectorViewModel : ObservableObject {
     [ObservableProperty] double vignetteAmount;
     [ObservableProperty] double grainAmount;
     [ObservableProperty] double glowIntensity;
+    [ObservableProperty] double glowRadius = 20;
+    [ObservableProperty] double glowThreshold = 0.6;
+    [ObservableProperty] double glowWarmth;
     [ObservableProperty] bool invertEnabled;
     [ObservableProperty] double liftR;
     [ObservableProperty] double liftG;
@@ -164,6 +167,9 @@ public sealed partial class InspectorViewModel : ObservableObject {
             VignetteAmount = clip.EffectNumber("stylize.vignette", "amount", 0);
             GrainAmount = clip.EffectNumber("stylize.grain", "amount", 0);
             GlowIntensity = clip.EffectNumber("stylize.glow", "intensity", 0);
+            GlowRadius = clip.EffectNumber("stylize.glow", "radius", 20);
+            GlowThreshold = clip.EffectNumber("stylize.glow", "threshold", 0.6);
+            GlowWarmth = clip.EffectNumber("stylize.glow", "warmth", 0);
             InvertEnabled = clip.EffectOf("stylize.invert") is not null;
             LiftR = clip.EffectNumber("color.wheels", "lift.r", 0);
             LiftG = clip.EffectNumber("color.wheels", "lift.g", 0);
@@ -431,8 +437,18 @@ public sealed partial class InspectorViewModel : ObservableObject {
     partial void OnGrainAmountChanged(double v) => CommitEffect("Grain", "stylize.grain",
         v == 0 ? null : new() { ["amount"] = v, ["size"] = 1.0 });
 
-    partial void OnGlowIntensityChanged(double v) => CommitEffect("Glow", "stylize.glow",
-        v == 0 ? null : new() { ["intensity"] = v, ["radius"] = 20.0, ["threshold"] = 0.6 });
+    partial void OnGlowIntensityChanged(double v) => CommitGlow();
+    partial void OnGlowRadiusChanged(double v) => CommitGlow();
+    partial void OnGlowThresholdChanged(double v) => CommitGlow();
+    partial void OnGlowWarmthChanged(double v) => CommitGlow();
+
+    void CommitGlow() => CommitEffect("Glow", "stylize.glow",
+        GlowIntensity == 0 ? null : new() {
+            ["intensity"] = GlowIntensity,
+            ["radius"] = GlowRadius,
+            ["threshold"] = GlowThreshold,
+            ["warmth"] = GlowWarmth,
+        });
 
     // "amount" is a placeholder — the ABI removes effects with empty params,
     // and invert has no real parameters.
