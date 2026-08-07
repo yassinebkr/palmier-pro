@@ -24,10 +24,10 @@ First launch asks your name and accent color. If something goes wrong, logs are 
 
 The Windows app is real and running. What works today:
 
-- **Editor shell (Avalonia):** AppTheme-faithful dark UI — media library (folders, search, grid/list, hover scrub), preview with transport + source-monitor tabs, custom timeline (filmstrips, waveforms, roll/trim/blade/ripple edits, snap, ranges, multi-track, tabs), inspector (transform, keyframes, fades, effects, LUT), undo/redo, project files (`.palmier` save/open/autosave), export queue to H.264/MP4, FCPXML interchange, auto-update.
-- **Media engine (Swift + Vulkan + FFmpeg):** frame-accurate decode with seek-and-walk caching, 12 effect kernels re-authored in SPIR-V, text layers, audio (miniaudio/WASAPI), composited-frame capture, offscreen export.
-- **AI agent:** multi-provider chat (Anthropic, OpenAI, Z.AI, Moonshot, OpenRouter) with tool-use editing of the timeline, streaming, permission prompts, live model lists.
-- **Generation:** Replicate and fal.ai integration (Seedance 2.0, Kling 3.0, Veo 3 families) with first/last-frame transitions generated straight from timeline cuts, reference media, cost estimates, and provenance sidecars.
+- **Editor shell (Avalonia):** AppTheme-faithful dark UI — media library (folders, search, grid/list, hover scrub), preview with transport + source-monitor tabs, custom timeline (filmstrips, waveforms, roll/trim/blade/ripple edits, snap, loop ranges, multi-track, per-track height/gain/meters, tabs), inspector (transform, keyframes, fades, effects, LUT, color wheels, grade + hue curve editors), undo/redo, project files (`.palmier` save/open/autosave), export queue to H.264/MP4, FCPXML interchange, auto-update.
+- **Media engine (Swift + Vulkan + FFmpeg):** frame-accurate decode with seek-and-walk caching, 17 effect kernels re-authored in SPIR-V, text layers, audio (miniaudio/WASAPI), composited-frame capture, offscreen export.
+- **AI agent:** multi-provider chat (Anthropic, OpenAI, Z.AI, Moonshot, OpenRouter) with tool-use editing of the timeline, streaming, permission prompts, live model lists — or drive the editor from an external MCP client (below).
+- **Generation:** Replicate and fal.ai integration (Seedance 2.0, Kling 3.0, FLUX.3, Veo 3 families) with first/last-frame transitions from timeline cuts, a guided prompt builder, optional location context from footage GPS tags, clip extension (Enhance) from a clip's tail, reference media, cost estimates, and provenance sidecars with a recent-generations list.
 
 Architecture: the shell talks to the Swift core in-proc through a thin `@_cdecl` C ABI (`PalmierCoreHost.dll`) — no COM, no WinUI 3. See [`docs/windows-port-proposal.md`](docs/windows-port-proposal.md) for the port's foundations and the `PalmierWin/` directory for the engine.
 
@@ -58,7 +58,7 @@ dotnet build Shell        # C# shell
 .\Shell\run-shell.ps1     # run the editor
 ```
 
-Tests: `dotnet test PalmierWin/Shell/PalmierShell.sln` (460+ shell and interop tests) and the `palmierwin-spike` engine harness.
+Tests: `dotnet test PalmierWin/Shell/PalmierShell.sln` (740+ shell and interop tests) and the `palmierwin-spike` engine harness.
 
 ## Credits
 
