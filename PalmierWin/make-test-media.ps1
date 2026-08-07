@@ -126,3 +126,12 @@ $outGps = Join-Path $outDir "gps.mp4"
     -movflags use_metadata_tags -c:v libx264 -pix_fmt yuv420p $outGps
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outGps"
+
+# Speed-mapping fixture: 6 s so a sped-up clip's tail window fits comfortably
+# inside the source (a 60-frame clip at 2x consumes 4 s).
+$outSpeed = Join-Path $outDir "speedtail.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=6:size=320x240:rate=30" `
+    -f lavfi -i "sine=frequency=440:duration=6" `
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outSpeed
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outSpeed"

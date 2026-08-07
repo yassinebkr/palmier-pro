@@ -69,7 +69,7 @@ public class ClipExtractTests {
         IntPtr project = CoreApi.palmier_project_create();
         string? extracted = null;
         try {
-            string id = CoreApi.AddClip(project, TestMediaPath("longtest.mp4"), 60)!;
+            string id = CoreApi.AddClip(project, TestMediaPath("speedtail.mp4"), 60)!;
             Assert.Equal(1, CoreApi.palmier_clip_set_speed(project, id, 2.0));
             var clip = TimelineState.Parse(CoreApi.GetTimelineJson(project)).FindClip(id)!;
 
