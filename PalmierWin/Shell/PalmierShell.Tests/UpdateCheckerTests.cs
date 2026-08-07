@@ -119,7 +119,7 @@ public sealed class UpdateSettingsPersistenceTests : IDisposable {
 
     public void Dispose() {
         SettingsStore.PathOverride = null;
-        File.Delete(path);
+        TempFiles.Run(() => File.Delete(path));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public sealed class SessionLogTests : IDisposable {
     public void UnwritableLogDirectoryNeverThrows() {
         // A file where the log directory should be forces CreateDirectory to fail.
         string file = Path.Combine(Path.GetTempPath(), $"palmier-notdir-{Guid.NewGuid():N}");
-        File.WriteAllText(file, "x");
+        TempFiles.Run(() => File.WriteAllText(file, "x"));
         try {
             SessionLog.DirectoryOverride = file;
             Assert.Null(Record.Exception(() => {
@@ -181,7 +181,7 @@ public sealed class SessionLogTests : IDisposable {
             }));
         } finally {
             SessionLog.Reset();
-            File.Delete(file);
+            TempFiles.Run(() => File.Delete(file));
         }
     }
 }
