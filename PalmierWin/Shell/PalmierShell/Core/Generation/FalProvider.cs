@@ -11,46 +11,51 @@ public sealed class FalProvider : IGenerationProvider {
     public string Name => "fal.ai";
     public string KeyHint => "fal.ai/dashboard/keys";
 
-    /// Seedance 2.0 takes 4–15 s and 480p/720p on both tiers. The image-to-
-    /// video endpoints are the ones that accept a first and last frame — the
-    /// text-to-video ones ignore them, so they are listed separately rather
-    /// than switched behind the user's back.
-    static readonly int[] SeedanceDurations = [4, 5, 6, 8, 10, 12, 15];
-    static readonly string[] SeedanceResolutions = ["720p", "480p"];
+    /// The image-to-video endpoints are the ones that accept a first and last
+    /// frame — the text-to-video ones ignore them, so they are listed
+    /// separately in the manifest rather than switched behind the user's back.
+    public IReadOnlyList<GenerationModel> Models => ModelManifest.For("fal");
 
-    public IReadOnlyList<GenerationModel> Models { get; } = [
-        new("bytedance/seedance-2.0/image-to-video", "Seedance 2.0 · first/last frame",
-            SeedanceDurations) { Frames = FrameInput.FirstLast, Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/text-to-video", "Seedance 2.0 · text only",
-            SeedanceDurations) { Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/fast/image-to-video", "Seedance 2.0 Fast · first/last frame",
-            SeedanceDurations) { Frames = FrameInput.FirstLast, Resolutions = SeedanceResolutions },
-        new("bytedance/seedance-2.0/fast/text-to-video", "Seedance 2.0 Fast · text only",
-            SeedanceDurations) { Resolutions = SeedanceResolutions },
-        new("fal-ai/kling-video/v2.1/standard/text-to-video", "Kling 2.1 Standard", [5, 10]),
-        new("fal-ai/veo3/fast", "Veo 3 Fast", [8]),
-        new("fal-ai/minimax/hailuo-02/standard/text-to-video", "Hailuo 02", [6, 10]),
-    ];
-
-    /// How the endpoint takes stills. An id we do not curate gets None: we
-    /// have not read its schema, so we send it no frame fields.
-    FrameInput Frames(string modelId) =>
-        Models.FirstOrDefault(m => m.Id == modelId)?.Frames ?? FrameInput.None;
-
-    public async Task<string> SubmitAsync(GenerationRequest request, string apiKey, CancellationToken ct) {
-        using var http = GenerationHttp.Client(("Authorization", $"Key {apiKey}"));
+    /// Assembles the request body. Split out so the request shape is testable
+    /// without a network call — fal's families name their fields differently,
+    /// and an undeclared key fails the run.
+    public static Dictionary<string, object> BuildBody(GenerationRequest request) {
         var body = new Dictionary<string, object> {
             ["prompt"] = request.Prompt,
             ["duration"] = request.Seconds.ToString(),
             ["resolution"] = request.Resolution,
         };
+        var model = ModelManifest.ForAll("fal").FirstOrDefault(m => m.Id == request.Model);
+        // Its schema default is true; a generated clip lands on a timeline
+        // with its own sound, so the synthesis is switched off explicitly.
+        if (model is { SynthesisesAudio: true })
+            body["generate_audio"] = false;
+        // FLUX.3 declares duration as a number, names its first/last stills
+        // start_/end_image_url, and continues a clip from a `video_url`.
+        if (model is { Family: "flux" }) {
+            body["duration"] = request.Seconds;
+            if (model.Frames == FrameInput.FirstLast) {
+                if (GenerationHttp.DataUri(request.FirstFrame) is { } first) body["start_image_url"] = first;
+                if (GenerationHttp.DataUri(request.LastFrame) is { } last) body["end_image_url"] = last;
+            }
+            if (model.Capabilities.Contains("extend")
+                && GenerationHttp.DataUri(request.ReferenceVideos.FirstOrDefault(), "video/mp4") is { } clip)
+                body["video_url"] = clip;
+            return body;
+        }
         // Only the image-to-video endpoints declare these; text-to-video
         // rejects nothing but ignores them, which is worse — a paid run that
         // throws the stills away. The composer steers the user first.
-        if (Frames(request.Model) == FrameInput.FirstLast) {
+        if (model?.Frames == FrameInput.FirstLast) {
             if (GenerationHttp.DataUri(request.FirstFrame) is { } first) body["image_url"] = first;
             if (GenerationHttp.DataUri(request.LastFrame) is { } last) body["end_image_url"] = last;
         }
+        return body;
+    }
+
+    public async Task<string> SubmitAsync(GenerationRequest request, string apiKey, CancellationToken ct) {
+        using var http = GenerationHttp.Client(("Authorization", $"Key {apiKey}"));
+        var body = BuildBody(request);
         using var response = await http.PostAsJsonAsync($"https://queue.fal.run/{request.Model}", body, ct);
         string json = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)

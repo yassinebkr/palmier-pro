@@ -115,4 +115,66 @@ public class ReplicateInputShapeTests : IDisposable {
         Assert.DoesNotContain("reference_images", input.Keys);
         Assert.Contains("start_image", input.Keys);
     }
+
+    /// FLUX.3's transition shape: both stills in one `images` array, duration
+    /// as a string (its schema's type, "auto" being the other value), audio
+    /// off, and none of the other families' frame keys.
+    [Fact]
+    public void FluxSendsBothStillsAsAnImagesArray() {
+        var input = ReplicateProvider.BuildInput(Request("black-forest-labs/flux-3", "1080p"));
+        var images = Assert.IsType<List<object>>(input["images"]);
+        Assert.Equal(2, images.Count);
+        Assert.All(images, uri => Assert.StartsWith("data:image/png", (string)uri!));
+        Assert.Equal("5", input["duration"]);
+        Assert.Equal("1080p", input["resolution"]);
+        Assert.Equal(false, input["generate_audio"]);
+        Assert.DoesNotContain("image", input.Keys);
+        Assert.DoesNotContain("last_frame_image", input.Keys);
+        Assert.DoesNotContain("start_image", input.Keys);
+        Assert.DoesNotContain("draft", input.Keys);
+    }
+
+    /// One still opens the clip; the array carries just it.
+    [Fact]
+    public void FluxWithOnlyAFirstFrameOpensTheClip() {
+        var input = ReplicateProvider.BuildInput(Request("black-forest-labs/flux-3") with { LastFrame = null });
+        Assert.Single(Assert.IsType<List<object>>(input["images"]));
+    }
+
+    /// No stills is text-to-video: the images key stays out entirely.
+    [Fact]
+    public void FluxTextOnlySendsNoImages() {
+        var input = ReplicateProvider.BuildInput(
+            Request("black-forest-labs/flux-3") with { FirstFrame = null, LastFrame = null });
+        Assert.Equal(["duration", "generate_audio", "prompt", "resolution"], input.Keys.Order());
+    }
+
+    /// A lone end frame is never sent: as images[0] it would open the clip —
+    /// the exact opposite of the intent, and the run would be paid for.
+    [Fact]
+    public void FluxLoneLastFrameSendsNoImages() {
+        var input = ReplicateProvider.BuildInput(
+            Request("black-forest-labs/flux-3") with { FirstFrame = null, LastFrame = "last.png" });
+        Assert.DoesNotContain("images", input.Keys);
+    }
+
+    /// A video continues from its final frames under `start_video`, and the
+    /// schema forbids combining it with images — the stills stay out.
+    [Fact]
+    public void FluxExtendSendsStartVideoInsteadOfImages() {
+        var input = ReplicateProvider.BuildInput(
+            Request("black-forest-labs/flux-3") with { ReferenceVideos = ["local.mp4"] },
+            ["https://replicate.delivery/clip"]);
+        Assert.Equal("https://replicate.delivery/clip", input["start_video"]);
+        Assert.DoesNotContain("images", input.Keys);
+    }
+
+    /// The draft flag only travels to a model that declares it.
+    [Fact]
+    public void FluxDraftFlagFollowsTheCapability() {
+        var draft = ReplicateProvider.BuildInput(Request("black-forest-labs/flux-3") with { Draft = true });
+        Assert.Equal(true, draft["draft"]);
+        var seedance = ReplicateProvider.BuildInput(Request("bytedance/seedance-2.0") with { Draft = true });
+        Assert.DoesNotContain("draft", seedance.Keys);
+    }
 }

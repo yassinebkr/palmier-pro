@@ -340,4 +340,27 @@ public class GenerationPricingTests {
     public void ModelIdsAreTrimmedBeforeLookup() {
         Assert.NotNull(GenerationPricing.For("fal", "  bytedance/seedance-2.0/text-to-video ", 5, "720p"));
     }
+
+    /// FLUX.3 publishes per-resolution rates on both providers, so these
+    /// estimates are exact, not approximate.
+    [Theory]
+    [InlineData("replicate", "black-forest-labs/flux-3", "720p", 0.85)]
+    [InlineData("replicate", "black-forest-labs/flux-3", "1080p", 1.45)]
+    [InlineData("fal", "blackforestlabs/flux-3/first-last-frame-to-video", "720p", 0.85)]
+    [InlineData("fal", "blackforestlabs/flux-3/text-to-video", "1080p", 1.45)]
+    public void FluxIsPricedPerSecondPerResolution(string provider, string model, string resolution, decimal expected) {
+        var estimate = GenerationPricing.For(provider, model, 5, resolution);
+        Assert.NotNull(estimate);
+        Assert.Equal(expected, estimate!.Amount);
+        Assert.False(estimate.Approximate);
+    }
+
+    /// Extending a clip bills higher than generating one on fal.
+    [Fact]
+    public void FluxExtendBillsAboveTheGenerateRate() {
+        var extend = GenerationPricing.For("fal", "blackforestlabs/flux-3/extend-video", 5, "720p");
+        var generate = GenerationPricing.For("fal", "blackforestlabs/flux-3/text-to-video", 5, "720p");
+        Assert.Equal(2.05m, extend!.Amount);
+        Assert.True(extend.Amount > generate!.Amount);
+    }
 }

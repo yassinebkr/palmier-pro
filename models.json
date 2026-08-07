@@ -1,0 +1,178 @@
+// The generation model list as data. ModelManifest reads this bundled copy;
+// a synced remote copy replaces it at runtime. Every offered resolution must
+// carry a verified per-second rate — an unpriced option defeats the estimate
+// the Generate button sits next to — so higher tiers stay unlisted until priced.
+{
+  "version": 1,
+  "providers": {
+    "replicate": [
+      {
+        "id": "bytedance/seedance-2.0",
+        "name": "Seedance 2.0",
+        "durations": [4, 5, 6, 8, 10, 12, 15],
+        "capabilities": ["firstLastFrame"],
+        // The endpoint also offers 1080p and 4k, both unpriced so far.
+        "resolutions": ["720p", "480p"],
+        "synthesisesAudio": true,
+        // Reference-to-video: up to 9 images and 3 videos (15 s combined),
+        // addressed as [Image1]/[Video1] in the prompt. The schema forbids
+        // combining them with first/last frames.
+        "maxReferenceImages": 9,
+        "maxReferenceVideos": 3,
+        "framesAndReferencesExclusive": true
+      },
+      // Seedance 1.x takes the same first/last frame pair; kept as the
+      // fallback when 2.0's input moderation flags a frame.
+      {
+        "id": "bytedance/seedance-1.5-pro",
+        "name": "Seedance 1.5 Pro",
+        "durations": [4, 5, 6, 8, 10, 12],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["720p", "480p", "1080p"],
+        "synthesisesAudio": true
+      },
+      {
+        "id": "bytedance/seedance-1-pro",
+        "name": "Seedance 1 Pro",
+        "durations": [4, 5, 6, 8, 10, 12],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["1080p", "720p", "480p"]
+      },
+      // Kling 3.0: quality is a mode rather than a resolution (standard is
+      // 720p, pro is 1080p); a 4k mode exists but stays unlisted without a
+      // verified rate. Duration is any whole second from 3 to 15.
+      {
+        "id": "kwaivgi/kling-v3-video",
+        "name": "Kling 3.0",
+        "durations": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["1080p", "720p"],
+        "synthesisesAudio": true
+      },
+      {
+        "id": "kwaivgi/kling-v2.1",
+        "name": "Kling 2.1",
+        "durations": [5, 10]
+      },
+      // Veo 3 starts from a still but has no last-frame field, so it can open
+      // on a frame yet cannot land a transition.
+      {
+        "id": "google/veo-3",
+        "name": "Veo 3",
+        "durations": [4, 6, 8],
+        "capabilities": ["firstFrame"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true
+      },
+      {
+        "id": "google/veo-3-fast",
+        "name": "Veo 3 Fast",
+        "durations": [4, 6, 8],
+        "capabilities": ["firstFrame"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true
+      },
+      {
+        "id": "minimax/video-01",
+        "name": "MiniMax Video-01",
+        "durations": [6]
+      },
+      // One endpoint whose optional inputs pick the workflow: an images
+      // array (one opens the clip, two start and end it), start_video to
+      // continue a clip, neither for text-to-video. `draft` is a fast 720p
+      // preview flag. Accepts any whole second 5–20 ("auto" too); the picker
+      // offers the useful spread.
+      {
+        "id": "black-forest-labs/flux-3",
+        "name": "FLUX.3",
+        "durations": [5, 8, 10, 15, 20],
+        "capabilities": ["textToVideo", "firstFrame", "firstLastFrame", "extend", "draft"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
+      }
+    ],
+    "fal": [
+      // The image-to-video endpoints are the ones that accept a first and last
+      // frame — the text-to-video ones ignore them, so they are listed
+      // separately rather than switched behind the user's back. Seedance 2.0
+      // takes 4–15 s and 480p/720p on both tiers.
+      {
+        "id": "bytedance/seedance-2.0/image-to-video",
+        "name": "Seedance 2.0 · first/last frame",
+        "durations": [4, 5, 6, 8, 10, 12, 15],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["720p", "480p"]
+      },
+      {
+        "id": "bytedance/seedance-2.0/text-to-video",
+        "name": "Seedance 2.0 · text only",
+        "durations": [4, 5, 6, 8, 10, 12, 15],
+        "resolutions": ["720p", "480p"]
+      },
+      {
+        "id": "bytedance/seedance-2.0/fast/image-to-video",
+        "name": "Seedance 2.0 Fast · first/last frame",
+        "durations": [4, 5, 6, 8, 10, 12, 15],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["720p", "480p"]
+      },
+      {
+        "id": "bytedance/seedance-2.0/fast/text-to-video",
+        "name": "Seedance 2.0 Fast · text only",
+        "durations": [4, 5, 6, 8, 10, 12, 15],
+        "resolutions": ["720p", "480p"]
+      },
+      {
+        "id": "fal-ai/kling-video/v2.1/standard/text-to-video",
+        "name": "Kling 2.1 Standard",
+        "durations": [5, 10]
+      },
+      {
+        "id": "fal-ai/veo3/fast",
+        "name": "Veo 3 Fast",
+        "durations": [8]
+      },
+      {
+        "id": "fal-ai/minimax/hailuo-02/standard/text-to-video",
+        "name": "Hailuo 02",
+        "durations": [6, 10]
+      },
+      // FLUX.3 on fal is a family of single-workflow endpoints rather than
+      // one switched endpoint. Draft mode is its own endpoint family
+      // (…/draft, with a draft_cache the draft-enhance endpoint renders at
+      // full quality), not a flag here, so these entries carry no draft
+      // capability. All three take any whole second 5–20.
+      {
+        "id": "blackforestlabs/flux-3/first-last-frame-to-video",
+        "name": "FLUX.3 · first/last frame",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
+      },
+      {
+        "id": "blackforestlabs/flux-3/text-to-video",
+        "name": "FLUX.3 · text only",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["textToVideo"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
+      },
+      {
+        "id": "blackforestlabs/flux-3/extend-video",
+        "name": "FLUX.3 · extend",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["extend"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux",
+        // Out of the picker until the composer's Enhance affordance lands —
+        // nothing can attach the required source video yet.
+        "hidden": true
+      }
+    ]
+  }
+}

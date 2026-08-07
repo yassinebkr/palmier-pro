@@ -22,54 +22,10 @@ public sealed class ReplicateProvider : IGenerationProvider {
     /// Face rejection is a conditional input classifier ("may contain a real
     /// person"), not a blanket ban — identifiable faces in stills can be
     /// flagged on any mode, and the flag surfaces as the opaque "(E005)".
-    public IReadOnlyList<GenerationModel> Models => All;
+    public IReadOnlyList<GenerationModel> Models => ModelManifest.For("replicate");
 
-    static readonly GenerationModel[] All = [
-        new("bytedance/seedance-2.0", "Seedance 2.0", [4, 5, 6, 8, 10, 12, 15]) {
-            // The endpoint also offers 1080p and 4k; they are not listed until
-            // there is a verified per-second rate, because an unpriced option
-            // defeats the estimate the Generate button sits next to.
-            Frames = FrameInput.FirstLast, Resolutions = ["720p", "480p"],
-            SynthesisesAudio = true,
-            // Reference-to-video: up to 9 images and 3 videos (15 s combined),
-            // addressed as [Image1]/[Video1] in the prompt. The schema forbids
-            // combining them with image/last_frame_image.
-            MaxReferenceImages = 9, MaxReferenceVideos = 3,
-            FramesAndReferencesExclusive = true,
-        },
-        // Seedance 1.x takes the same first/last frame pair; kept as the
-        // fallback when 2.0's input moderation flags a frame.
-        new("bytedance/seedance-1.5-pro", "Seedance 1.5 Pro", [4, 5, 6, 8, 10, 12]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["720p", "480p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("bytedance/seedance-1-pro", "Seedance 1 Pro", [4, 5, 6, 8, 10, 12]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["1080p", "720p", "480p"],
-        },
-        // Kling 3.0 takes the same pair under Kuaishou's names, start_image
-        // and end_image, and quality is a mode rather than a resolution:
-        // standard is 720p, pro is 1080p. A 4k mode exists but is not offered
-        // without a verified rate. Duration is any whole second from 3 to 15.
-        new("kwaivgi/kling-v3-video", "Kling 3.0",
-            [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) {
-            Frames = FrameInput.FirstLast, Resolutions = ["1080p", "720p"],
-            SynthesisesAudio = true,
-        },
-        new("kwaivgi/kling-v2.1", "Kling 2.1", [5, 10]),
-        // Veo 3 starts from a still but has no last-frame field, so it can
-        // open on a frame yet cannot land a transition.
-        new("google/veo-3", "Veo 3", [4, 6, 8]) {
-            Frames = FrameInput.FirstOnly, Resolutions = ["720p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("google/veo-3-fast", "Veo 3 Fast", [4, 6, 8]) {
-            Frames = FrameInput.FirstOnly, Resolutions = ["720p", "1080p"],
-            SynthesisesAudio = true,
-        },
-        new("minimax/video-01", "MiniMax Video-01", [6]),
-    ];
-
-    static GenerationModel? Curated(string modelId) => All.FirstOrDefault(m => m.Id == modelId);
+    static GenerationModel? Curated(string modelId) =>
+        ModelManifest.ForAll("replicate").FirstOrDefault(m => m.Id == modelId);
 
     /// How the endpoint takes stills; None for any id we do not curate.
     static FrameInput Frames(string modelId) => Curated(modelId)?.Frames ?? FrameInput.None;
@@ -159,10 +115,37 @@ public sealed class ReplicateProvider : IGenerationProvider {
         bool hasReferences = request.ReferenceImages.Count > 0 || request.ReferenceVideos.Count > 0;
         if (hasReferences && Curated(request.Model) is { AcceptsReferences: true }) {
             var images = request.ReferenceImages
-                .Select(GenerationHttp.DataUri).Where(uri => uri is not null).Cast<object>().ToList();
+                .Select(path => GenerationHttp.DataUri(path)).Where(uri => uri is not null).Cast<object>().ToList();
             if (images.Count > 0) input["reference_images"] = images;
             if (referenceVideoUrls is { Count: > 0 })
                 input["reference_videos"] = referenceVideoUrls.Cast<object>().ToList();
+            return input;
+        }
+
+        // FLUX.3 is one endpoint whose optional inputs pick the workflow:
+        // `images` (one opens the clip, two start and end it), `start_video`
+        // to continue from a clip's final frames — the schema forbids
+        // combining them — and neither for text-to-video. Its duration field
+        // is a string ("auto" or the seconds), unlike the families above.
+        if (Curated(request.Model) is { Family: "flux" } flux) {
+            input["duration"] = request.Seconds.ToString();
+            input["resolution"] = request.Resolution;
+            if (request.Draft && flux.Capabilities.Contains("draft"))
+                input["draft"] = true;
+            if (referenceVideoUrls is { Count: > 0 } videos)
+                input["start_video"] = videos[0];
+            else {
+                // Same rule as the other families: a lone end frame is never
+                // sent — as images[0] it would OPEN the clip, the exact
+                // opposite of the intent, and the run would be paid for.
+                var images = new List<object>();
+                if (GenerationHttp.DataUri(request.FirstFrame) is { } opens) {
+                    images.Add(opens);
+                    if (GenerationHttp.DataUri(request.LastFrame) is { } ends)
+                        images.Add(ends);
+                }
+                if (images.Count > 0) input["images"] = images;
+            }
             return input;
         }
 

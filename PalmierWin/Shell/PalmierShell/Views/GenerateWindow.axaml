@@ -235,7 +235,13 @@
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <views:ModelBox ItemsSource="{Binding ModelChoices}" Text="{Binding ModelId, Mode=TwoWay}"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <views:ModelBox Grid.Column="0" ItemsSource="{Binding ModelChoices}" Text="{Binding ModelId, Mode=TwoWay}"/>
+          <Button Grid.Column="1" Content="{Binding UpdateModelsText}" FontSize="11" Padding="8,3"
+                  VerticalAlignment="Center"
+                  Command="{Binding UpdateModelsCommand}" IsEnabled="{Binding CanUpdateModels}"
+                  ToolTip.Tip="Fetches the latest model list and swaps the picker over to it. The current list stays if the check fails."/>
+        </Grid>
 
         <TextBlock Text="{Binding PromptWarning}" FontSize="11" TextWrapping="Wrap"
                    IsVisible="{Binding HasPromptWarning}"

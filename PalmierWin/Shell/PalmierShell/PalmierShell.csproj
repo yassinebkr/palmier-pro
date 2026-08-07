@@ -21,5 +21,8 @@
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- The generation model manifest lives at the repo root (the remote
+         sync fetches it from there); the link keeps its avares path. -->
+    <AvaloniaResource Include="..\..\..\models.json" Link="Assets\models.json" />
   </ItemGroup>
 </Project>

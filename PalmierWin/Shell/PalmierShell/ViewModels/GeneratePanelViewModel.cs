@@ -407,14 +407,20 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// can order against it instead of racing its Message writes.
     public Task Initialized { get; }
 
-    void SyncModels() {
+    void SyncModels() => SyncModels(keepSelection: false);
+
+    /// Rebuilds the pickers from the provider's manifest. A provider switch
+    /// starts at the top of the new list; a manifest sync keeps the current
+    /// model when it survives, so the button never silently moves the user.
+    void SyncModels(bool keepSelection) {
+        string keep = keepSelection ? ModelId.Trim() : "";
         Models.Clear();
         ModelChoices.Clear();
         foreach (var model in SelectedProvider.Models) {
             Models.Add(model);
             ModelChoices.Add(model.Id);
         }
-        ModelId = Models.FirstOrDefault()?.Id ?? "";
+        ModelId = keep.Length > 0 ? keep : Models.FirstOrDefault()?.Id ?? "";
     }
 
     partial void OnSelectedProviderChanged(IGenerationProvider value) {
@@ -422,10 +428,74 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         _ = RefreshKeyAsync();
     }
 
+    /// In flight while the manifest check runs: the button relabels and
+    /// disables rather than stacking a second fetch.
+    [ObservableProperty] bool updatingModels;
+
+    public bool CanUpdateModels => !UpdatingModels;
+
+    public string UpdateModelsText => UpdatingModels ? "Checking…" : "Update models";
+
+    partial void OnUpdatingModelsChanged(bool value) {
+        OnPropertyChanged(nameof(CanUpdateModels));
+        OnPropertyChanged(nameof(UpdateModelsText));
+    }
+
+    /// Pulls the latest model manifest and swaps the picker over to it. The
+    /// current list stays on any failure — offline must never blank models.
+    [RelayCommand]
+    async Task UpdateModels() {
+        if (UpdatingModels) return;
+        UpdatingModels = true;
+        Message = "Checking for new models…";
+        try {
+            await RunModelSyncAsync();
+        } finally {
+            UpdatingModels = false;
+        }
+    }
+
+    /// Startup sync (MainViewModel, once per launch): quiet unless models
+    /// actually changed — no "Checking…" churn, failures stay silent.
+    public async Task StartupSyncAsync() {
+        var report = await ModelManifest.SyncAsync();
+        if (report is null) return;
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => {
+            SyncModels(keepSelection: true);
+            ModelOptionsChanged(ModelId);
+            if (report.Added.Count > 0 || report.Removed.Count > 0)
+                Message = DescribeSync(report);
+        });
+    }
+
+    async Task RunModelSyncAsync() {
+        var report = await ModelManifest.SyncAsync();
+        if (report is null) {
+            Message = "Couldn't check — keeping the current list.";
+            return;
+        }
+        SyncModels(keepSelection: true);
+        ModelOptionsChanged(ModelId);   // unchanged id still re-reads durations/resolutions
+        Message = DescribeSync(report);
+    }
+
+    static string DescribeSync(ModelManifest.ManifestSyncReport report) {
+        var parts = new List<string>();
+        if (report.Added.Count > 0)
+            parts.Add($"{report.Added.Count} new model{(report.Added.Count > 1 ? "s" : "")}: " +
+                      string.Join(", ", report.Added));
+        if (report.Removed.Count > 0)
+            parts.Add($"{report.Removed.Count} model{(report.Removed.Count > 1 ? "s" : "")} removed: " +
+                      string.Join(", ", report.Removed));
+        return parts.Count > 0 ? string.Join("; ", parts) + "." : "Already up to date.";
+    }
+
     /// Durations come from the curated entry; a pasted id gets the common set.
     /// Added before the reselect and pruned after, because a ComboBox bound to
     /// an item that leaves its source writes null back into this int.
-    partial void OnModelIdChanged(string value) {
+    partial void OnModelIdChanged(string value) => ModelOptionsChanged(value);
+
+    void ModelOptionsChanged(string value) {
         var model = Models.FirstOrDefault(m => m.Id == value.Trim());
         Retarget(Durations, model?.Durations ?? [5, 10], SelectedDuration, next => SelectedDuration = next);
         Retarget(Resolutions, model?.Resolutions ?? ["720p"], SelectedResolution,
