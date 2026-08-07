@@ -84,6 +84,7 @@ public class PromptBuilderTests {
         foreach (var chip in PromptBuilder.Groups.SelectMany(group => group.Chips)) {
             Assert.False(string.IsNullOrWhiteSpace(chip.Label));
             Assert.False(string.IsNullOrWhiteSpace(chip.Phrase));
+            Assert.Equal(chip.Phrase, chip.Phrase.Trim());
         }
     }
 

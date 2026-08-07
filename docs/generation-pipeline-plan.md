@@ -68,7 +68,7 @@ line in the prompt).
 
 ## C. Enhance mode (extend-video)
 
-Unhide `blackforestlabs/flux-3/extend-video` (both models.json copies) and add
+Unhide `blackforestlabs/flux-3/extend-video` (models.json) and add
 the composer's missing affordance: attach the selected clip's video as the
 source (the `ReferenceVideos` path and per-provider request bodies already
 exist). Entry points: composer mode + media/timeline context menu
