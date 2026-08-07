@@ -21,6 +21,7 @@ public class ExportTests {
     }
 
     [Fact]
+    [Trait("Category", "Hardware")]
     public void Export_WritesAPlayableFileAndReportsCompletion() {
         IntPtr project = CoreApi.palmier_project_create();
         string dir = Path.Combine(Path.GetTempPath(), $"palmier-export-{Guid.NewGuid():N}");
@@ -48,6 +49,7 @@ public class ExportTests {
     }
 
     [Fact]
+    [Trait("Category", "Hardware")]
     public void Export_CanBeCancelledMidRunAndDeletesThePartialFile() {
         IntPtr project = CoreApi.palmier_project_create();
         string dir = Path.Combine(Path.GetTempPath(), $"palmier-export-{Guid.NewGuid():N}");

@@ -55,6 +55,7 @@ public class TextStyleTests {
     /// Default white glyphs turn red: over the solid interior pixels the green
     /// and blue channels must collapse while red stays lit.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void TextColorReachesTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
@@ -76,6 +77,7 @@ public class TextStyleTests {
     /// Left alignment shifts the glyph mass off centre; halving the font size
     /// quarters the glyph area.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void AlignmentAndSizeReachTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {

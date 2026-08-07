@@ -89,6 +89,7 @@ public class RenderSizeTests {
     }
 
     [Fact]
+    [Trait("Category", "Hardware")]
     public void Export_CompositesAtTheProjectRenderSize() {
         IntPtr project = CoreApi.palmier_project_create();
         string dir = Path.Combine(Path.GetTempPath(), $"palmier-export-{Guid.NewGuid():N}");

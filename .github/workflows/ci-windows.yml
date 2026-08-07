@@ -132,3 +132,133 @@ jobs:
           Copy-Item -Path "ThirdParty\ffmpeg\bin\*.dll" -Destination $exeDir -Force
           & "$exeDir\palmierwin-spike.exe"
           Pop-Location
+
+  shell-gate:
+    name: Shell tests & crash gate
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3-release
+          swift-build: 6.3-RELEASE
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Link PalmierCore into PalmierWin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path PalmierWin/Sources | Out-Null
+          $coreSrc = (Resolve-Path "Sources/PalmierCore").Path
+          New-Item -ItemType SymbolicLink -Path "PalmierWin/Sources/PalmierCore" -Value $coreSrc | Out-Null
+
+      - name: Fetch Windows media deps
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          ./fetch-deps.ps1
+          Pop-Location
+
+      # The interop suite P/Invokes PalmierCoreHost.dll, so the engine build
+      # must come first (NativeSearchPath.cs primes PATH from the repo layout).
+      - name: Build PalmierWin
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          swift build
+          Pop-Location
+
+      # Interop and fixture-driven tests read clips from PalmierWin/test_media
+      # (gitignored; generated deterministically by this script).
+      - name: Generate test media
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          ./make-test-media.ps1
+          Pop-Location
+
+      # Category=Hardware marks tests that need a real GPU compositor or audio
+      # endpoint (composited-pixel captures, exports, peak metering) — they run
+      # locally on developer machines and can never pass on a headless runner.
+      - name: Test the Windows shell
+        shell: pwsh
+        run: dotnet test PalmierWin/Shell/PalmierShell.sln -c Release --filter "Category!=Hardware"
+
+      - name: Generate gate media
+        shell: pwsh
+        run: |
+          $ff = "PalmierWin/ThirdParty/ffmpeg/bin/ffmpeg.exe"
+          foreach ($n in 1, 2) {
+            & $ff -hide_banner -loglevel error -y `
+              -f lavfi -i "testsrc=size=320x180:rate=30:duration=6" `
+              -f lavfi -i "sine=frequency=440:duration=6" `
+              -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest `
+              "$env:RUNNER_TEMP/gate$n.mp4"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # Launch the real editor end to end: import two clips, append them to the
+      # timeline, select, arm the transition composer (drives the frame-capture
+      # path), autoplay. The process must survive 75 s. Runners have no GPU, so
+      # the Vulkan engine reports unavailable and the render path stays idle —
+      # what this gates is startup, media import/probing, transition arming,
+      # playback ticking, and the no-console stderr logging trap that only
+      # fires for GUI launches. GPU render-path checks stay with the local
+      # spike harness.
+      - name: Run the crash gate
+        shell: pwsh
+        run: |
+          $repo = (Get-Location).Path
+          $env:PATH = "$repo\PalmierWin\ThirdParty\ffmpeg\bin;$repo\PalmierWin\.build\x86_64-unknown-windows-msvc\debug;$env:PATH"
+          $exe = "$repo\PalmierWin\Shell\PalmierShell\bin\Release\net9.0-windows\PalmierShell.exe"
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru -ArgumentList `
+            "--add-to-timeline","$env:RUNNER_TEMP\gate1.mp4","$env:RUNNER_TEMP\gate2.mp4", `
+            "--select-first-clip","--transition-repro","--autoplay","--no-update"
+          $deadline = (Get-Date).AddSeconds(75)
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 5
+            $p.Refresh()
+            if ($p.HasExited) { break }
+          }
+          $dumpDir = "$env:LOCALAPPDATA\CrashDumps"
+          $freshDumps = @()
+          if (Test-Path $dumpDir) {
+            $freshDumps = Get-ChildItem $dumpDir -Filter "PalmierShell.exe.*.dmp" |
+              Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-10) }
+          }
+          if ($p.HasExited) {
+            Write-Error "PalmierShell exited during the gate window (exit code $($p.ExitCode))"
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          if ($freshDumps.Count -gt 0) {
+            Write-Error "fresh crash dump(s) written during the gate: $($freshDumps.Name -join ', ')"
+            exit 1
+          }
+          Write-Output "crash gate passed: editor survived 75 s of import, transition arming and autoplay"
+
+      - name: Collect gate logs
+        if: always()
+        shell: pwsh
+        run: |
+          $dst = "$env:RUNNER_TEMP/gate-logs"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $logs = "$env:APPDATA\PalmierPro\logs"
+          if (Test-Path $logs) { Copy-Item "$logs\*" $dst -Force -ErrorAction SilentlyContinue }
+          $dumpDir = "$env:LOCALAPPDATA\CrashDumps"
+          if (Test-Path $dumpDir) {
+            Get-ChildItem $dumpDir -Filter "PalmierShell.exe.*.dmp" |
+              Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-30) } |
+              Copy-Item -Destination $dst -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload gate logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-gate-logs
+          path: ${{ runner.temp }}/gate-logs
+          if-no-files-found: ignore

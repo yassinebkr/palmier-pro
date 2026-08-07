@@ -312,6 +312,7 @@ public class InteropTests {
     }
 
     [Fact]
+    [Trait("Category", "Hardware")]
     public void AudioPeaks_RecordAndResetPerTrack() {
         IntPtr project = CoreApi.palmier_project_create();
         try {

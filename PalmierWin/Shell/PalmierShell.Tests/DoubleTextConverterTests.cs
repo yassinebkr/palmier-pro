@@ -13,9 +13,13 @@ public class DoubleTextConverterTests {
     }
 
     [Fact]
-    public void ValidTextParsesWithCurrentCulture() {
-        var value = DoubleTextConverter.Instance.ConvertBack("0,5", typeof(double), null, null);
-        Assert.Equal(0.5d, value);
+    public void ValidTextParsesWithTheGivenCulture() {
+        var fr = new System.Globalization.CultureInfo("fr-FR");
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        Assert.Equal(0.5d, DoubleTextConverter.Instance.ConvertBack("0,5", typeof(double), null, fr));
+        Assert.Equal(0.5d, DoubleTextConverter.Instance.ConvertBack("0.5", typeof(double), null, inv));
+        Assert.Same(BindingOperations.DoNothing,
+            DoubleTextConverter.Instance.ConvertBack("0,5", typeof(double), null, inv));
     }
 
     [Fact]

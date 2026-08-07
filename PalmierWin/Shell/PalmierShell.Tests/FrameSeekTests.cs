@@ -113,6 +113,7 @@ public class FrameSeekTests {
     /// split → trim bookkeeping → planner → decoder → compositor → readback.
     /// The captured colours must be the two either side of the cut.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void CompositedCaptureReadsEitherSideOfACut() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
