@@ -262,6 +262,32 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [ObservableProperty] bool hasApiKey;
     [ObservableProperty] string? message;
 
+    /// Where the next take lands, in one persistent header line. Message is
+    /// transient — a capture warning replaces the arm's text — so the target
+    /// statement lives here and the arm messages are composed from it.
+    string targetSummary = DefaultTargetSummary;
+    const string DefaultTargetSummary = "New shot into the media library";
+
+    public string TargetSummary =>
+        UseLocationContext && LocationStatus is { } status
+            ? $"{targetSummary} · {status}"
+            : targetSummary;
+
+    void SetTargetSummary(string summary) {
+        targetSummary = summary;
+        OnPropertyChanged(nameof(TargetSummary));
+    }
+
+    /// The prompt builder's fold follows the user, across sessions. Persisted
+    /// on every toggle; restored once at construction.
+    [ObservableProperty] bool promptBuilderExpanded = true;
+    bool restoringBuilderState;
+
+    partial void OnPromptBuilderExpandedChanged(bool value) {
+        if (restoringBuilderState) return;
+        _ = Task.Run(() => SettingsStore.Update(s => s with { PromptBuilderExpanded = value }));
+    }
+
     /// The guided builder's sections. A chip appends its phrase to the same
     /// editable prompt text — the builder is an assist, never a gate.
     public IReadOnlyList<PromptChipGroup> PromptChipGroups => PromptBuilder.Groups;
@@ -406,6 +432,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         OnPropertyChanged(nameof(FrameModeText));
         OnPropertyChanged(nameof(ReferenceConflict));
         OnPropertyChanged(nameof(CanAttachReferences));
+        OnPropertyChanged(nameof(TargetSummary));
     }
 
     /// Whether the reference section is offered at all for the current model.
@@ -445,12 +472,22 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         this.library = library;
         selectedProvider = Providers[0];
         SyncModels();
-        Initialized = RefreshKeyAsync();
+        Initialized = InitializeAsync();
     }
 
     /// The constructor's key/model restore, awaitable so callers (and tests)
     /// can order against it instead of racing its Message writes.
     public Task Initialized { get; }
+
+    /// One settings read at construction: the persisted panel state plus the
+    /// key/model restore every settings read shares.
+    async Task InitializeAsync() {
+        var settings = await Task.Run(() => LoadSettings());
+        restoringBuilderState = true;
+        PromptBuilderExpanded = settings.PromptBuilderExpanded;
+        restoringBuilderState = false;
+        ApplySettings(settings);
+    }
 
     void SyncModels() => SyncModels(keepSelection: false);
 
@@ -621,8 +658,9 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Also restores the provider's last-used model — but only over an
     /// untouched default, never over a selection made this session, and in
     /// enhance mode never a model the narrowed picker does not offer.
-    public async Task RefreshKeyAsync() {
-        var settings = await Task.Run(() => LoadSettings());
+    public async Task RefreshKeyAsync() => ApplySettings(await Task.Run(() => LoadSettings()));
+
+    void ApplySettings(AppSettings settings) {
         HasApiKey = settings.KeyFor(SelectedProvider.Id).Length > 0;
         Message = HasApiKey ? null : $"Add a {SelectedProvider.Name} key in Settings → Generation.";
         if (ModelId == Models.FirstOrDefault()?.Id
@@ -829,8 +867,8 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         SetLastFrame(lastFrame, lastFrameNumber);
         string moved = MoveToFrameCapableModel();
         string where = target.FillsGap ? "the gap at" : "the cut at";
-        Message = $"Transition across {where} {Timecode.Format(target.BoundaryFrame, 30)} — " +
-                  "describe the motion, then Generate." + moved;
+        SetTargetSummary($"Transition across {where} {Timecode.Format(target.BoundaryFrame, 30)}");
+        Message = targetSummary + " — describe the motion, then Generate." + moved;
         ResetSpans();
         ResetLocation(locationTag);
         if (target.FillsGap && target.DurationFrames > 0) PreferDuration(target.DurationFrames);
@@ -856,10 +894,11 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         ClearLastFrame();
         ResetSpans();
         ResetLocation(locationTag);
-        Message = target.AvailableFrames > 0
+        SetTargetSummary(target.AvailableFrames > 0
             ? $"New shot for the {target.AvailableFrames / 30.0:0.#} s gap at " +
-              $"{Timecode.Format(target.StartFrame, 30)} — describe it, then Generate."
-            : $"New shot at {Timecode.Format(target.StartFrame, 30)} — describe it, then Generate.";
+              $"{Timecode.Format(target.StartFrame, 30)}"
+            : $"New shot at {Timecode.Format(target.StartFrame, 30)}");
+        Message = targetSummary + " — describe it, then Generate.";
         if (target.AvailableFrames > 0) PreferDuration(target.AvailableFrames);
     }
 
@@ -870,8 +909,8 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         if (PendingShot is null || (!hasFirst && !hasLast)) return;
         string frames = hasFirst && hasLast ? "the clips on both sides"
             : hasFirst ? "the clip before it" : "the clip after it";
-        Message = $"New shot to sit between {frames} — describe it, then Generate." +
-                  MoveToFrameCapableModel();
+        SetTargetSummary($"New shot to sit between {frames}");
+        Message = targetSummary + " — describe it, then Generate." + MoveToFrameCapableModel();
     }
 
     /// Arms an enhance: the run continues the tail of the target's clip,
@@ -894,8 +933,9 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         ReferenceImages.Clear();
         ReferenceVideos.Clear();
         AddReferenceVideo(tailVideoPath);
+        SetTargetSummary($"Extend '{target.ClipName}'");
         if (ReferenceVideos.Count > 0) {
-            Message = $"Extend '{target.ClipName}' — describe what happens next, then Generate." + moved;
+            Message = targetSummary + " — describe what happens next, then Generate." + moved;
         } else {
             ReferencesChanged();   // the clears above still changed the state
             Message = $"{SelectedProvider.Name} has no model that can extend a clip.";
@@ -1017,6 +1057,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         PendingShot = null;
         ClearEnhance();
         ResetLocation(null);
+        SetTargetSummary(DefaultTargetSummary);
         OnPropertyChanged(nameof(ShowSpanPickers));
         OnPropertyChanged(nameof(HasPendingPlacement));
     }

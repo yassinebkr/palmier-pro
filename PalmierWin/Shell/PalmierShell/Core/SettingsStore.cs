@@ -24,6 +24,9 @@ public sealed record AppSettings(string Provider, string Model) {
 
     public bool SnapEnabled { get; init; } = true;
 
+    /// The composer's prompt builder section; expanded until the user folds it.
+    public bool PromptBuilderExpanded { get; init; } = true;
+
     /// "Later" on an update prompt suppresses it until this moment.
     public DateTimeOffset? UpdateSnoozeUntil { get; init; }
 
@@ -68,6 +71,7 @@ public static class SettingsStore {
         public string Accent { get; init; } = "";
         public string UserName { get; init; } = "";
         public bool SnapEnabled { get; init; } = true;
+        public bool PromptBuilderExpanded { get; init; } = true;
         public DateTimeOffset? UpdateSnoozeUntil { get; init; }
         public string UpdateSkipVersion { get; init; } = "";
     }
@@ -95,6 +99,7 @@ public static class SettingsStore {
                 Accent = persisted.Accent,
                 UserName = persisted.UserName,
                 SnapEnabled = persisted.SnapEnabled,
+                PromptBuilderExpanded = persisted.PromptBuilderExpanded,
                 UpdateSnoozeUntil = persisted.UpdateSnoozeUntil,
                 UpdateSkipVersion = persisted.UpdateSkipVersion,
             };
@@ -122,6 +127,7 @@ public static class SettingsStore {
                     Accent = settings.Accent,
                     UserName = settings.UserName,
                     SnapEnabled = settings.SnapEnabled,
+                    PromptBuilderExpanded = settings.PromptBuilderExpanded,
                     UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
                     UpdateSkipVersion = settings.UpdateSkipVersion,
                 }));

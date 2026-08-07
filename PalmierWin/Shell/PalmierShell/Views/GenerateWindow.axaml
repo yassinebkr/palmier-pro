@@ -33,6 +33,10 @@
          long advice lines overflow the right edge by exactly its width. -->
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Spacing="8" Margin="14,12,14,14">
+        <!-- Where the next take lands. Persistent, unlike Message — a capture
+             warning or a sync note must not erase the target. -->
+        <TextBlock Text="{Binding TargetSummary}" FontSize="11" TextTrimming="CharacterEllipsis"
+                   Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
         <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
           <StackPanel Grid.Column="0" Spacing="3">
             <TextBlock Text="First frame" FontSize="10"
@@ -193,7 +197,8 @@
 
         <!-- Quick-pick phrases for the five parts of a shot description. A
              chip appends to the same prompt text the box below edits. -->
-        <Expander Classes="section" Header="PROMPT BUILDER" IsExpanded="True">
+        <Expander Classes="section" Header="PROMPT BUILDER"
+                  IsExpanded="{Binding PromptBuilderExpanded, Mode=TwoWay}">
           <ItemsControl ItemsSource="{Binding PromptChipGroups}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="gen:PromptChipGroup">
