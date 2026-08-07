@@ -81,6 +81,11 @@ public partial class InspectorPanel : UserControl {
             vm?.CommitHueCurve((Core.HueChannel)editor.Channel, e.Points);
     }
 
+    /// A canceled drag previewed points into the VM model without committing;
+    /// refresh restores the model from the stored effect so the canceled
+    /// channel cannot leak into a later commit on another channel.
+    void OnCurveCanceled(object? sender, EventArgs e) => vm?.Refresh();
+
     Core.ColorWheelMath.WheelKind KindOf(object? sender) =>
         ReferenceEquals(sender, LiftWheel) ? Core.ColorWheelMath.WheelKind.Lift
             : ReferenceEquals(sender, GainWheel) ? Core.ColorWheelMath.WheelKind.Gain

@@ -45,6 +45,10 @@ public class CurveEditor : Control {
     public event EventHandler<CurvePointsEventArgs>? Changed;
     /// Gesture finished: pointer released, or a double-tap removal.
     public event EventHandler<CurvePointsEventArgs>? Committed;
+    /// Gesture aborted mid-drag (capture lost): nothing commits, and the
+    /// listener must discard the previewed points from any model they
+    /// already leaked into.
+    public event EventHandler? Canceled;
 
     const double MinDragDistance = 3;   // macOS DragGesture(minimumDistance: 3)
 
@@ -218,11 +222,19 @@ public class CurveEditor : Control {
         e.Handled = true;
     }
 
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
-        base.OnPointerCaptureLost(e);
+    /// Drop an in-flight gesture without committing. A press that never
+    /// passed the drag threshold previewed nothing, so it cancels quietly.
+    public void CancelDrag() {
         pressed = false;
+        if (dragPoints is null) return;
         dragPoints = null;
         InvalidateVisual();
+        Canceled?.Invoke(this, EventArgs.Empty);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) {
+        base.OnPointerCaptureLost(e);
+        CancelDrag();
     }
 
     void OnDoubleTapped(object? sender, TappedEventArgs e) {

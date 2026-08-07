@@ -139,4 +139,27 @@ public class CurveInspectorTests {
         h.Inspector.CommitHueCurve(HueChannel.Sat, []);
         Assert.Null(h.Clip(id).EffectOf("color.hueCurves"));
     }
+
+    /// A drag on Red previews points into the model; losing the capture
+    /// cancels the gesture and the panel answers with a Refresh. A later
+    /// commit on Master must not serialize the canceled Red preview.
+    [Fact]
+    public void CanceledCurveDrag_DoesNotLeakIntoALaterCommitOnAnotherChannel() {
+        using var h = new Harness();
+        string id = h.AddSelectedClip();
+        var redPreview = new List<CurvePoint> { new(0, 0.1), new(1, 0.9) };
+
+        h.Inspector.PreviewCurve(GradeChannel.Red, redPreview);
+        Assert.Equal(redPreview, h.Inspector.CurveGrade.Red);
+        h.Inspector.Refresh();   // the Canceled handler's recovery
+        Assert.Empty(h.Inspector.CurveGrade.Red);
+
+        var master = new List<CurvePoint> { new(0, 0), new(0.5, 0.7), new(1, 1) };
+        h.Inspector.CommitCurve(GradeChannel.Master, master);
+
+        string json = h.Clip(id).EffectOf("color.curves")?.Text("curve") ?? "";
+        var written = GradeCurve.Parse(json);
+        Assert.Equal(master, written.Master);
+        Assert.Empty(written.Red);
+    }
 }

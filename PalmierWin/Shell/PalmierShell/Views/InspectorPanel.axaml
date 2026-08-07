@@ -309,7 +309,8 @@
               </StackPanel>
               <views:CurveEditor x:Name="GradeEditor" Mode="Grade"
                                  Height="{StaticResource CurveEditorHeight}"
-                                 Changed="OnGradeCurveChanged" Committed="OnGradeCurveCommitted"/>
+                                 Changed="OnGradeCurveChanged" Committed="OnGradeCurveCommitted"
+                                 Canceled="OnCurveCanceled"/>
               <TextBlock Text="Drag to add or shape a point · double-click to remove" FontSize="9"
                          Foreground="{StaticResource ThemeTextMutedBrush}"/>
             </StackPanel>
@@ -327,7 +328,8 @@
               </StackPanel>
               <views:CurveEditor x:Name="HueEditor" Mode="Hue"
                                  Height="{StaticResource CurveEditorHeight}"
-                                 Changed="OnHueCurveChanged" Committed="OnHueCurveCommitted"/>
+                                 Changed="OnHueCurveChanged" Committed="OnHueCurveCommitted"
+                                 Canceled="OnCurveCanceled"/>
               <TextBlock Text="Drag to add or shape a point · double-click to remove" FontSize="9"
                          Foreground="{StaticResource ThemeTextMutedBrush}"/>
             </StackPanel>
