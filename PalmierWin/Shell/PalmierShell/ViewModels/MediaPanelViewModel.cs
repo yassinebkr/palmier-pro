@@ -149,6 +149,9 @@ public sealed partial class MediaPanelViewModel : ObservableObject {
     /// Where generated transitions are filed.
     public const string TransitionsFolder = "Transitions";
 
+    /// Where finished enhances are filed.
+    public const string EnhancedFolder = "Enhanced";
+
     public const string DefaultFolder = "Library";
 
     readonly Dictionary<string, bool> folderExpanded = new();

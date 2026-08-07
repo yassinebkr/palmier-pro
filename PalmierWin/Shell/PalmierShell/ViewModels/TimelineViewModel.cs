@@ -215,6 +215,12 @@ public sealed partial class TimelineViewModel : ObservableObject {
 
     public void RequestRemoveSilence(string clipId) => RemoveSilenceRequested?.Invoke(clipId);
 
+    /// Enhance with AI… (context menu): the owner extracts the clip's tail
+    /// and arms the composer to continue it.
+    public event Action<string>? EnhanceRequested;
+
+    public void RequestEnhance(string clipId) => EnhanceRequested?.Invoke(clipId);
+
     /// Delete and close the hole: later clips on the affected tracks pull left.
     public event Action<string>? RippleDeleteRequested;
 

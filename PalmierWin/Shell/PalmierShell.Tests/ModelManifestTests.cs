@@ -46,7 +46,7 @@ public sealed class ModelManifestTests : IDisposable {
             "fal-ai/minimax/hailuo-02/standard/text-to-video",
             "blackforestlabs/flux-3/first-last-frame-to-video",
             "blackforestlabs/flux-3/text-to-video",
-            // extend-video stays in the manifest but hidden until Enhance lands.
+            "blackforestlabs/flux-3/extend-video",
         ];
         var fal = ModelManifest.For("fal");
         Assert.Equal(falIds.Length, fal.Count);
@@ -85,16 +85,17 @@ public sealed class ModelManifestTests : IDisposable {
         Assert.True(replicate.SynthesisesAudio);
 
         var fal = ModelManifest.For("fal").Where(m => m.Family == "flux").ToList();
-        Assert.Equal(2, fal.Count);
+        Assert.Equal(3, fal.Count);
         Assert.All(fal, m => Assert.True(m.SynthesisesAudio));
-        Assert.DoesNotContain(fal, m => m.Id == "blackforestlabs/flux-3/extend-video");
         Assert.Equal(["firstLastFrame"],
             fal.Single(m => m.Id == "blackforestlabs/flux-3/first-last-frame-to-video").Capabilities);
         Assert.Equal(["textToVideo"],
             fal.Single(m => m.Id == "blackforestlabs/flux-3/text-to-video").Capabilities);
-        // Hidden from the picker, still on the builders' surface (ForAll).
-        Assert.Equal(["extend"],
-            ModelManifest.ForAll("fal").Single(m => m.Id == "blackforestlabs/flux-3/extend-video").Capabilities);
+        // In the picker since the composer's Enhance affordance landed: it is
+        // the armed enhance that attaches the source video the endpoint needs.
+        var extend = fal.Single(m => m.Id == "blackforestlabs/flux-3/extend-video");
+        Assert.Equal(["extend"], extend.Capabilities);
+        Assert.Equal(1, extend.MaxReferenceVideos);
     }
 
     /// The manifest's own rule: every offered resolution carries a verified

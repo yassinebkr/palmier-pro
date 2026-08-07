@@ -241,6 +241,14 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Set when the run should fill empty timeline space with a new shot.
     public ShotTarget? PendingShot { get; private set; }
 
+    /// Set when the run should continue an existing clip and land after it.
+    public EnhanceTarget? PendingEnhance { get; private set; }
+
+    /// Bumped on every arm and disarm, so asynchronous arm prep (frame
+    /// decodes, tail extractions) can tell a stale completion from the arm
+    /// it started under.
+    public int ArmGeneration { get; private set; }
+
     public bool HasFirstFrame => FirstFramePath is not null;
     public bool HasLastFrame => LastFramePath is not null;
 
@@ -453,12 +461,20 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         string keep = keepSelection ? ModelId.Trim() : "";
         Models.Clear();
         ModelChoices.Clear();
-        foreach (var model in SelectedProvider.Models) {
+        foreach (var model in PickerModels()) {
             Models.Add(model);
             ModelChoices.Add(model.Id);
         }
         ModelId = keep.Length > 0 ? keep : Models.FirstOrDefault()?.Id ?? "";
     }
+
+    /// What the picker may offer in the current mode. An extend-only endpoint
+    /// needs a source video to mean anything, so it stays out of plain shots
+    /// and transitions — and while an enhance is armed, the models that can
+    /// continue a clip are all the picker shows.
+    IEnumerable<GenerationModel> PickerModels() => PendingEnhance is not null
+        ? SelectedProvider.Models.Where(m => m.CanExtend)
+        : SelectedProvider.Models.Where(m => !m.ExtendOnly);
 
     partial void OnSelectedProviderChanged(IGenerationProvider value) {
         SyncModels();
@@ -598,16 +614,21 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     partial void OnSelectedResolutionChanged(string value) => RefreshDerived();
     partial void OnTunePromptChanged(bool value) => RefreshDerived();
 
+    /// Test seam: replaces the settings read. Never set in production code.
+    public Func<AppSettings> LoadSettings { get; set; } = SettingsStore.Load;
+
     /// Re-reads the provider's key; call after the settings pane saves.
     /// Also restores the provider's last-used model — but only over an
-    /// untouched default, never over a selection made this session.
+    /// untouched default, never over a selection made this session, and in
+    /// enhance mode never a model the narrowed picker does not offer.
     public async Task RefreshKeyAsync() {
-        var settings = await Task.Run(SettingsStore.Load);
+        var settings = await Task.Run(() => LoadSettings());
         HasApiKey = settings.KeyFor(SelectedProvider.Id).Length > 0;
         Message = HasApiKey ? null : $"Add a {SelectedProvider.Name} key in Settings → Generation.";
         if (ModelId == Models.FirstOrDefault()?.Id
             && settings.Models.TryGetValue(ModelMemoryKey, out var saved)
-            && saved.Length > 0)
+            && saved.Length > 0
+            && (PendingEnhance is null || Models.Any(m => m.Id == saved)))
             ModelId = saved;
     }
 
@@ -626,23 +647,19 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             Message = conflict;
             return;
         }
+        if (PendingEnhance is not null && ReferenceVideos.Count == 0) {
+            Message = "The source video was removed — re-arm Enhance from the clip's menu.";
+            return;
+        }
         string id = ModelId.Trim();
         string name = Models.FirstOrDefault(m => m.Id == id)?.Name ?? id;
-        // The receipt records the prompt actually sent, not the one typed.
-        string sent = FinalPrompt;
-        var request = new GenerationRequest(sent, id, SelectedDuration) {
-            FirstFrame = FirstFramePath,
-            LastFrame = LastFramePath,
-            Resolution = SelectedResolution,
-            NegativePrompt = TunePrompt ? Style.Negative(Context) : null,
-            ReferenceImages = ReferenceImages.Select(r => r.Path).ToList(),
-            ReferenceVideos = ReferenceVideos.Select(r => r.Path).ToList(),
-        };
+        var request = BuildRequest();
         // The model that actually ran is the one worth restoring next launch.
         string memoryKey = ModelMemoryKey;
         _ = Task.Run(() => SettingsStore.Update(s => s.WithModel(memoryKey, id)));
         var transition = PendingTransition;
         var shot = PendingShot;
+        var enhance = PendingEnhance;
         int takes = TwoTakes ? 2 : 1;
         // One claim across the takes: the first success lands on the
         // timeline, the other stays in the library as the alternative.
@@ -651,11 +668,23 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             var job = new GenerationJobViewModel(Prompt.Trim(),
                 takes > 1 ? $"{name} · take {take}" : name);
             Jobs.Add(job);
-            _ = RunAsync(job, SelectedProvider, request, transition, shot, claim);
+            _ = RunAsync(job, SelectedProvider, request, transition, shot, enhance, claim);
         }
         Prompt = "";
         ClearPlacement();
     }
+
+    /// The request exactly as Generate sends it — the prompt actually sent,
+    /// not the one typed, plus the attached stills and references. Split out
+    /// so what would go on the wire is checkable without spending money.
+    public GenerationRequest BuildRequest() => new(FinalPrompt, ModelId.Trim(), SelectedDuration) {
+        FirstFrame = FirstFramePath,
+        LastFrame = LastFramePath,
+        Resolution = SelectedResolution,
+        NegativePrompt = TunePrompt ? Style.Negative(Context) : null,
+        ReferenceImages = ReferenceImages.Select(r => r.Path).ToList(),
+        ReferenceVideos = ReferenceVideos.Select(r => r.Path).ToList(),
+    };
 
     sealed class InsertClaim {
         int claimed;
@@ -669,9 +698,12 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// generated for.
     public event Action<ShotTarget, string>? ShotReady;
 
+    /// Raised when a finished enhance should land after its source clip.
+    public event Action<EnhanceTarget, string>? EnhanceReady;
+
     async Task RunAsync(GenerationJobViewModel job, IGenerationProvider provider,
                         GenerationRequest request, TransitionTarget? transition,
-                        ShotTarget? shot, InsertClaim claim) {
+                        ShotTarget? shot, EnhanceTarget? enhance, InsertClaim claim) {
         try {
             var settings = await Task.Run(SettingsStore.Load);
             string key = settings.KeyFor(provider.Id);
@@ -686,10 +718,12 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             });
             Jobs.Remove(job);
             job.Finish();
-            // Transitions get a folder of their own; a generated shot is just
-            // another piece of footage and belongs with the rest.
+            // Transitions and enhances get folders of their own; a generated
+            // shot is just another piece of footage and belongs with the rest.
             await importAsync(path,
-                transition is not null ? MediaPanelViewModel.TransitionsFolder : null);
+                transition is not null ? MediaPanelViewModel.TransitionsFolder
+                : enhance is not null ? MediaPanelViewModel.EnhancedFolder
+                : null);
             // With two takes, the first success takes the timeline slot and
             // the other stays in the library as the alternative to swap in.
             if (transition is not null) {
@@ -699,6 +733,10 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             if (shot is not null) {
                 if (claim.TryClaim()) ShotReady?.Invoke(shot, path);
                 else Message = "Second take imported to the library — swap it in if you prefer it.";
+            }
+            if (enhance is not null) {
+                if (claim.TryClaim()) EnhanceReady?.Invoke(enhance, path);
+                else Message = "Second take imported to Enhanced — swap it in if you prefer it.";
             }
         } catch (OperationCanceledException) {
             Jobs.Remove(job);
@@ -782,8 +820,10 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     public void BeginTransition(TransitionTarget target, string firstFrame, string lastFrame,
                                 int? firstFrameNumber = null, int? lastFrameNumber = null,
                                 string? locationTag = null) {
+        ArmGeneration++;
         PendingTransition = target;
         PendingShot = null;
+        ClearEnhance();
         IsOpen = true;
         SetFirstFrame(firstFrame, firstFrameNumber);
         SetLastFrame(lastFrame, lastFrameNumber);
@@ -807,8 +847,10 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Arms a generated shot for empty timeline space. `locationTag` is the
     /// nearest preceding clip's container location tag, when it has one.
     public void BeginShot(ShotTarget target, string? locationTag = null) {
+        ArmGeneration++;
         PendingShot = target;
         PendingTransition = null;
+        ClearEnhance();
         IsOpen = true;
         ClearFirstFrame();
         ClearLastFrame();
@@ -830,6 +872,34 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             : hasFirst ? "the clip before it" : "the clip after it";
         Message = $"New shot to sit between {frames} — describe it, then Generate." +
                   MoveToFrameCapableModel();
+    }
+
+    /// Arms an enhance: the run continues the tail of the target's clip,
+    /// attached as [Video1] — the stills step aside (the endpoints take one
+    /// or the other) and the picker narrows to the models that can extend.
+    /// The prompt is left for the user: it describes how the shot continues.
+    /// `locationTag` is the clip's container location tag, when it has one.
+    public void BeginEnhance(EnhanceTarget target, string tailVideoPath, string? locationTag = null) {
+        ArmGeneration++;
+        PendingEnhance = target;
+        PendingTransition = null;
+        PendingShot = null;
+        IsOpen = true;
+        ClearFirstFrame();
+        ClearLastFrame();
+        ResetSpans();
+        ResetLocation(locationTag);
+        SyncModels(keepSelection: true);
+        string moved = MoveToExtendCapableModel();
+        ReferenceImages.Clear();
+        ReferenceVideos.Clear();
+        AddReferenceVideo(tailVideoPath);
+        if (ReferenceVideos.Count > 0) {
+            Message = $"Extend '{target.ClipName}' — describe what happens next, then Generate." + moved;
+        } else {
+            ReferencesChanged();   // the clears above still changed the state
+            Message = $"{SelectedProvider.Name} has no model that can extend a clip.";
+        }
     }
 
     /// Matches the requested length to the space: the smallest offered
@@ -921,9 +991,31 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         return $" Switched to {capable.Name}, which is the one that takes both frames.";
     }
 
+    /// An enhance cannot run on a model that cannot continue a clip. Switch
+    /// to the first that can and say so, as MoveToFrameCapableModel does.
+    string MoveToExtendCapableModel() {
+        if (CurrentModel is { CanExtend: true }) return "";
+        var capable = Models.FirstOrDefault(m => m.CanExtend);
+        if (capable is null) return "";
+        ModelId = capable.Id;
+        return $" Switched to {capable.Name}, which is the one that continues a clip.";
+    }
+
+    /// Leaving enhance restores the full picker. A selection the unfiltered
+    /// list no longer holds — the extend-only endpoint — falls back to the
+    /// top of it rather than staying armed for a request it cannot serve.
+    void ClearEnhance() {
+        if (PendingEnhance is null) return;
+        PendingEnhance = null;
+        SyncModels(keepSelection: true);
+        if (CurrentModel is null) ModelId = Models.FirstOrDefault()?.Id ?? "";
+    }
+
     public void ClearPlacement() {
+        ArmGeneration++;
         PendingTransition = null;
         PendingShot = null;
+        ClearEnhance();
         ResetLocation(null);
         OnPropertyChanged(nameof(ShowSpanPickers));
         OnPropertyChanged(nameof(HasPendingPlacement));
@@ -978,3 +1070,8 @@ public sealed record ShotTarget(string TrackId, int StartFrame, int AvailableFra
     public int ReplaceBeforeFrames { get; init; }
     public int ReplaceAfterFrames { get; init; }
 }
+
+/// Where a finished enhance lands: right after the clip it continues, on
+/// that clip's track. Only the id is durable — the landing re-reads the
+/// clip's position, so edits made while the run generates are respected.
+public sealed record EnhanceTarget(string ClipId, string ClipName);

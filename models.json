@@ -81,7 +81,8 @@
       // array (one opens the clip, two start and end it), start_video to
       // continue a clip, neither for text-to-video. `draft` is a fast 720p
       // preview flag. Accepts any whole second 5–20 ("auto" too); the picker
-      // offers the useful spread.
+      // offers the useful spread. The source video rides as the single
+      // reference video, and the schema forbids combining it with images.
       {
         "id": "black-forest-labs/flux-3",
         "name": "FLUX.3",
@@ -89,7 +90,9 @@
         "capabilities": ["textToVideo", "firstFrame", "firstLastFrame", "extend", "draft"],
         "resolutions": ["720p", "1080p"],
         "synthesisesAudio": true,
-        "family": "flux"
+        "family": "flux",
+        "maxReferenceVideos": 1,
+        "framesAndReferencesExclusive": true
       }
     ],
     "fal": [
@@ -161,6 +164,8 @@
         "synthesisesAudio": true,
         "family": "flux"
       },
+      // Extend continues an existing clip from its final frames; the one
+      // source video it takes rides as the run's single reference video.
       {
         "id": "blackforestlabs/flux-3/extend-video",
         "name": "FLUX.3 · extend",
@@ -169,9 +174,7 @@
         "resolutions": ["720p", "1080p"],
         "synthesisesAudio": true,
         "family": "flux",
-        // Out of the picker until the composer's Enhance affordance lands —
-        // nothing can attach the required source video yet.
-        "hidden": true
+        "maxReferenceVideos": 1
       }
     ]
   }

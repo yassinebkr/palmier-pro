@@ -171,8 +171,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Timeline.TransitionRequested += (left, right) => _ = BeginTransitionAsync(left, right);
         Timeline.ShotRequested += (trackId, start, available) =>
             _ = BeginShotAsync(trackId, start, available);
+        Timeline.EnhanceRequested += clipId => _ = BeginEnhanceAsync(
+            Timeline, Media.Generate, clipId, ClipExtract.SaveTail, LocationTagFor);
         Media.Generate.TransitionReady += InsertTransition;
         Media.Generate.ShotReady += InsertShot;
+        Media.Generate.EnhanceReady += InsertEnhance;
         // The composer's frame-nudge buttons recapture through the same
         // composite path the automatic stills use.
         Media.Generate.CaptureTimelineFrame = frame =>
@@ -515,6 +518,37 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         Media.Generate.DescribeShotFrames(first is not null, last is not null);
     }
 
+    /// Extracts the tail of the clip's used range — five seconds of frames,
+    /// or the whole range when shorter — and arms the composer to continue
+    /// it. Same source-domain math as the transition video-context path; the
+    /// ffmpeg extract runs off the UI thread. A failed extract says so and
+    /// nothing arms. Static so tests can drive it with a plain composer —
+    /// the instance wiring only subscribes the event.
+    public static async Task BeginEnhanceAsync(
+        TimelineViewModel timeline, GeneratePanelViewModel composer, string clipId,
+        Func<ClipState, int, int, string?> extractTail, Func<string?, string?> locationTagFor) {
+        if (timeline.State?.FindClip(clipId) is not { } clip) return;
+        string name = Path.GetFileNameWithoutExtension(clip.MediaRef);
+        // A couple of seconds of decode: open the composer first so the click
+        // has a visible effect, as the transition flow does.
+        composer.IsOpen = true;
+        composer.Message = $"Extracting the tail of '{name}'…";
+        int fps = TimelineViewModel.TimelineFps;
+        int arm = composer.ArmGeneration;
+        string? tail = await Task.Run(() => extractTail(clip, 5 * fps, fps));
+        // A newer arm made meanwhile owns the composer; this completion is stale.
+        if (arm != composer.ArmGeneration) return;
+        if (tail is null) {
+            // A failed re-arm also clears the previous enhance — unlike the
+            // transition failure, which leaves an untouched composer alone —
+            // or the armed state would go on naming the old clip.
+            composer.ClearPlacement();
+            composer.Message = $"Could not extract the tail of '{name}' (ffmpeg).";
+            return;
+        }
+        composer.BeginEnhance(new EnhanceTarget(clip.Id, name), tail, locationTagFor(clip.MediaRef));
+    }
+
     /// Drops a finished transition into place. Across a cut it straddles the
     /// boundary, overwriting the tail of the outgoing clip and the head of the
     /// incoming one — that is what a transition is. Across a gap it starts at
@@ -611,6 +645,43 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
             return true;
         });
         Timeline.Reload();
+    }
+
+    /// Lands a finished enhance right after the clip it continues, on that
+    /// clip's track. One undo entry. A clip edited away mid-run or a refused
+    /// insert is reported through the composer, never dropped silently — the
+    /// take is already in the library either way.
+    void InsertEnhance(EnhanceTarget target, string mediaPath) {
+        int clipFrames = TimelineViewModel.TimelineFramesFor(mediaPath)
+            ?? DefaultTransitionSeconds * TimelineViewModel.TimelineFps;
+        bool placed = Undo.Execute("Enhance Clip",
+            () => PlaceEnhance(Project, target, mediaPath, clipFrames));
+        Timeline.Reload();
+        if (!placed)
+            Media.Generate.Message = Timeline.State?.FindClip(target.ClipId) is null
+                ? $"'{target.ClipName}' is no longer on the timeline — " +
+                  "the take is in the library under Enhanced."
+                : $"Could not place the take ({Path.GetFileName(mediaPath)}) after " +
+                  $"'{target.ClipName}' — it is in the library under Enhanced.";
+    }
+
+    /// The placement half of InsertEnhance, separated so tests can drive it
+    /// against a live project. The clip's end is re-read at insert time, so
+    /// edits made while the run generated are respected; when the landing
+    /// span is taken, AddClipAt's own overwrite semantics apply, as with any
+    /// drop onto occupied space.
+    public static bool PlaceEnhance(IntPtr project, EnhanceTarget target, string mediaPath,
+                                    int clipFrames) {
+        var state = TimelineState.Parse(CoreApi.GetTimelineJson(project));
+        if (state.FindClip(target.ClipId) is not { } source) return false;
+        int start = source.EndFrame;
+        if (CoreApi.AddClipAt(project, mediaPath, clipFrames, start) is not { } id) return false;
+        // The core drops new clips on the first video track; the take belongs
+        // on the track of the clip it continues.
+        var track = state.Tracks.FirstOrDefault(t => t.Clips.Any(c => c.Id == source.Id));
+        if (track is not null)
+            CoreApi.palmier_timeline_move_clip_to_track(project, id, track.Id, start);
+        return true;
     }
 
     /// Extracts the clips around the pending target and attaches them to the
