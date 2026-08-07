@@ -419,8 +419,10 @@ public func palmierProjectTimelineName(_ handle: UnsafeMutableRawPointer?,
 }
 
 /// Probes a media file via libavformat without decoding. Writes
-/// "width,height,fpsX100,totalFrames" (ASCII) into buf. totalFrames is -1
-/// when the container reports no duration. Returns 1 on success, 0 on failure.
+/// "width,height,fpsX100,totalFrames[,location]" (ASCII) into buf. totalFrames
+/// is -1 when the container reports no duration. location is the format-level
+/// location tag (iPhone ISO6709 or generic "location"), empty when absent.
+/// Returns 1 on success, 0 on failure.
 /// Audio-only files report 0,0,3000,frames at a synthetic 30 fps and fail when the container has no duration.
 @_cdecl("palmier_probe_media")
 public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
@@ -432,6 +434,8 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
     defer { var f: UnsafeMutablePointer<AVFormatContext>? = fmt; avformat_close_input(&f) }
     guard avformat_find_stream_info(fmt, nil) >= 0 else { return 0 }
 
+    let location = probeLocationTag(fmt)
+
     guard let (_, videoStream) = FFmpegDecoder.firstPlayableVideoStream(in: fmt),
           let par = videoStream.pointee.codecpar else {
         // No playable video stream: an audio-only file still imports, with
@@ -439,7 +443,7 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
         guard av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0) >= 0 else { return 0 }
         let seconds = fmt.pointee.duration > 0 ? Double(fmt.pointee.duration) / 1_000_000 : 0
         guard seconds > 0 else { return 0 }
-        return writeCString("0,0,3000,\(Int((seconds * 30).rounded()))", into: buf, size: bufSize)
+        return writeCString("0,0,3000,\(Int((seconds * 30).rounded()))\(location)", into: buf, size: bufSize)
     }
 
     let width = Int(par.pointee.width)
@@ -458,7 +462,25 @@ public func palmierProbeMedia(_ path: UnsafePointer<CChar>?,
         totalFrames = -1
     }
 
-    return writeCString("\(width),\(height),\(fpsX100),\(totalFrames)", into: buf, size: bufSize)
+    return writeCString("\(width),\(height),\(fpsX100),\(totalFrames)\(location)", into: buf, size: bufSize)
+}
+
+/// Format-level location tag (iPhone ISO6709, or the generic "location" key),
+/// comma-prefixed for the probe line; empty when absent. Commas and newlines
+/// inside the tag are flattened so the single-line ASCII contract holds, and
+/// the tag is capped so a 128-byte buffer always fits the full probe line.
+private func probeLocationTag(_ fmt: UnsafeMutablePointer<AVFormatContext>) -> String {
+    guard fmt.pointee.metadata != nil else { return "" }
+    for key in ["com.apple.quicktime.location.ISO6709", "location"] {
+        guard let entry = key.withCString({ av_dict_get(fmt.pointee.metadata, $0, nil, 0) }),
+              let raw = entry.pointee.value else { continue }
+        let tag = String(cString: raw)
+            .replacingOccurrences(of: ",", with: ";")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        if !tag.isEmpty { return ",\(String(tag.prefix(60)))" }
+    }
+    return ""
 }
 
 /// Adds a clip for `mediaPath` at the end of its track — the video track

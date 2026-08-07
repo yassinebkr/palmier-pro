@@ -392,16 +392,24 @@ public static partial class CoreApi {
         return decoded > 0 ? (buf, decoded) : null;
     }
 
-    public readonly record struct MediaProbe(int Width, int Height, double Fps, int TotalFrames);
+    public readonly record struct MediaProbe(int Width, int Height, double Fps, int TotalFrames, string Location = "");
 
     /// Probes a media file. Returns null when the core can't open it.
     public static MediaProbe? ProbeMedia(string path) {
         var buf = new byte[128];
         if (palmier_probe_media(path, buf, buf.Length) != 1) return null;
         string text = Encoding.ASCII.GetString(buf, 0, Array.IndexOf(buf, (byte)0) is >= 0 and var n ? n : buf.Length);
+        return ParseProbe(text);
+    }
+
+    /// "width,height,fpsX100,totalFrames[,location]" — location rides along
+    /// only on engines new enough to send it, so it is optional.
+    public static MediaProbe? ParseProbe(string text) {
         var parts = text.Split(',');
-        if (parts.Length != 4) return null;
-        return new MediaProbe(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]) / 100.0, int.Parse(parts[3]));
+        if (parts.Length is < 4 or > 5) return null;
+        if (!int.TryParse(parts[0], out int w) || !int.TryParse(parts[1], out int h) ||
+            !int.TryParse(parts[2], out int fpsX100) || !int.TryParse(parts[3], out int frames)) return null;
+        return new MediaProbe(w, h, fpsX100 / 100.0, frames, parts.Length == 5 ? parts[4] : "");
     }
 
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
