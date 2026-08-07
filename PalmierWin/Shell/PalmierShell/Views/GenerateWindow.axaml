@@ -304,6 +304,17 @@
         <CheckBox FontSize="11" IsChecked="{Binding TunePrompt, Mode=TwoWay}"
                   Content="{Binding StyleName, StringFormat='Tune the prompt for {0}'}"
                   ToolTip.Tip="{Binding PromptAdvice}"/>
+        <!-- Off by default on every open; only the resolved place name ever
+             reaches the prompt — coordinates go nowhere but the geocoder. -->
+        <CheckBox FontSize="11" IsChecked="{Binding UseLocationContext, Mode=TwoWay}"
+                  IsVisible="{Binding HasLocationContext}"
+                  ToolTip.Tip="Grounds the prompt in where the source footage was shot. Only the resolved place name is sent to the model; coordinates never leave the machine except to the OpenStreetMap geocoder.">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Use location context"/>
+            <TextBlock Text="{Binding LocationStatus}" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{StaticResource ThemeTextMutedBrush}"/>
+          </StackPanel>
+        </CheckBox>
         <Button Classes="icon" FontSize="11" Padding="6,3" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Left"
                 Command="{Binding TogglePromptPreviewCommand}">

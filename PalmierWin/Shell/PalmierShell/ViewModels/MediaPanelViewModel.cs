@@ -14,6 +14,8 @@ public sealed partial class MediaItemViewModel : ObservableObject {
     public int Height { get; }
     public double Fps { get; }
     public int TotalFrames { get; }
+    /// ISO6709 or free-text location tag from the container, "" when absent.
+    public string Location { get; }
     public string DurationText { get; }
     public string ResolutionText => Width > 0 && Height > 0 ? $"{Width}×{Height}" : "";
 
@@ -68,6 +70,7 @@ public sealed partial class MediaItemViewModel : ObservableObject {
         Height = probe.Height;
         Fps = probe.Fps;
         TotalFrames = probe.TotalFrames;
+        Location = probe.Location;
         double seconds = probe.Fps > 0 && probe.TotalFrames > 0 ? probe.TotalFrames / probe.Fps : 0;
         DurationText = TimeSpan.FromSeconds(seconds).ToString(@"m\:ss");
     }

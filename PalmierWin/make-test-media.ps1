@@ -117,3 +117,12 @@ $outClick = Join-Path $outDir "click.mp4"
     -map 0:v -map "[a]" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest $outClick
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
 Write-Host "Generated $outClick"
+
+# GPS fixture: carries an iPhone-style ISO6709 location tag in the container
+# metadata, so the probe's location field has something real to read.
+$outGps = Join-Path $outDir "gps.mp4"
+& $ffmpeg -y -f lavfi -i "testsrc=duration=1:size=160x120:rate=30" `
+    -metadata "com.apple.quicktime.location.ISO6709=+48.8566+002.3522/" `
+    -movflags use_metadata_tags -c:v libx264 -pix_fmt yuv420p $outGps
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg exited $LASTEXITCODE" }
+Write-Host "Generated $outGps"

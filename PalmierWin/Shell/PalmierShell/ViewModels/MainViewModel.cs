@@ -435,6 +435,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
     /// hint, in seconds.
     const int DefaultTransitionSeconds = 5;
 
+    /// The container location tag of the media a generation is grounded in,
+    /// from the import probe. Null when the clip is missing or untagged — the
+    /// composer then hides its location toggle entirely.
+    string? LocationTagFor(string? mediaPath) =>
+        mediaPath is null ? null
+            : Media.Items.FirstOrDefault(item => item.Path == mediaPath)?.Location;
+
     /// Grabs the outgoing clip's last frame and the incoming clip's first
     /// frame, then arms the Generate composer to travel between them. Both
     /// decodes happen off the UI thread.
@@ -469,7 +476,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
                 LeftClipStartFrame = left.StartFrame,
                 RightClipEndFrame = right.EndFrame,
             },
-            first, last, firstFrame, lastFrame);
+            first, last, firstFrame, lastFrame, LocationTagFor(left.MediaRef));
     }
 
     /// Arms a generated shot for empty timeline space, seeded with the frames
@@ -489,7 +496,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
             BeforeClipStartFrame = before?.StartFrame ?? 0,
             AfterClipEndFrame = after?.EndFrame ?? int.MaxValue,
         };
-        Media.Generate.BeginShot(target);
+        Media.Generate.BeginShot(target, LocationTagFor(before?.MediaRef));
         if (before is null && after is null) return;
 
         // Anchored to the neighbours' edges, not the click: empty space past

@@ -71,12 +71,10 @@ public func palmierThumbnails(_ path: UnsafePointer<CChar>?,
     var probeBuf = [CChar](repeating: 0, count: 128)
     var totalFrames = -1
     var fps = 30.0
-    if palmierProbeMedia(path, &probeBuf, 128) == 1 {
-        let parts = String(cString: probeBuf).split(separator: ",")
-        if parts.count == 4, let f = Int(parts[2]), let t = Int(parts[3]) {
-            fps = Double(f) / 100.0
-            totalFrames = t
-        }
+    if palmierProbeMedia(path, &probeBuf, 128) == 1,
+       let probe = parseProbeLine(String(cString: probeBuf)) {
+        fps = Double(probe.fpsX100) / 100.0
+        totalFrames = probe.totalFrames
     }
 
     var written: Int32 = 0
