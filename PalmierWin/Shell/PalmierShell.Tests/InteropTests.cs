@@ -101,6 +101,14 @@ public class InteropTests {
         Assert.True(probe.Value.Height > 0);
         Assert.True(probe.Value.Fps > 0);
         Assert.True(probe.Value.TotalFrames > 0);
+        Assert.Equal("", probe.Value.Location);
+    }
+
+    [Fact]
+    public void ProbeMedia_ReadsTheContainerLocationTag() {
+        var probe = CoreApi.ProbeMedia(TestMediaPath("gps.mp4"));
+        Assert.NotNull(probe);
+        Assert.Equal("+48.8566+002.3522/", probe.Value.Location);
     }
 
     [Fact]
