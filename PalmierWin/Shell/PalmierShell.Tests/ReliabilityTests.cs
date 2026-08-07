@@ -40,7 +40,7 @@ public sealed class CrashLogTests : IDisposable {
         // A file where the log directory should be: CreateDirectory fails.
         string blocker = Path.Combine(dir, "blocker");
         Directory.CreateDirectory(dir);
-        File.WriteAllText(blocker, "");
+        TempFiles.Run(() => File.WriteAllText(blocker, ""));
         CrashLog.DirectoryOverride = Path.Combine(blocker, "logs");
 
         Assert.Null(CrashLog.Write("test", new Exception("boom")));
@@ -59,7 +59,7 @@ public sealed class SettingsFallbackTests : IDisposable {
 
     public void Dispose() {
         SettingsStore.PathOverride = null;
-        if (File.Exists(path)) File.Delete(path);
+        if (File.Exists(path)) TempFiles.Run(() => File.Delete(path));
     }
 
     [Theory]
@@ -68,7 +68,7 @@ public sealed class SettingsFallbackTests : IDisposable {
     [InlineData("null")]                                                   // valid JSON, no object
     [InlineData("not json at all")]
     public void Load_CorruptFile_FallsBackToDefault(string content) {
-        File.WriteAllText(path, content);
+        TempFiles.Run(() => File.WriteAllText(path, content));
         Assert.Equal(AppSettings.Default, SettingsStore.Load());
     }
 
@@ -77,12 +77,12 @@ public sealed class SettingsFallbackTests : IDisposable {
         // A file where the settings directory should be: CreateDirectory
         // throws IOException, and the save must degrade, not crash.
         string blocker = Path.Combine(Path.GetTempPath(), $"palmier-blocker-{Guid.NewGuid():N}");
-        File.WriteAllText(blocker, "");
+        TempFiles.Run(() => File.WriteAllText(blocker, ""));
         SettingsStore.PathOverride = Path.Combine(blocker, "settings.json");
         try {
             SettingsStore.Save(AppSettings.Default.WithKey("anthropic", "k"));
         } finally {
-            File.Delete(blocker);
+            TempFiles.Run(() => File.Delete(blocker));
         }
     }
 }
@@ -97,7 +97,7 @@ public sealed class LayoutFallbackTests : IDisposable {
 
     public void Dispose() {
         LayoutStore.PathOverride = null;
-        if (File.Exists(path)) File.Delete(path);
+        if (File.Exists(path)) TempFiles.Run(() => File.Delete(path));
     }
 
     [Theory]
@@ -105,7 +105,7 @@ public sealed class LayoutFallbackTests : IDisposable {
     [InlineData("{\"WindowWidth\": \"wide\", \"Maximized\": 7}")] // wrong types
     [InlineData("null")]                                    // valid JSON, no object
     public void Load_CorruptFile_FallsBackToDefault(string content) {
-        File.WriteAllText(path, content);
+        TempFiles.Run(() => File.WriteAllText(path, content));
         Assert.Equal(WorkspaceLayout.Default, LayoutStore.Load());
     }
 }

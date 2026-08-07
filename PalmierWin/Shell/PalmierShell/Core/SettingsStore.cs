@@ -137,27 +137,37 @@ public static class SettingsStore {
         foreach (var (provider, key) in settings.Keys)
             if (key.Length > 0) encrypted[provider] = Encrypt(key);
 
-        try {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(
-                new Persisted(settings.Provider, settings.Model, "") {
-                    KeysProtected = encrypted,
-                    Models = new Dictionary<string, string>(settings.Models),
-                    Accent = settings.Accent,
-                    UserName = settings.UserName,
-                    SnapEnabled = settings.SnapEnabled,
-                    PromptBuilderExpanded = settings.PromptBuilderExpanded,
-                    AgentMode = settings.AgentMode,
-                    ApprovedMcpClients = [..settings.ApprovedMcpClients],
-                    UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
-                    UpdateSkipVersion = settings.UpdateSkipVersion,
-                }));
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-            // An unwritable AppData must not take the app down; the session
-            // keeps the settings in memory and nothing persists.
-            Console.Error.WriteLine($"settings: could not save to {SettingsPath}: {ex.Message}");
+        // An on-access scanner can hold a brand-new settings file for a few
+        // milliseconds; retry only that transient, then degrade as before.
+        for (int attempt = 0; ; attempt++) {
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+                File.WriteAllText(SettingsPath, JsonSerializer.Serialize(
+                    new Persisted(settings.Provider, settings.Model, "") {
+                        KeysProtected = encrypted,
+                        Models = new Dictionary<string, string>(settings.Models),
+                        Accent = settings.Accent,
+                        UserName = settings.UserName,
+                        SnapEnabled = settings.SnapEnabled,
+                        PromptBuilderExpanded = settings.PromptBuilderExpanded,
+                        AgentMode = settings.AgentMode,
+                        ApprovedMcpClients = [..settings.ApprovedMcpClients],
+                        UpdateSnoozeUntil = settings.UpdateSnoozeUntil,
+                        UpdateSkipVersion = settings.UpdateSkipVersion,
+                    }));
+                return;
+            } catch (IOException ex) when (ex.HResult == SharingViolation && attempt < 2) {
+                Thread.Sleep(50);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // An unwritable AppData must not take the app down; the session
+                // keeps the settings in memory and nothing persists.
+                Console.Error.WriteLine($"settings: could not save to {SettingsPath}: {ex.Message}");
+                return;
+            }
         }
     }
+
+    const int SharingViolation = unchecked((int)0x80070020);
 
     /// Read-modify-write under the gate, so a pane that owns one section
     /// never drops another section's values — and two concurrent updates
