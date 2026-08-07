@@ -25,6 +25,14 @@
       <TextBox x:Name="NameBox" FontSize="12" Watermark="Your name"
                TextChanged="OnNameChanged" KeyDown="OnNameKeyDown"/>
       <views:AccentSwatchPicker x:Name="AccentPicker"/>
+      <StackPanel Spacing="4">
+        <TextBlock Text="AI editing" FontSize="12"
+                   Foreground="{StaticResource ThemeTextTertiaryBrush}"/>
+        <RadioButton x:Name="ModeInline" FontSize="12" IsChecked="True"
+                     Content="Built-in agent (your API key)"/>
+        <RadioButton x:Name="ModeExternal" FontSize="12"
+                     Content="An external MCP client (Claude Desktop…)"/>
+      </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
         <Button x:Name="ContinueButton" Content="Continue" Classes="primary"
                 FontSize="12" MinWidth="76" IsEnabled="False" Click="OnContinue"/>

@@ -20,6 +20,7 @@ public partial class SettingsWindow : Window {
     readonly string accentOnOpen;
     string accentHex;
     bool saved;
+    bool loadingAgentMode = true;
 
     public SettingsWindow() : this(null!) { }  // XAML designer only
 
@@ -34,11 +35,36 @@ public partial class SettingsWindow : Window {
         // provider, key, and model state.
         DataContext = main.Agent;
         SnapDefault.IsChecked = main.Timeline.SnapEnabled;
-        UserNameBox.Text = SettingsStore.Load().UserName;
+        var settings = SettingsStore.Load();
+        UserNameBox.Text = settings.UserName;
+        // The mode radios apply on click (no Save round-trip); the flag keeps
+        // the initial check from writing the settings right back.
+        AgentModeExternal.IsChecked = settings.AgentMode == AppSettings.AgentModeExternal;
+        AgentModeInline.IsChecked = settings.AgentMode != AppSettings.AgentModeExternal;
+        AgentModeStatus.Text = main.Mcp.StatusLine;
+        AgentModeInline.Checked += OnAgentModeChecked;
+        AgentModeExternal.Checked += OnAgentModeChecked;
+        loadingAgentMode = false;
+        main.Mcp.PropertyChanged += OnMcpPropertyChanged;
         AccentSwatches.SelectedHex = accentHex;
         AccentSwatches.SelectionChanged += hex => { accentHex = hex; Accent.Apply(hex); };
         BuildGenerationKeys();
-        Closed += (_, _) => { if (!saved) Accent.Apply(accentOnOpen); };
+        Closed += (_, _) => {
+            main.Mcp.PropertyChanged -= OnMcpPropertyChanged;
+            if (!saved) Accent.Apply(accentOnOpen);
+        };
+    }
+
+    void OnMcpPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        if (e.PropertyName == nameof(Core.Mcp.McpHost.StatusLine) && main is not null)
+            AgentModeStatus.Text = main.Mcp.StatusLine;
+    }
+
+    async void OnAgentModeChecked(object? sender, RoutedEventArgs e) {
+        if (loadingAgentMode || main is null) return;
+        string mode = AgentModeExternal.IsChecked == true
+            ? AppSettings.AgentModeExternal : AppSettings.AgentModeInline;
+        await main.Mcp.SetAgentModeAsync(mode);
     }
 
     readonly Dictionary<string, TextBox> generationKeyBoxes = new();
