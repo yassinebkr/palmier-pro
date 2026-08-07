@@ -11,7 +11,13 @@ public sealed class McpSession {
     public string ClientName { get; }
     public string ClientVersion { get; }
     public DateTimeOffset ConnectedAt { get; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset LastActivityAt { get; private set; } = DateTimeOffset.UtcNow;
+
+    long lastActivityTicks = DateTimeOffset.UtcNow.UtcTicks;
+
+    /// Ticks behind Volatile: DateTimeOffset is two words, so a plain
+    /// read/write could tear between the listener's handler threads.
+    public DateTimeOffset LastActivityAt =>
+        new(Volatile.Read(ref lastActivityTicks), TimeSpan.Zero);
 
     readonly List<ToolCall> calls = new();
     readonly object gate = new();
@@ -27,7 +33,7 @@ public sealed class McpSession {
         get { lock (gate) return calls.ToList(); }
     }
 
-    public void Touch() => LastActivityAt = DateTimeOffset.UtcNow;
+    public void Touch() => Volatile.Write(ref lastActivityTicks, DateTimeOffset.UtcNow.UtcTicks);
 
     public void Record(ToolCall call) {
         lock (gate) {

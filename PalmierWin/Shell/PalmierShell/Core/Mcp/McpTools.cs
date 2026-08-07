@@ -19,13 +19,30 @@ public sealed class McpTools {
     readonly TimelineViewModel timeline;
     readonly Func<IReadOnlyList<MediaItemViewModel>> mediaItems;
     readonly UndoStack undo;
+    readonly Func<string, int?> probe;
 
     public McpTools(Func<IntPtr> project, TimelineViewModel timeline,
-                    Func<IReadOnlyList<MediaItemViewModel>> mediaItems, UndoStack undo) {
+                    Func<IReadOnlyList<MediaItemViewModel>> mediaItems, UndoStack undo,
+                    Func<string, int?>? probe = null) {
         this.project = project;
         this.timeline = timeline;
         this.mediaItems = mediaItems;
         this.undo = undo;
+        this.probe = probe ?? TimelineViewModel.TimelineFramesFor;
+    }
+
+    /// Runs on the request thread before the UI-thread hop: an omitted
+    /// add_clip duration resolves from the library or a media probe here, so
+    /// the UI thread never blocks on FFmpeg. Anything unresolved is left for
+    /// Execute's own validation to report.
+    public void Prepare(string name, JsonObject args) {
+        if (name != "add_clip" || ArgString(args, "media_path") is not { } path ||
+            ArgInt(args, "duration_frames") is > 0)
+            return;
+        int? frames = mediaItems().FirstOrDefault(i => i.Path == path) is { } item
+            ? TimelineViewModel.TimelineFramesFor(item)
+            : probe(path);
+        if (frames is { } resolved) args["duration_frames"] = resolved;
     }
 
     public static readonly string[] ToolNames = [
@@ -137,10 +154,15 @@ public sealed class McpTools {
         args[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
     /// Integers arrive as JSON numbers; a fractional value truncates toward
-    /// zero, matching the agent host's `Int($0)` coercion.
-    static int? ArgInt(JsonObject args, string key) =>
-        args[key] is JsonValue v && v.TryGetValue<double>(out var d) && double.IsFinite(d)
-            ? (int)d : null;
+    /// zero, matching the agent host's `Int($0)` coercion. Tries int first:
+    /// TryGetValue<double> only coerces on JsonElement-backed nodes, and
+    /// Prepare writes an in-memory int node for the resolved duration.
+    static int? ArgInt(JsonObject args, string key) {
+        if (args[key] is not JsonValue v) return null;
+        if (v.TryGetValue<int>(out var i)) return i;
+        if (v.TryGetValue<double>(out var d) && double.IsFinite(d)) return (int)d;
+        return null;
+    }
 
     static double? ArgNumber(JsonObject args, string key) =>
         args[key] is JsonValue v && v.TryGetValue<double>(out var d) && double.IsFinite(d)
@@ -181,12 +203,10 @@ public sealed class McpTools {
     McpToolResult AddClip(JsonObject args) {
         if (ArgString(args, "media_path") is not { } path)
             return Error("media_path is required.");
+        // An omitted duration was resolved in Prepare, off the UI thread.
         int duration = ArgInt(args, "duration_frames") ?? 0;
-        if (duration <= 0) {
-            if (TimelineViewModel.TimelineFramesFor(path) is not { } probed)
-                return Error($"Could not read {path} — is the path exactly as list_media reported?");
-            duration = probed;
-        }
+        if (duration <= 0)
+            return Error($"Could not read {path} — is the path exactly as list_media reported?");
         string? id = null;
         bool ok = ArgInt(args, "start_frame") is { } start
             ? undo.Execute("Add Clip", () => (id = CoreApi.AddClipAt(project(), path, duration, start)) is not null)
@@ -310,10 +330,13 @@ public sealed class McpTools {
             if (ArgNumber(args, "volume_db") is { } db)
                 Record(CoreApi.palmier_clip_set_volume_db(p, clipId, db) == 1, "volume");
             if (FadeKeys.Any(k => args[k] is not null)) {
+                // Away-from-zero, matching the agent host's Swift .rounded().
                 int fadeIn = Math.Max(0, (int)Math.Round(
-                    (ArgNumber(args, "fade_in_seconds") ?? clip.FadeInFrames / 30.0) * 30));
+                    (ArgNumber(args, "fade_in_seconds") ?? clip.FadeInFrames / 30.0) * 30,
+                    MidpointRounding.AwayFromZero));
                 int fadeOut = Math.Max(0, (int)Math.Round(
-                    (ArgNumber(args, "fade_out_seconds") ?? clip.FadeOutFrames / 30.0) * 30));
+                    (ArgNumber(args, "fade_out_seconds") ?? clip.FadeOutFrames / 30.0) * 30,
+                    MidpointRounding.AwayFromZero));
                 Record(CoreApi.palmier_clip_set_fades(p, clipId, fadeIn, fadeOut) == 1, "fades");
             }
             if (ArgString(args, "text") is { } text)

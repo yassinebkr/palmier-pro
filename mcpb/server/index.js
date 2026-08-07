@@ -88,6 +88,10 @@ function openGetStream() {
     reconnect();
   };
   request = http.get(URL_BASE, { headers: headers({ 'Accept': 'text/event-stream' }), timeout: 0 }, (res) => {
+    // 405 = the server has no standalone stream (spec-legal). POST
+    // request/response is all the shim needs, so this is not a lost
+    // connection — failing here would spin initialize→GET→reconnect.
+    if (res.statusCode === 405) { res.resume(); log('no GET stream (405); POST-only mode'); return; }
     if (res.statusCode !== 200) { res.resume(); return fail(new Error(`GET HTTP ${res.statusCode}`)); }
     let buf = '';
     res.setEncoding('utf8');

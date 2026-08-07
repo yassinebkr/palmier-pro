@@ -24,10 +24,11 @@ public class McpTests {
         public McpTools Tools { get; }
         public McpServer Server { get; }
 
-        public Harness(Func<Func<object?>, Task<object?>>? seam = null) {
+        public Harness(Func<Func<object?>, Task<object?>>? seam = null,
+                       Func<string, int?>? probe = null) {
             Timeline = new TimelineViewModel(Project);
             Undo = new UndoStack(Timeline.CaptureSnapshot, Timeline.RestoreSnapshot);
-            Tools = new McpTools(() => Project, Timeline, () => Media, Undo);
+            Tools = new McpTools(() => Project, Timeline, () => Media, Undo, probe);
             Server = new McpServer(0, Tools, seam ?? DirectSeam, "9.9.9-test");
             Server.Start();
             Assert.Equal(McpServerState.Running, Server.State);
@@ -188,13 +189,14 @@ public class McpTests {
     }
 
     [Fact]
-    public async Task CallTool_UnknownTool_IsToolErrorNotProtocolError() {
+    public async Task CallTool_UnknownTool_ReturnsMinus32602() {
+        // The 2025-06-18 tools/call error table puts an unknown tool name at
+        // the protocol level, not in a tool-result isError.
         using var h = new Harness();
         using var client = new HttpClient();
         string session = await Initialize(client, h.Port);
-        var (isError, text) = await CallTool(client, h.Port, session, "bogus");
-        Assert.True(isError);
-        Assert.Equal("Unknown tool bogus.", text);
+        var body = await Rpc(client, h.Port, session, "tools/call", """{"name":"bogus"}""");
+        Assert.Equal(-32602, body["error"]!["code"]!.GetValue<int>());
     }
 
     [Fact]
@@ -204,6 +206,55 @@ public class McpTests {
         string session = await Initialize(client, h.Port);
         var body = await Rpc(client, h.Port, session, "tools/call", """{"arguments":{}}""");
         Assert.Equal(-32602, body["error"]!["code"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Get_WithSession_Gets405() {
+        // The stdio shim reads 405 as "no standalone stream" (POST-only mode)
+        // — this pins the answer its reconnect logic depends on.
+        using var h = new Harness();
+        using var client = new HttpClient();
+        string session = await Initialize(client, h.Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"http://127.0.0.1:{h.Port}/mcp");
+        request.Headers.Add(McpServer.SessionHeader, session);
+        using var res = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExplicitNullId_GetsAResponseWithNullId() {
+        // Only a missing id is a notification; an explicit null is a request.
+        using var h = new Harness();
+        using var client = new HttpClient();
+        string session = await Initialize(client, h.Port);
+        using var res = await Post(client, h.Port,
+            """{"jsonrpc":"2.0","id":null,"method":"ping"}""", session);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = JsonNode.Parse(await res.Content.ReadAsStringAsync())!.AsObject();
+        Assert.True(body.ContainsKey("id"));
+        Assert.Null(body["id"]);
+        Assert.NotNull(body["result"]);
+    }
+
+    [Fact]
+    public async Task Body_OverOneMegabyte_Gets413() {
+        using var h = new Harness();
+        using var client = new HttpClient();
+        using var res = await Post(client, h.Port, new string('x', (1 << 20) + 1));
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Body_ExactlyOneMegabyte_IsReadAndAnswered() {
+        // At the cap the whole body is read; it fails as unparseable, not
+        // as oversized.
+        using var h = new Harness();
+        using var client = new HttpClient();
+        using var res = await Post(client, h.Port, new string('x', 1 << 20));
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
+        Assert.Equal(-32700, body["error"]!["code"]!.GetValue<int>());
     }
 
     // --- Schema discovery -------------------------------------------------
@@ -264,6 +315,35 @@ public class McpTests {
         var clip = TimelineState.Parse(timelineJson).FindClip(clipId);
         Assert.NotNull(clip);
         Assert.Equal((0, 60), (clip.StartFrame, clip.DurationFrames));
+    }
+
+    [Fact]
+    public async Task AddClip_DurationProbe_RunsOffTheUiPathAndPrefersTheLibrary() {
+        bool insideSeam = false;
+        Task<object?> Seam(Func<object?> work) {
+            insideSeam = true;
+            try { return Task.FromResult(work()); } finally { insideSeam = false; }
+        }
+        var probeInsideSeam = new List<bool>();
+        using var h = new Harness(Seam,
+            _ => { probeInsideSeam.Add(insideSeam); return 42; });
+        using var client = new HttpClient();
+        string session = await Initialize(client, h.Port);
+        string pathJson = TestMediaPath("testsrc.mp4").Replace("\\", "\\\\");
+
+        // Not in the library: the probe answers, outside the seam's "UI thread".
+        var (isError, text) = await CallTool(client, h.Port, session, "add_clip",
+            $$"""{"media_path":"{{pathJson}}"}""");
+        Assert.False(isError, text);
+        Assert.Equal(42, JsonNode.Parse(text)!["duration_frames"]!.GetValue<int>());
+        Assert.Equal(new[] { false }, probeInsideSeam);
+
+        // In the library: the item's duration wins without probing at all.
+        h.Import("testsrc.mp4");
+        var (_, libraryText) = await CallTool(client, h.Port, session, "add_clip",
+            $$"""{"media_path":"{{pathJson}}"}""");
+        Assert.Equal(60, JsonNode.Parse(libraryText)!["duration_frames"]!.GetValue<int>());
+        Assert.Single(probeInsideSeam);
     }
 
     [Fact]

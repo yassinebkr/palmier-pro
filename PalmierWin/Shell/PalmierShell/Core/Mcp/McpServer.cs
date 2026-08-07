@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace PalmierShell.Core.Mcp;
 
-public enum McpServerState { Stopped, Running, Busy }
+public enum McpServerState { Stopped, Running, Busy, Failed }
 
 /// MCP endpoint inside the shell: JSON-RPC 2.0 over plain HTTP on loopback,
 /// Streamable-HTTP style with `application/json` responses (no SSE). External
@@ -14,10 +14,10 @@ public enum McpServerState { Stopped, Running, Busy }
 /// to the UI thread through the injected invoke seam, serialized one at a
 /// time, because timeline mutations touch observable state.
 ///
-/// Lifecycle: Start/Stop are idempotent; Start on a taken port reports Busy
-/// instead of throwing. The caller must Stop before the engine handles die —
-/// a tool call in flight touches the live project (MainWindow stops the server
-/// ahead of MainViewModel.Dispose, mirroring the agent shutdown guard).
+/// Lifecycle: Start/Stop are idempotent; a taken port reports Busy, any other
+/// bind failure Failed — no exception escapes. MainWindow stops the server
+/// ahead of engine teardown; a handler abandoned mid-flight is caught by the
+/// core's dead-handle guards and CallTool's catch, never a crash.
 public sealed class McpServer : IDisposable {
     public const int DefaultPort = 19789;
     public const string SessionHeader = "Mcp-Session-Id";
@@ -64,9 +64,16 @@ public sealed class McpServer : IDisposable {
         candidate.Prefixes.Add($"http://127.0.0.1:{port}/");
         try {
             candidate.Start();
-        } catch (HttpListenerException) {
+        } catch (HttpListenerException ex) {
             candidate.Close();
-            State = McpServerState.Busy;
+            // 183 (ERROR_ALREADY_EXISTS): the port is taken — a state, not a
+            // crash. Any other bind failure is unexpected: log the detail.
+            if (ex.ErrorCode == 183) {
+                State = McpServerState.Busy;
+            } else {
+                State = McpServerState.Failed;
+                SessionLog.Event("mcp", $"listener start failed (error {ex.ErrorCode}): {ex.Message}");
+            }
             return;
         }
         listener = candidate;
@@ -78,7 +85,10 @@ public sealed class McpServer : IDisposable {
 
     /// Stops the listener and drops every session; a later Start rebinds.
     /// In-flight handlers are abandoned, not awaited — Stop may run on the UI
-    /// thread, where waiting on a handler queued behind it would deadlock.
+    /// thread, where awaiting a handler queued behind it would deadlock. An
+    /// abandoned handler that reaches a dead engine handle is refused by the
+    /// core's handle registry or caught in CallTool; teardown is safe by
+    /// those guards, not by this ordering.
     public void Stop() {
         if (listener is not { } l) {
             State = McpServerState.Stopped;
@@ -137,13 +147,22 @@ public sealed class McpServer : IDisposable {
                 response.StatusCode = 405;
                 return;
             }
-            if (request.ContentLength64 > MaxBodyBytes) {
+            // Bounded read: a chunked body carries no Content-Length, so the
+            // cap is enforced by reading at most MaxBodyBytes + 1 bytes
+            // regardless of the framing.
+            var buffer = new byte[MaxBodyBytes + 1];
+            int total = 0;
+            while (total < buffer.Length) {
+                int n = await request.InputStream.ReadAsync(
+                    buffer.AsMemory(total, buffer.Length - total));
+                if (n == 0) break;
+                total += n;
+            }
+            if (total > MaxBodyBytes) {
                 response.StatusCode = 413;
                 return;
             }
-            string body;
-            using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
-                body = await reader.ReadToEndAsync();
+            string body = Encoding.UTF8.GetString(buffer, 0, total);
             var (status, sessionId, responseBody) =
                 await DispatchAsync(request.Headers[SessionHeader], body);
             if (sessionId is not null) response.Headers[SessionHeader] = sessionId;
@@ -182,7 +201,9 @@ public sealed class McpServer : IDisposable {
         if (root is not JsonObject request)
             return RpcError(null, -32600, "Invalid Request: expected a request object.");
         var id = request.TryGetPropertyValue("id", out var idNode) ? idNode?.DeepClone() : null;
-        bool hasId = id is not null;
+        // Only a MISSING id is a notification; an explicit null id is a
+        // (discouraged) request and gets its response with id null.
+        bool hasId = request.ContainsKey("id");
         string? method = request["method"] is JsonValue m && m.TryGetValue<string>(out var ms)
             ? ms : null;
         if (method is null)
@@ -207,7 +228,7 @@ public sealed class McpServer : IDisposable {
             case "tools/list":
                 return RpcResult(id, new JsonObject { ["tools"] = McpTools.ToolSchemas() });
             case "tools/call":
-                return await CallTool(request, id!, session!);
+                return await CallTool(request, id, session!);
             default:
                 return RpcError(id, -32601, "Method not found");
         }
@@ -237,15 +258,18 @@ public sealed class McpServer : IDisposable {
         return (200, sessionId, Envelope(request["id"]?.DeepClone(), "result", result));
     }
 
-    async Task<(int, string?, string?)> CallTool(JsonObject request, JsonNode id, McpSession session) {
+    async Task<(int, string?, string?)> CallTool(JsonObject request, JsonNode? id, McpSession session) {
         if (request["params"] is not JsonObject p)
             return RpcError(id, -32602, "Invalid params: expected an object.");
         if (p["name"] is not JsonValue nv || !nv.TryGetValue<string>(out string? name))
             return RpcError(id, -32602, "Invalid params: tool name must be a string.");
+        if (!McpTools.ToolNames.Contains(name))
+            return RpcError(id, -32602, $"Tool not found: {name}");
         if (p["arguments"] is { } argNode && argNode is not JsonObject)
             return RpcError(id, -32602, "Invalid params: arguments must be an object.");
         var args = (p["arguments"] as JsonObject) ?? new JsonObject();
 
+        tools.Prepare(name, args);  // request thread: media probing stays off the UI hop
         McpToolResult result;
         await toolGate.WaitAsync();
         try {

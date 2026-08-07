@@ -56,8 +56,9 @@ public partial class MainWindow : Window {
         ApplyLayout(Program.Layout);
         Closing += OnClosing;
         Closed += (_, _) => {
-            // The listener goes before the engine handles die (the agent
-            // shutdown ordering): a tool call in flight touches the project.
+            // Stop the listener before the engine handles die (the agent
+            // shutdown ordering); a request abandoned mid-flight is refused
+            // by the core's dead-handle guards, not saved by this ordering.
             mcpServer?.Stop();
             viewModel.Dispose();
         };
@@ -374,9 +375,11 @@ public partial class MainWindow : Window {
         mcpServer = new McpServer(port, tools,
             async work => await Dispatcher.UIThread.InvokeAsync(work), version);
         mcpServer.Start();
-        SessionLog.Event("mcp", mcpServer.State == McpServerState.Running
-            ? $"listening on http://127.0.0.1:{mcpServer.Port}/mcp"
-            : $"port {port} busy — MCP server not started");
+        SessionLog.Event("mcp", mcpServer.State switch {
+            McpServerState.Running => $"listening on http://127.0.0.1:{mcpServer.Port}/mcp",
+            McpServerState.Busy => $"port {port} busy — MCP server not started",
+            _ => $"MCP server failed to start on port {port}",
+        });
     }
 
     void OnViewerTabClose(object? sender, PointerPressedEventArgs e) {

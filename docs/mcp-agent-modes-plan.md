@@ -23,19 +23,25 @@ stdio→HTTP shim for Claude Desktop.
 - macOS reference implementation: `Sources/PalmierPro/Agent/MCP/`
   (MCPHTTPServer.swift raw HTTP+SSE, MCPService.swift method routing,
   MCPClientInfo.swift captures client name/version at `initialize`).
-  `mcpb/server/index.js` is a Node stdio→HTTP shim — platform-independent,
-  usable as-is on Windows.
+  `mcpb/server/index.js` is a Node stdio→HTTP shim — usable on Windows with
+  a one-line delta from upstream: its `openGetStream` accepts 405 (the server
+  has no standalone stream) as POST-only mode instead of failing into
+  reconnect — upstream would spin initialize→GET→reconnect against a 405.
 
 ## Architecture
 
 - **`Core/Mcp/McpServer.cs`** (shell): `HttpListener` bound to
   `http://127.0.0.1:19789/` (loopback only — never LAN). One endpoint
   `POST /mcp` speaking JSON-RPC 2.0, Streamable-HTTP style with plain
-  `application/json` responses (SSE deferred — the shim tolerates both).
+  `application/json` responses (SSE deferred — the patched shim tolerates
+  both, reading the GET stream's 405 as POST-only mode).
   Methods: `initialize` (assigns `Mcp-Session-Id`, captures clientInfo),
   `notifications/initialized`, `ping`, `tools/list`, `tools/call`. Unknown
   method → -32601; bad params → -32602. Port busy (second instance) → status
-  state, never a crash.
+  state, never a crash. Trust boundary: while `--mcp` is on, the endpoint is
+  unauthenticated loopback — any local process can drive the editor. The
+  approval gate below lands in slice 2; Origin-header validation (macOS's
+  `OriginValidator.localhost`) is deferred there too.
 - **`Core/Mcp/McpTools.cs`**: the same 10 tools, schemas mirroring the
   AgentHost definitions (same names/params — external clients get the Windows
   capability set, no more, no less). Execution maps to the shell's domain
@@ -66,9 +72,10 @@ stdio→HTTP shim for Claude Desktop.
 ## Slices
 
 1. This plan doc + `McpServer`/`McpTools` + tests, server off by default,
-   startable via `--mcp` dev flag (no UI). End-to-end proof: a temporary
-   script client drives initialize → tools/list → add_clip → get_timeline
-   read-back against a real project.
+   startable via `--mcp` dev flag (no UI). End-to-end proof:
+   `McpTests.FullClientSequence_InitializeListCallReadBack` drives
+   initialize → tools/list → add_clip → get_timeline read-back over real
+   HTTP on an ephemeral port against a live engine project.
 2. Mode switch + connection panel + approval gate + welcome step + settings.
 3. Docs: README section for connecting Claude Desktop via the shim.
 
