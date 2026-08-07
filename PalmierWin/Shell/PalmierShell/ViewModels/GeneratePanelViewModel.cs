@@ -267,6 +267,27 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [ObservableProperty] bool tunePrompt = true;
     [ObservableProperty] bool showPromptPreview;
 
+    /// Opt-in GPS grounding: a "Setting: <place>" line from the armed target's
+    /// source media location tag. The toggle is offered only when the tag
+    /// exists and resets to off on every arm — location is never sent unless
+    /// the user asks, this time.
+    [ObservableProperty] bool hasLocationContext;
+    [ObservableProperty] bool useLocationContext;
+    [ObservableProperty] string? locationStatus;
+
+    string? locationTag;
+    string? settingText;
+    int locationGeneration;
+
+    /// In-flight Setting-line resolution, awaitable so tests can order
+    /// against the status writes.
+    public Task LocationResolution { get; private set; } = Task.CompletedTask;
+
+    /// Resolves a location tag to "City, Country" text. The shared geocoder
+    /// by default; settable so tests never touch the network.
+    public Func<string, Task<string?>> DescribeLocation { get; set; } =
+        tag => GeocodeService.Shared.DescribeAsync(tag);
+
     /// Suggestion strings for the picker — "Display name — id".
     public ObservableCollection<string> ModelChoices { get; } = new();
 
@@ -283,9 +304,18 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         VideoReferences = ReferenceVideos.Count,
     };
 
-    /// The prompt exactly as it will be sent.
-    public string FinalPrompt =>
-        TunePrompt ? Style.Build(Prompt, Context) : Prompt.Trim();
+    /// The prompt exactly as it will be sent. The Setting line lives here, in
+    /// the one assembly path both the preview and the submit read, so the two
+    /// can never diverge — and never in the editable box, which stays the
+    /// user's own words.
+    public string FinalPrompt {
+        get {
+            string built = TunePrompt ? Style.Build(Prompt, Context) : Prompt.Trim();
+            if (UseLocationContext && settingText is { } setting)
+                built += $"\nSetting: {setting}";
+            return built;
+        }
+    }
 
     /// Name of the tuning in force, for the composer's label.
     public string StyleName => Style.Name;
@@ -531,6 +561,38 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         RefreshDerived();
     }
 
+    partial void OnUseLocationContextChanged(bool value) =>
+        LocationResolution = ResolveLocationAsync(value);
+
+    async Task ResolveLocationAsync(bool enabled) {
+        int generation = ++locationGeneration;
+        settingText = null;
+        if (!enabled || locationTag is null) {
+            LocationStatus = null;
+            RefreshDerived();
+            return;
+        }
+        LocationStatus = "locating…";
+        string? place = await DescribeLocation(locationTag);
+        if (generation != locationGeneration) return;   // toggled off or re-armed mid-flight
+        settingText = place;
+        LocationStatus = place is null ? "location unavailable" : $"Setting: {place}";
+        RefreshDerived();
+    }
+
+    /// Arming or clearing a target starts the privacy surface over: toggle
+    /// off, any stale resolution dropped, and the row hidden when the source
+    /// media carries no location tag.
+    void ResetLocation(string? tag) {
+        locationGeneration++;   // stales any in-flight resolve
+        locationTag = tag is { Length: > 0 } ? tag : null;
+        settingText = null;
+        LocationStatus = null;
+        HasLocationContext = locationTag is not null;
+        UseLocationContext = false;
+        RefreshDerived();
+    }
+
     partial void OnHasApiKeyChanged(bool value) => OnPropertyChanged(nameof(CanGenerate));
     partial void OnSelectedDurationChanged(int value) => RefreshDerived();
     partial void OnSelectedResolutionChanged(string value) => RefreshDerived();
@@ -715,9 +777,11 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
 
     /// Arms a transition: the stills bracket the cut and the finished clip is
     /// inserted there instead of only landing in the library. The frame
-    /// numbers make the slots steerable with the nudge buttons.
+    /// numbers make the slots steerable with the nudge buttons. `locationTag`
+    /// is the outgoing clip's container location tag, when it has one.
     public void BeginTransition(TransitionTarget target, string firstFrame, string lastFrame,
-                                int? firstFrameNumber = null, int? lastFrameNumber = null) {
+                                int? firstFrameNumber = null, int? lastFrameNumber = null,
+                                string? locationTag = null) {
         PendingTransition = target;
         PendingShot = null;
         IsOpen = true;
@@ -728,6 +792,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         Message = $"Transition across {where} {Timecode.Format(target.BoundaryFrame, 30)} — " +
                   "describe the motion, then Generate." + moved;
         ResetSpans();
+        ResetLocation(locationTag);
         if (target.FillsGap && target.DurationFrames > 0) PreferDuration(target.DurationFrames);
     }
 
@@ -739,14 +804,16 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
                   $"at {Timecode.Format(boundaryFrame, 30)}…";
     }
 
-    /// Arms a generated shot for empty timeline space.
-    public void BeginShot(ShotTarget target) {
+    /// Arms a generated shot for empty timeline space. `locationTag` is the
+    /// nearest preceding clip's container location tag, when it has one.
+    public void BeginShot(ShotTarget target, string? locationTag = null) {
         PendingShot = target;
         PendingTransition = null;
         IsOpen = true;
         ClearFirstFrame();
         ClearLastFrame();
         ResetSpans();
+        ResetLocation(locationTag);
         Message = target.AvailableFrames > 0
             ? $"New shot for the {target.AvailableFrames / 30.0:0.#} s gap at " +
               $"{Timecode.Format(target.StartFrame, 30)} — describe it, then Generate."
@@ -857,6 +924,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     public void ClearPlacement() {
         PendingTransition = null;
         PendingShot = null;
+        ResetLocation(null);
         OnPropertyChanged(nameof(ShowSpanPickers));
         OnPropertyChanged(nameof(HasPendingPlacement));
     }
