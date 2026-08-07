@@ -30,6 +30,9 @@ public sealed class UndoStack {
     public bool CanUndo => undo.Count > 0;
     public bool CanRedo => redo.Count > 0;
 
+    /// Pending undo entries — tests and status surfaces read the depth.
+    public int Count => undo.Count;
+
     /// Runs `intent`; on success records one entry (unless the state did not
     /// change) and clears the redo stack. Returns the intent's result.
     public bool Execute(string name, Func<bool> intent) {
