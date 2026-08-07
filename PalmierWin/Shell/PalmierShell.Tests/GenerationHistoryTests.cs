@@ -48,6 +48,19 @@ public class GenerationHistoryTests : IDisposable {
         Assert.Single(GenerationHistory.Load(dir));
     }
 
+    /// The positional record deserializes even "{}" — Prompt comes out null
+    /// and the row build would NRE on it, on every refresh, forever.
+    [Fact]
+    public void ASidecarWithoutAPromptIsSkipped() {
+        WriteTake("ok.mp4", "p", "m", "2026-08-05T10:00:00.0000000Z");
+        File.WriteAllBytes(Path.Combine(dir, "empty.mp4"), [1]);
+        File.WriteAllText(Path.Combine(dir, "empty.mp4.generation.json"), "{}");
+        File.WriteAllBytes(Path.Combine(dir, "promptless.mp4"), [1]);
+        File.WriteAllText(Path.Combine(dir, "promptless.mp4.generation.json"),
+            """{"Provider":"Replicate","Model":"m","Seconds":5,"CreatedUtc":"2026-08-05T10:00:00.0000000Z"}""");
+        Assert.Single(GenerationHistory.Load(dir));
+    }
+
     [Fact]
     public void TheListIsCappedAtTheDefaultLimit() {
         for (int i = 0; i < 12; i++)

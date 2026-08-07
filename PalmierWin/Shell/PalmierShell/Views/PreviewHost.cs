@@ -43,17 +43,19 @@ public sealed class PreviewHost : NativeControlHost {
         _ = Task.Run(() => {
             EngineSession? session = null;
             try {
+                // Creation can still be in flight against the HWND while the
+                // window closes at exit: the attach is guarded (hwnd == Zero),
+                // and the residual risk is a driver-level fault at exit — accepted.
                 session = new EngineSession(surface);
             } catch (Exception ex) {
                 // No Vulkan-capable GPU or driver: the preview stays dark, the
                 // rest of the editor keeps working, and the window says why.
                 Console.Error.WriteLine($"preview: engine unavailable: {ex.Message}");
             }
-            try {
-                Dispatcher.UIThread.Post(() => AttachSession(session));
-            } catch {
-                session?.Dispose();   // the dispatcher is gone: the app is exiting
-            }
+            // Post never throws on dispatcher shutdown — the operation aborts
+            // silently — so at process exit the attach may never run and the
+            // session is reclaimed by the OS.
+            Dispatcher.UIThread.Post(() => AttachSession(session));
         });
     }
 

@@ -36,11 +36,13 @@ public static class GenerationHistory {
             try {
                 var record = JsonSerializer.Deserialize<GenerationRecord>(
                     File.ReadAllText(sidecarPath));
-                if (record is null) return null;
+                // The positional record parses even "{}" — members just come
+                // out null. A prompt-less sidecar is skipped like a corrupt one.
+                if (string.IsNullOrEmpty(record?.Prompt)) return null;
                 var created = DateTimeOffset.TryParse(record.CreatedUtc, out var when)
                     ? when
                     : File.GetLastWriteTimeUtc(sidecarPath);
-                return new RecentGeneration(mediaPath, record.Model, record.Prompt, created);
+                return new RecentGeneration(mediaPath, record.Model ?? "", record.Prompt, created);
             } catch {
                 return null;
             }

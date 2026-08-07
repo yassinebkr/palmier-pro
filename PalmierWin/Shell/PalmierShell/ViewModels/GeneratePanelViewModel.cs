@@ -855,12 +855,16 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     }
 
     /// Re-imports a take that is on disk but not in the library. The media
-    /// panel dedupes by path, and the button hides either way — a take that
-    /// will not probe has no working Import to offer.
+    /// panel dedupes by path, and the button hides either way — but a take
+    /// deleted between the refresh and the click says so, not vanishes silently.
     [RelayCommand]
     async Task ImportRecent(RecentGenerationViewModel? row) {
         if (row is null || !row.CanImport) return;
         row.CanImport = false;
+        if (!File.Exists(row.MediaPath)) {
+            Message = "Couldn't import — the file is gone.";
+            return;
+        }
         await importAsync(row.MediaPath, null);
     }
 
