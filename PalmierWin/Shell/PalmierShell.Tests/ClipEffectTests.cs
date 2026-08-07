@@ -61,6 +61,26 @@ public class ClipEffectTests {
         }
     }
 
+    /// New effects land at their canonical EffectOrdering rank, not at the
+    /// end: the effect list's order IS render order, and project files cross
+    /// both apps. color.lut ranks after color.curves, so setting them
+    /// lut-first must still store curves first.
+    [Fact]
+    public void NewEffectsInsertInCanonicalRenderOrder() {
+        IntPtr project = CoreApi.palmier_project_create();
+        try {
+            string id = CoreApi.AddClip(project, TestMediaPath("testsrc.mp4"), 30)!;
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id,
+                "color.lut", """{"path":"luts/x.cube","intensity":1}"""));
+            Assert.Equal(1, CoreApi.palmier_clip_set_effect(project, id,
+                "color.curves", """{"curve":"{\"master\":[{\"x\":0,\"y\":0},{\"x\":0.5,\"y\":0.6},{\"x\":1,\"y\":1}],\"red\":[],\"green\":[],\"blue\":[]}"}"""));
+            var effects = State(project).FindClip(id)!.Effects!;
+            Assert.Equal(["color.curves", "color.lut"], effects.Select(f => f.Type));
+        } finally {
+            CoreApi.palmier_project_destroy(project);
+        }
+    }
+
     /// End to end: an aggressive levels grade must change what the compositor
     /// produces. Captured through the same path the preview and stills use.
     [Fact]

@@ -1375,7 +1375,8 @@ public func palmierTimelineCloseGap(_ handle: UnsafeMutableRawPointer?,
 /// Upserts one effect on a clip: `paramsJson` is a flat JSON object of
 /// numbers and strings (e.g. {"clarity":0.4,"path":"C:/x.cube"}). An existing
 /// effect of the same type keeps its place in the stack and is replaced;
-/// otherwise the effect appends. Empty params remove the effect — a stack
+/// otherwise the effect inserts at its canonical EffectOrdering rank — the
+/// list's order is render order. Empty params remove the effect — a stack
 /// entry with nothing set renders as a no-op and only confuses the list.
 /// Effect types are the renderer's stable machine names ("detail.clarity",
 /// "color.lut", …); unknown types are stored untouched so a newer renderer
@@ -1421,7 +1422,10 @@ public func palmierClipSetEffect(_ handle: UnsafeMutableRawPointer?,
                 effects[existing].params = params
                 effects[existing].enabled = true
             } else {
-                effects.append(Effect(type: type, params: params))
+                // Effect order is render order; keep the canonical rank so the
+                // same stack renders identically on both apps.
+                effects.insert(Effect(type: type, params: params),
+                               at: EffectOrdering.insertIndex(effects, for: type))
             }
             timeline.tracks[trackIndex].clips[clipIndex].effects = effects.isEmpty ? nil : effects
             return 1
