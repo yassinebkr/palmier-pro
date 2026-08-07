@@ -14,12 +14,13 @@ static class McpTestClient {
     public static Task<object?> Direct(Func<object?> work) => Task.FromResult(work());
 
     public static async Task<HttpResponseMessage> Post(HttpClient client, int port, string body,
-                                                       string? session = null) {
+                                                       string? session = null, string? origin = null) {
         using var request = new HttpRequestMessage(HttpMethod.Post,
             $"http://127.0.0.1:{port}/mcp") {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
         if (session is not null) request.Headers.Add(McpServer.SessionHeader, session);
+        if (origin is not null) request.Headers.Add("Origin", origin);
         return await client.SendAsync(request);
     }
 

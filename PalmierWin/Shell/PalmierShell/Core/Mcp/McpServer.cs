@@ -14,6 +14,11 @@ public enum McpServerState { Stopped, Running, Busy, Failed }
 /// to the UI thread through the injected invoke seam, serialized one at a
 /// time, because timeline mutations touch observable state.
 ///
+/// Loopback trust boundary: http.sys 404s foreign Host headers, and a request
+/// carrying a non-loopback Origin gets 403 — a web page's fetch always
+/// carries Origin, so browser drive-bys are blocked while curl, the Node
+/// shim, and desktop clients (no Origin) pass.
+///
 /// Lifecycle: Start/Stop are idempotent; a taken port reports Busy, any other
 /// bind failure Failed — no exception escapes. McpHost stops the server ahead
 /// of engine teardown; a handler abandoned mid-flight is caught by the
@@ -140,6 +145,13 @@ public sealed class McpServer : IDisposable {
         return true;
     }
 
+    /// Loopback origins only: any port, http or https; "null" (sandboxed
+    /// pages) and non-URI values fail the parse and are refused.
+    static bool IsLoopbackOrigin(string origin) =>
+        Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+        uri.Scheme is "http" or "https" &&
+        uri.Host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
+
     /// Asks http.sys for a free loopback port by way of a throwaway socket.
     static int ReserveFreePort() {
         var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
@@ -171,6 +183,12 @@ public sealed class McpServer : IDisposable {
             var response = context.Response;
             if (request.Url?.AbsolutePath != "/mcp") {
                 response.StatusCode = 404;
+                return;
+            }
+            // A browser page's fetch always carries Origin; anything not
+            // served from loopback is a drive-by, refused before any work.
+            if (request.Headers["Origin"] is { } origin && !IsLoopbackOrigin(origin)) {
+                response.StatusCode = 403;
                 return;
             }
             if (request.HttpMethod != "POST") {

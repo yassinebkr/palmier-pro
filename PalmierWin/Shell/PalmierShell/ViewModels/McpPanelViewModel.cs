@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -52,11 +53,12 @@ public sealed partial class McpCallRow : ObservableObject {
 
 /// The external-mode face of the left panel: server state, connected and
 /// pending clients with their approvals, and the active session's recent
-/// tool calls. Rebuilds on the host's Changed (UI thread); a 1 s timer, started
-/// by the view once attached, keeps only the relative-time strings fresh.
+/// tool calls. Rebuilds on the host's Changed (UI thread); a 1 s timer the
+/// view starts at window load keeps only the relative-time strings fresh.
 public sealed partial class McpPanelViewModel : ObservableObject, IDisposable {
     readonly McpHost host;
     readonly DispatcherTimer ages;
+    readonly PropertyChangedEventHandler onHostPropertyChanged;
 
     public ObservableCollection<McpSessionRow> Sessions { get; } = new();
     public ObservableCollection<McpCallRow> RecentCalls { get; } = new();
@@ -82,7 +84,7 @@ public sealed partial class McpPanelViewModel : ObservableObject, IDisposable {
     public McpPanelViewModel(McpHost host) {
         this.host = host;
         host.Changed += Rebuild;
-        host.PropertyChanged += (_, e) => {
+        onHostPropertyChanged = (_, e) => {
             if (e.PropertyName is nameof(McpHost.StatusLine) or nameof(McpHost.State)
                     or nameof(McpHost.Port)) {
                 OnPropertyChanged(nameof(StatusLine));
@@ -90,23 +92,26 @@ public sealed partial class McpPanelViewModel : ObservableObject, IDisposable {
                 OnPropertyChanged(nameof(Endpoint));
             }
         };
+        host.PropertyChanged += onHostPropertyChanged;
         ages = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         ages.Tick += (_, _) => RefreshAges();
         Rebuild();
     }
 
-    /// The view starts the age refresh once attached — a DispatcherTimer
-    /// needs a running app, so headless tests drive Rebuild directly.
+    /// Attach fires at window load — the mode swap toggles IsVisible and never
+    /// detaches — so the timer runs from app start. Headless tests drive
+    /// Rebuild directly; a DispatcherTimer needs a running app.
     public void Start() => ages.Start();
     public void Stop() => ages.Stop();
 
     public void Rebuild() {
+        var sessions = host.Sessions;
         Sessions.Clear();
-        foreach (var session in host.Sessions) Sessions.Add(new McpSessionRow(host, session));
+        foreach (var session in sessions) Sessions.Add(new McpSessionRow(host, session));
         RecentCalls.Clear();
-        var active = host.Sessions.Where(s => !s.Pending)
-                                  .OrderByDescending(s => s.LastActivityAt)
-                                  .FirstOrDefault();
+        var active = sessions.Where(s => !s.Pending)
+                             .OrderByDescending(s => s.LastActivityAt)
+                             .FirstOrDefault();
         if (active is not null)
             foreach (var call in active.RecentCalls.TakeLast(20).Reverse())
                 RecentCalls.Add(new McpCallRow(call));
@@ -124,5 +129,6 @@ public sealed partial class McpPanelViewModel : ObservableObject, IDisposable {
     public void Dispose() {
         ages.Stop();
         host.Changed -= Rebuild;
+        host.PropertyChanged -= onHostPropertyChanged;
     }
 }

@@ -1089,6 +1089,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         Mcp.Shutdown();
         McpPanel.Dispose();
+        Mcp.Dispose();
         Agent.Shutdown();
         Media.Generate.CancelAll();
         engine?.Dispose();

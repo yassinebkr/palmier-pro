@@ -118,6 +118,8 @@ public sealed partial class McpHost : ObservableObject, IDisposable {
 
     bool IsApproved(string clientName) {
         if (devMode) return true;
+        // Client names are self-reported: the gate is a consent UX for the
+        // user, not a boundary against local processes — loopback trust.
         lock (approvedNames) return approvedNames.Contains(clientName);
     }
 
