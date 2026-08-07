@@ -84,21 +84,31 @@ public sealed partial class AgentViewModel : ObservableObject {
     public ObservableCollection<string> MentionCandidates { get; } = new();
 
     public AgentViewModel(IntPtr agent, TimelineViewModel timeline,
-                          MediaPanelViewModel media, UndoStack undo) {
+                          MediaPanelViewModel media, UndoStack undo,
+                          Func<Task<AppSettings>>? settingsLoader = null) {
         this.agent = agent;
         this.timeline = timeline;
         this.media = media;
         this.undo = undo;
+        this.settingsLoader = settingsLoader ?? (() => Task.Run(SettingsStore.Load));
         pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         pollTimer.Tick += (_, _) => Poll();
         selectedProvider = Providers[0];  // AgentProviders() never returns empty
         // Fill the picker synchronously so it is never bound to an empty list.
         SetModelList(SeedFor(selectedProvider), selectedModel);
-        _ = LoadSettingsAsync();
+        Ready = LoadSettingsAsync();
     }
 
+    readonly Func<Task<AppSettings>> settingsLoader;
+
+    /// The initial settings load; completes even when shutdown cuts it short.
+    public Task Ready { get; }
+
+    bool shutdown;
+
     async Task LoadSettingsAsync() {
-        var settings = await Task.Run(SettingsStore.Load);
+        var settings = await settingsLoader();
+        if (shutdown) return;   // teardown won the race: the handle is already dead
         loadingSettings = true;
         SelectedProvider = Providers.FirstOrDefault(p => p.Id == settings.Provider) ?? Providers[0];
         SetModelList(SeedFor(SelectedProvider),
@@ -112,6 +122,7 @@ public sealed partial class AgentViewModel : ObservableObject {
     /// Pushes the provider, its key, and the model into the core. Keys are
     /// per provider, so switching provider swaps the key too.
     void ApplyProviderToCore(AppSettings settings) {
+        if (shutdown) return;
         string key = settings.KeyFor(SelectedProvider.Id);
         HasApiKey = key.Length > 0;
         if (agent == IntPtr.Zero) return;
@@ -162,7 +173,7 @@ public sealed partial class AgentViewModel : ObservableObject {
     /// the poll loop as a "models" event.
     [RelayCommand]
     void RefreshModels() {
-        if (agent == IntPtr.Zero) return;
+        if (shutdown || agent == IntPtr.Zero) return;
         ModelsMessage = null;
         if (CoreApi.palmier_agent_refresh_models(agent) == 1) {
             RefreshingModels = true;
@@ -180,6 +191,7 @@ public sealed partial class AgentViewModel : ObservableObject {
     /// Switching provider restores that provider's own key and last model.
     async Task SwitchProviderAsync(ProviderInfo provider) {
         var settings = await Task.Run(SettingsStore.Load);
+        if (shutdown) return;
         loadingSettings = true;
         SetModelList(SeedFor(provider),
                      settings.Models.GetValueOrDefault(provider.Id, provider.DefaultModel));
@@ -302,6 +314,7 @@ public sealed partial class AgentViewModel : ObservableObject {
     /// Must run before the agent handle is destroyed — a later tick would
     /// poll a dead handle.
     public void Shutdown() {
+        shutdown = true;
         pollTimer.Stop();
         if (agent != IntPtr.Zero) CoreApi.palmier_agent_cancel(agent);
     }
