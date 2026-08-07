@@ -254,6 +254,13 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [ObservableProperty] bool hasApiKey;
     [ObservableProperty] string? message;
 
+    /// The guided builder's sections. A chip appends its phrase to the same
+    /// editable prompt text — the builder is an assist, never a gate.
+    public IReadOnlyList<PromptChipGroup> PromptChipGroups => PromptBuilder.Groups;
+
+    [RelayCommand]
+    void InsertPromptChip(string phrase) => Prompt = PromptBuilder.AppendPhrase(Prompt, phrase);
+
     /// Model-specific prompt tuning. On by default — it is the difference
     /// between a usable clip and a lottery ticket — but always visible and
     /// always optional.
