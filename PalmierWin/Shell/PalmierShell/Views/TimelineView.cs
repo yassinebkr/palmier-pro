@@ -912,6 +912,12 @@ public sealed class TimelineView : Control {
                 menu.Items.Add(unlink);
             }
             if (hit.Clip.MediaType == "video") {
+                // Extend needs the clip's media on disk to read its tail from.
+                if (System.IO.File.Exists(hit.Clip.MediaRef)) {
+                    var enhance = new MenuItem { Header = "Enhance with AI…" };
+                    enhance.Click += (_, _) => vm.RequestEnhance(hit.Clip.Id);
+                    menu.Items.Add(enhance);
+                }
                 var silence = new MenuItem { Header = "Remove Silence…" };
                 silence.Click += (_, _) => vm.RequestRemoveSilence(hit.Clip.Id);
                 menu.Items.Add(silence);

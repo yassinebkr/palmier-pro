@@ -107,26 +107,14 @@ public sealed class ReplicateProvider : IGenerationProvider {
         if (kling && request.NegativePrompt is { Length: > 0 } negative)
             input["negative_prompt"] = negative;
 
-        // Reference-to-video (Seedance 2.0): user-attached images inline as
-        // data URIs, videos as the hosted URLs the upload step produced. The
-        // schema forbids mixing these with first/last frames — the composer
-        // enforces that, and this layer honours the refs when both slip in,
-        // because refs were the explicit attachment.
-        bool hasReferences = request.ReferenceImages.Count > 0 || request.ReferenceVideos.Count > 0;
-        if (hasReferences && Curated(request.Model) is { AcceptsReferences: true }) {
-            var images = request.ReferenceImages
-                .Select(path => GenerationHttp.DataUri(path)).Where(uri => uri is not null).Cast<object>().ToList();
-            if (images.Count > 0) input["reference_images"] = images;
-            if (referenceVideoUrls is { Count: > 0 })
-                input["reference_videos"] = referenceVideoUrls.Cast<object>().ToList();
-            return input;
-        }
-
         // FLUX.3 is one endpoint whose optional inputs pick the workflow:
         // `images` (one opens the clip, two start and end it), `start_video`
         // to continue from a clip's final frames — the schema forbids
         // combining them — and neither for text-to-video. Its duration field
-        // is a string ("auto" or the seconds), unlike the families above.
+        // is a string ("auto" or the seconds), unlike the families below. It
+        // sits above the generic reference branch because its source video IS
+        // a reference video here — as `start_video`, not `reference_videos`,
+        // a key its schema does not declare.
         if (Curated(request.Model) is { Family: "flux" } flux) {
             input["duration"] = request.Seconds.ToString();
             input["resolution"] = request.Resolution;
@@ -146,6 +134,21 @@ public sealed class ReplicateProvider : IGenerationProvider {
                 }
                 if (images.Count > 0) input["images"] = images;
             }
+            return input;
+        }
+
+        // Reference-to-video (Seedance 2.0): user-attached images inline as
+        // data URIs, videos as the hosted URLs the upload step produced. The
+        // schema forbids mixing these with first/last frames — the composer
+        // enforces that, and this layer honours the refs when both slip in,
+        // because refs were the explicit attachment.
+        bool hasReferences = request.ReferenceImages.Count > 0 || request.ReferenceVideos.Count > 0;
+        if (hasReferences && Curated(request.Model) is { AcceptsReferences: true }) {
+            var images = request.ReferenceImages
+                .Select(path => GenerationHttp.DataUri(path)).Where(uri => uri is not null).Cast<object>().ToList();
+            if (images.Count > 0) input["reference_images"] = images;
+            if (referenceVideoUrls is { Count: > 0 })
+                input["reference_videos"] = referenceVideoUrls.Cast<object>().ToList();
             return input;
         }
 

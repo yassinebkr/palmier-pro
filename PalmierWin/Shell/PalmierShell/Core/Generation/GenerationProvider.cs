@@ -31,8 +31,7 @@ public sealed record GenerationModel(string Id, string Name, int[] Durations) {
     /// is not enough ("flux" names its fields nothing like seedance or kling).
     public string? Family { get; init; }
 
-    /// Kept in the manifest (and priced) but not offered in the picker — e.g.
-    /// the extend workflow until the composer's Enhance affordance lands.
+    /// Kept in the manifest (and priced) but not offered in the picker.
     public bool Hidden { get; init; }
 
     /// How this endpoint takes reference stills, from its capabilities.
@@ -43,6 +42,16 @@ public sealed record GenerationModel(string Id, string Name, int[] Durations) {
         FrameInput.None;
 
     public bool AcceptsFrames => Frames != FrameInput.None;
+
+    /// The endpoint continues an existing clip — the composer feeds it the
+    /// source video as its one reference video.
+    public bool CanExtend => Capabilities.Contains("extend", StringComparer.OrdinalIgnoreCase);
+
+    /// Extend is the only way this endpoint takes footage. Such a model is
+    /// useless for a plain shot or transition — the request would go out
+    /// without the source video it requires — so the picker offers it only
+    /// while an enhance is armed.
+    public bool ExtendOnly => CanExtend && !AcceptsFrames;
 
     /// Output resolutions the endpoint accepts; the first is its default.
     public string[] Resolutions { get; init; } = ["720p"];

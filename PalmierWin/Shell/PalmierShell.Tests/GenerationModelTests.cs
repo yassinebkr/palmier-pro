@@ -19,4 +19,25 @@ public class GenerationModelTests {
             Assert.Equal(ids.Count, ids.Distinct().Count());
         }
     }
+
+    [Fact]
+    public void AnEndpointThatOnlyExtendsIsMarkedExtendOnly() {
+        var extend = ModelManifest.For("fal").Single(m => m.Id == "blackforestlabs/flux-3/extend-video");
+        Assert.True(extend.CanExtend);
+        Assert.True(extend.ExtendOnly);
+    }
+
+    [Fact]
+    public void AModelThatExtendsAmongOtherInputsIsNotExtendOnly() {
+        var flux = ModelManifest.For("replicate").Single(m => m.Id == "black-forest-labs/flux-3");
+        Assert.True(flux.CanExtend);
+        Assert.False(flux.ExtendOnly);   // it also takes frames and plain text
+    }
+
+    [Fact]
+    public void APlainTextToVideoModelNeitherExtendsNorIsExtendOnly() {
+        var plain = ModelManifest.For("fal").Single(m => m.Id == "blackforestlabs/flux-3/text-to-video");
+        Assert.False(plain.CanExtend);
+        Assert.False(plain.ExtendOnly);
+    }
 }
