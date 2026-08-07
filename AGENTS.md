@@ -39,6 +39,8 @@ Use `swift build --traits BundledSpeech` for changes that touch MLX, speech anal
 - UI verification needs a real run + screenshot (see `PalmierWin/.build/uix.ps1` driving conventions); never claim UI passes without a screenshot or the user's confirmation.
 - Debug builds never poll for updates (a 0.1.0 dev version would always "update" to the latest release and stop being the dev build); `--update-demo` still exercises the dialog, and `run-shell.ps1` passes `--no-update` for good measure.
 - A running PalmierShell.exe locks `PalmierCoreHost.dll` and `bin/` — close it before rebuilding; never kill an instance you didn't start.
+- The MCP server (`PalmierShell/Core/Mcp/`) serves the 10 agent tools to external clients on `127.0.0.1:19789` — loopback only, approval-gated in External mode, auto-approved under the `--mcp` dev flag. Tool execution routes through the same CoreApi/TimelineViewModel/UndoStack path as the UI; keep schemas aligned with `AgentHost.swift`. Design: `docs/mcp-agent-modes-plan.md`.
+- CI on Windows runners has no GPU/audio: tests that need either are `Category=Hardware` and excluded by the `shell-gate` job's filter — classify new hardware-bound tests or the gate fails them loudly.
 
 ## Engineering approach
 
