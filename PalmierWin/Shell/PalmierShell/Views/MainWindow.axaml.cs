@@ -330,6 +330,9 @@ public partial class MainWindow : Window {
             updateStartup.Stop();
             updateDaily.Stop();
         }
+        // Model manifest sync: data, not app updates — runs in every build,
+        // quiet unless the model list actually changed.
+        _ = Task.Run(() => viewModel.Media.Generate.StartupSyncAsync());
         bool addToTimeline = args.Contains("--add-to-timeline");
         foreach (var path in args.Where(a => !a.StartsWith("--") && File.Exists(a))) {
             await viewModel.Media.ImportFileAsync(Path.GetFullPath(path));

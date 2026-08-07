@@ -420,9 +420,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
             Models.Add(model);
             ModelChoices.Add(model.Id);
         }
-        ModelId = keep.Length > 0 && Models.Any(m => m.Id == keep)
-            ? keep
-            : Models.FirstOrDefault()?.Id ?? "";
+        ModelId = keep.Length > 0 ? keep : Models.FirstOrDefault()?.Id ?? "";
     }
 
     partial void OnSelectedProviderChanged(IGenerationProvider value) {
@@ -451,17 +449,34 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         UpdatingModels = true;
         Message = "Checking for new models…";
         try {
-            var report = await ModelManifest.SyncAsync();
-            if (report is null) {
-                Message = "Couldn't check — using the bundled list.";
-                return;
-            }
-            SyncModels(keepSelection: true);
-            ModelOptionsChanged(ModelId);   // unchanged id still re-reads durations/resolutions
-            Message = DescribeSync(report);
+            await RunModelSyncAsync();
         } finally {
             UpdatingModels = false;
         }
+    }
+
+    /// Startup sync (MainViewModel, once per launch): quiet unless models
+    /// actually changed — no "Checking…" churn, failures stay silent.
+    public async Task StartupSyncAsync() {
+        var report = await ModelManifest.SyncAsync();
+        if (report is null) return;
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => {
+            SyncModels(keepSelection: true);
+            ModelOptionsChanged(ModelId);
+            if (report.Added.Count > 0 || report.Removed.Count > 0)
+                Message = DescribeSync(report);
+        });
+    }
+
+    async Task RunModelSyncAsync() {
+        var report = await ModelManifest.SyncAsync();
+        if (report is null) {
+            Message = "Couldn't check — keeping the current list.";
+            return;
+        }
+        SyncModels(keepSelection: true);
+        ModelOptionsChanged(ModelId);   // unchanged id still re-reads durations/resolutions
+        Message = DescribeSync(report);
     }
 
     static string DescribeSync(ModelManifest.ManifestSyncReport report) {

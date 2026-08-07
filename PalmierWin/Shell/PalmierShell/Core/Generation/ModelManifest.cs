@@ -67,9 +67,14 @@ public static class ModelManifest {
     /// and reports what changed. Null on any failure — the current list is
     /// then left untouched.
     public static async Task<ManifestSyncReport?> SyncAsync(CancellationToken ct = default) {
-        string? json = FetchOverride is { } fetch
-            ? await fetch(ct).ConfigureAwait(false)
-            : await FetchManifestAsync(ct).ConfigureAwait(false);
+        string? json;
+        try {
+            json = FetchOverride is { } fetch
+                ? await fetch(ct).ConfigureAwait(false)
+                : await FetchManifestAsync(ct).ConfigureAwait(false);
+        } catch {
+            return null;  // a throwing seam must not escape the never-throw contract
+        }
         if (json is null || ReadUsable(json) is not { } next) return null;
         // Diffed against the list in force before the cache file is replaced,
         // so the report describes the swap the panel is about to show.
