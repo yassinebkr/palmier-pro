@@ -22,7 +22,7 @@ public sealed class SettingsStoreConcurrencyTests : IDisposable {
 
     public void Dispose() {
         SettingsStore.PathOverride = null;
-        File.Delete(path);
+        TempFiles.Run(() => File.Delete(path));
     }
 
     [Fact]
