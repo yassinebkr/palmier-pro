@@ -11,14 +11,14 @@ namespace PalmierShell.Core;
 public sealed class DoubleTextConverter : IValueConverter {
     public static readonly DoubleTextConverter Instance = new();
 
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is double d ? d.ToString("0.###", CultureInfo.CurrentCulture) : string.Empty;
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo? culture) =>
+        value is double d ? d.ToString("0.###", culture ?? CultureInfo.CurrentCulture) : string.Empty;
 
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) {
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo? culture) {
         if (value is not string text) return BindingOperations.DoNothing;
         text = text.Trim();
         if (text.Length == 0) return BindingOperations.DoNothing;
-        return double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out double v)
+        return double.TryParse(text, NumberStyles.Float, culture ?? CultureInfo.CurrentCulture, out double v)
             ? v
             : BindingOperations.DoNothing;
     }

@@ -171,6 +171,15 @@ jobs:
           swift build
           Pop-Location
 
+      # Interop and fixture-driven tests read clips from PalmierWin/test_media
+      # (gitignored; generated deterministically by this script).
+      - name: Generate test media
+        shell: pwsh
+        run: |
+          Push-Location PalmierWin
+          ./make-test-media.ps1
+          Pop-Location
+
       - name: Test the Windows shell
         shell: pwsh
         run: dotnet test PalmierWin/Shell/PalmierShell.sln -c Release
