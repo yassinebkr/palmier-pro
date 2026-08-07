@@ -309,6 +309,32 @@
           <ComboBox Grid.Column="3" ItemsSource="{Binding Resolutions}" FontSize="12"
                     SelectedItem="{Binding SelectedResolution}"/>
         </Grid>
+
+        <!-- Finished takes still on disk, newest first, with a way back into
+             the library for one that never landed there. Collapsed: the
+             composer is for the next run, not the archive. -->
+        <Expander Classes="section" Header="RECENT GENERATIONS" IsExpanded="False"
+                  IsVisible="{Binding HasRecentGenerations}">
+          <ItemsControl ItemsSource="{Binding RecentGenerations}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RecentGenerationViewModel">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                  <StackPanel Grid.Column="0" Spacing="1">
+                    <TextBlock Text="{Binding PromptExcerpt}" FontSize="11"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource ThemeTextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding Detail}" FontSize="10"
+                               Foreground="{StaticResource ThemeTextMutedBrush}"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Import" FontSize="11" Padding="8,3"
+                          VerticalAlignment="Center" IsVisible="{Binding CanImport}"
+                          Command="{Binding $parent[Window].((vm:GeneratePanelViewModel)DataContext).ImportRecentCommand}"
+                          CommandParameter="{Binding}"/>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Expander>
       </StackPanel>
     </ScrollViewer>
 

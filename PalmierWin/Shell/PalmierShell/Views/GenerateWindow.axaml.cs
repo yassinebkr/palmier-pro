@@ -14,7 +14,12 @@ namespace PalmierShell.Views;
 /// before spending money. Results still land in the library: in-flight tiles
 /// there, finished clips imported, transitions filed under their own folder.
 public partial class GenerateWindow : Window {
-    public GenerateWindow() => InitializeComponent();
+    public GenerateWindow() {
+        InitializeComponent();
+        // Every open re-reads the take sidecars (off the UI thread in the
+        // view model), so a take generated since last time shows up.
+        Opened += (_, _) => _ = Vm?.RefreshRecentAsync();
+    }
 
     GeneratePanelViewModel? Vm => DataContext as GeneratePanelViewModel;
 

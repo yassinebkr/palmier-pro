@@ -81,6 +81,23 @@ public sealed partial class ReferenceItemViewModel : ObservableObject {
     }
 }
 
+/// One row of the recent-generations list: the take's prompt, model and age,
+/// plus an Import action while the file is on disk and not yet in the library.
+public sealed partial class RecentGenerationViewModel : ObservableObject {
+    public string MediaPath { get; }
+    public string PromptExcerpt { get; }
+    public string Detail { get; }
+    [ObservableProperty] bool canImport;
+
+    public RecentGenerationViewModel(RecentGeneration entry, bool canImport, DateTimeOffset now) {
+        MediaPath = entry.MediaPath;
+        CanImport = canImport;
+        Detail = $"{entry.Model} · {RelativeTime.Ago(entry.CreatedUtc, now)}";
+        string oneLine = entry.Prompt.ReplaceLineEndings(" ").Trim();
+        PromptExcerpt = oneLine.Length <= 60 ? oneLine : oneLine[..60].TrimEnd() + "…";
+    }
+}
+
 /// The Generate panel: prompt, provider, model, duration. Finished clips are
 /// imported into the media library like any other file.
 public sealed partial class GeneratePanelViewModel : ObservableObject {
@@ -776,6 +793,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
                 if (claim.TryClaim()) EnhanceReady?.Invoke(enhance, path);
                 else Message = "Second take imported to Enhanced — swap it in if you prefer it.";
             }
+            await RefreshRecentAsync();
         } catch (OperationCanceledException) {
             Jobs.Remove(job);
             job.Finish();
@@ -795,6 +813,55 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [RelayCommand]
     void DismissJob(GenerationJobViewModel? job) {
         if (job is not null) Jobs.Remove(job);
+    }
+
+    /// Finished takes still on disk, newest first. Rebuilt on every composer
+    /// open and after each completed job; the section stays collapsed, and
+    /// hidden while empty.
+    public ObservableCollection<RecentGenerationViewModel> RecentGenerations { get; } = new();
+
+    public bool HasRecentGenerations => RecentGenerations.Count > 0;
+
+    /// Test seam: where the history is read from. Production reads the real
+    /// generation output directory. Never set in production code.
+    public Func<string> HistoryDirectory { get; set; } = () => GenerationService.OutputDirectory;
+
+    /// Serializes concurrent rebuilds: a window open racing a job completion
+    /// must not interleave two writers to the same list.
+    int recentGeneration;
+
+    public async Task RefreshRecentAsync() {
+        int generation = ++recentGeneration;
+        HashSet<string> known;
+        IReadOnlyList<RecentGeneration> entries;
+        try {
+            string directory = HistoryDirectory();
+            known = library().Select(item => item.Path)
+                             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            entries = await Task.Run(() => GenerationHistory.Load(directory));
+        } catch (Exception ex) {
+            // Bookkeeping, fail-soft: the last good list stands, and a refresh
+            // failure must never fail the run that just finished.
+            SessionLog.Event("generate", $"recent-generations refresh failed: {ex.Message}");
+            return;
+        }
+        if (generation != recentGeneration) return;   // a newer load owns the list
+        RecentGenerations.Clear();
+        var now = DateTimeOffset.Now;
+        foreach (var entry in entries)
+            RecentGenerations.Add(new RecentGenerationViewModel(
+                entry, canImport: !known.Contains(entry.MediaPath), now));
+        OnPropertyChanged(nameof(HasRecentGenerations));
+    }
+
+    /// Re-imports a take that is on disk but not in the library. The media
+    /// panel dedupes by path, and the button hides either way — a take that
+    /// will not probe has no working Import to offer.
+    [RelayCommand]
+    async Task ImportRecent(RecentGenerationViewModel? row) {
+        if (row is null || !row.CanImport) return;
+        row.CanImport = false;
+        await importAsync(row.MediaPath, null);
     }
 
     [RelayCommand]
