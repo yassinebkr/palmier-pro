@@ -25,7 +25,7 @@ public sealed class ReplicateProvider : IGenerationProvider {
     public IReadOnlyList<GenerationModel> Models => ModelManifest.For("replicate");
 
     static GenerationModel? Curated(string modelId) =>
-        ModelManifest.For("replicate").FirstOrDefault(m => m.Id == modelId);
+        ModelManifest.ForAll("replicate").FirstOrDefault(m => m.Id == modelId);
 
     /// How the endpoint takes stills; None for any id we do not curate.
     static FrameInput Frames(string modelId) => Curated(modelId)?.Frames ?? FrameInput.None;

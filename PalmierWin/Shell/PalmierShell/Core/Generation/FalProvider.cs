@@ -25,7 +25,7 @@ public sealed class FalProvider : IGenerationProvider {
             ["duration"] = request.Seconds.ToString(),
             ["resolution"] = request.Resolution,
         };
-        var model = ModelManifest.For("fal").FirstOrDefault(m => m.Id == request.Model);
+        var model = ModelManifest.ForAll("fal").FirstOrDefault(m => m.Id == request.Model);
         // Its schema default is true; a generated clip lands on a timeline
         // with its own sound, so the synthesis is switched off explicitly.
         if (model is { SynthesisesAudio: true })

@@ -50,7 +50,12 @@ public static class ModelManifest {
     static volatile Lazy<Dictionary<string, IReadOnlyList<GenerationModel>>?> Synced =
         new(ReadCacheFile);
 
-    public static IReadOnlyList<GenerationModel> For(string provider) {
+    public static IReadOnlyList<GenerationModel> For(string provider) =>
+        ForAll(provider).Where(m => !m.Hidden).ToList();
+
+    /// Every entry including hidden ones — the request builders' surface.
+    /// Hidden keeps a model out of the picker, never out of the schema.
+    public static IReadOnlyList<GenerationModel> ForAll(string provider) {
         if (BundledOverride is { } source && Read(source) is { } overridden)
             return overridden.TryGetValue(provider, out var models) ? models : [];
         if (Synced.Value is { } synced)
@@ -205,7 +210,6 @@ public static class ModelManifest {
             result[provider] = entries
                 .Where(e => e is { Id.Length: > 0, Name.Length: > 0 })
                 .Select(e => e!.ToModel())
-                .Where(m => !m.Hidden)
                 .ToList();
         }
         return result;

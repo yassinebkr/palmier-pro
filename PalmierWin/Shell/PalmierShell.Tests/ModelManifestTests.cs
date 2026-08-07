@@ -92,8 +92,9 @@ public sealed class ModelManifestTests : IDisposable {
             fal.Single(m => m.Id == "blackforestlabs/flux-3/first-last-frame-to-video").Capabilities);
         Assert.Equal(["textToVideo"],
             fal.Single(m => m.Id == "blackforestlabs/flux-3/text-to-video").Capabilities);
+        // Hidden from the picker, still on the builders' surface (ForAll).
         Assert.Equal(["extend"],
-            fal.Single(m => m.Id == "blackforestlabs/flux-3/extend-video").Capabilities);
+            ModelManifest.ForAll("fal").Single(m => m.Id == "blackforestlabs/flux-3/extend-video").Capabilities);
     }
 
     /// The manifest's own rule: every offered resolution carries a verified
