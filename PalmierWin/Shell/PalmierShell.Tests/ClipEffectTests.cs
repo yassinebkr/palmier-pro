@@ -64,6 +64,7 @@ public class ClipEffectTests {
     /// End to end: an aggressive levels grade must change what the compositor
     /// produces. Captured through the same path the preview and stills use.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void AGradeChangesTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
@@ -81,6 +82,7 @@ public class ClipEffectTests {
     /// Frame 10 sits in the red band; invert turns it cyan, so every channel
     /// mean must land on 255 minus the unmodified mean.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void InvertInvertsTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
@@ -100,6 +102,7 @@ public class ClipEffectTests {
     /// Zeroing the red gain on the red band kills that channel and leaves the
     /// other two alone.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void WheelsGainReachesTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
@@ -120,6 +123,7 @@ public class ClipEffectTests {
     /// The shell's wheel mapping end to end: a full cyan drag on Gain halves
     /// the red channel, so the red band must visibly dim.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void WheelDragParamsReachTheCompositedPixels() {
         IntPtr project = CoreApi.palmier_project_create();
         try {
@@ -143,6 +147,7 @@ public class ClipEffectTests {
     /// run on the composited frame (per-layer keying comes with per-layer
     /// effects), so the key shows in the readback's alpha, not the RGB.
     [Fact]
+    [Trait("Category", "Hardware")]
     public void ChromaKeyCutsTheKeyedColour() {
         IntPtr project = CoreApi.palmier_project_create();
         try {

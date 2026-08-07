@@ -180,9 +180,12 @@ jobs:
           ./make-test-media.ps1
           Pop-Location
 
+      # Category=Hardware marks tests that need a real GPU compositor or audio
+      # endpoint (composited-pixel captures, exports, peak metering) — they run
+      # locally on developer machines and can never pass on a headless runner.
       - name: Test the Windows shell
         shell: pwsh
-        run: dotnet test PalmierWin/Shell/PalmierShell.sln -c Release
+        run: dotnet test PalmierWin/Shell/PalmierShell.sln -c Release --filter "Category!=Hardware"
 
       - name: Generate gate media
         shell: pwsh
