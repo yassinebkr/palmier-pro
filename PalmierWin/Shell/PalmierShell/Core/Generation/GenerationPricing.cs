@@ -29,6 +29,20 @@ public static class GenerationPricing {
         [("fal", "bytedance/seedance-2.0/fast/reference-to-video")] = 0.2419m,
     };
 
+    /// Published per-second rates that vary by resolution. FLUX.3 publishes
+    /// per-resolution rates on both providers ($0.17/$0.29 per second at
+    /// 720p/1080p; extend-video bills higher at $0.41/$0.53 on fal).
+    static readonly Dictionary<(string Provider, string Model, string Resolution), decimal> PerSecondByResolution = new() {
+        [("replicate", "black-forest-labs/flux-3", "720p")] = 0.17m,
+        [("replicate", "black-forest-labs/flux-3", "1080p")] = 0.29m,
+        [("fal", "blackforestlabs/flux-3/first-last-frame-to-video", "720p")] = 0.17m,
+        [("fal", "blackforestlabs/flux-3/first-last-frame-to-video", "1080p")] = 0.29m,
+        [("fal", "blackforestlabs/flux-3/text-to-video", "720p")] = 0.17m,
+        [("fal", "blackforestlabs/flux-3/text-to-video", "1080p")] = 0.29m,
+        [("fal", "blackforestlabs/flux-3/extend-video", "720p")] = 0.41m,
+        [("fal", "blackforestlabs/flux-3/extend-video", "1080p")] = 0.53m,
+    };
+
     /// Rates we only have from secondary sources; shown as approximate.
     /// Kling 3.0: Replicate's page publishes nothing, so these are the
     /// pass-through rates reported for the Kling API (standard ≈ 0.28/s,
@@ -49,6 +63,10 @@ public static class GenerationPricing {
         if (PerSecond.TryGetValue((providerId, model), out decimal rate))
             return new PriceEstimate(Round(rate * seconds),
                 $"{rate:0.####}/s · {seconds}s at {resolution} · {CheckedOn}", Approximate: false);
+
+        if (PerSecondByResolution.TryGetValue((providerId, model, resolution), out decimal byResolution))
+            return new PriceEstimate(Round(byResolution * seconds),
+                $"{byResolution:0.####}/s · {seconds}s at {resolution} · {CheckedOn}", Approximate: false);
 
         if (Approximate.TryGetValue((providerId, model, resolution), out decimal loose))
             return new PriceEstimate(Round(loose * seconds),

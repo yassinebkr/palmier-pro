@@ -222,6 +222,7 @@ public static class ModelManifest {
         public string? Name { get; set; }
         public int[]? Durations { get; set; }
         public string[]? Capabilities { get; set; }
+        public string? Family { get; set; }
         public string[]? Resolutions { get; set; }
         public bool SynthesisesAudio { get; set; }
         public int MaxReferenceImages { get; set; }
@@ -230,6 +231,7 @@ public static class ModelManifest {
 
         public GenerationModel ToModel() => new(Id!, Name!, Durations ?? []) {
             Capabilities = Capabilities ?? [],
+            Family = Family,
             Resolutions = Resolutions ?? ["720p"],
             SynthesisesAudio = SynthesisesAudio,
             MaxReferenceImages = MaxReferenceImages,

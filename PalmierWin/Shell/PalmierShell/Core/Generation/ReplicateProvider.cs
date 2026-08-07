@@ -115,10 +115,31 @@ public sealed class ReplicateProvider : IGenerationProvider {
         bool hasReferences = request.ReferenceImages.Count > 0 || request.ReferenceVideos.Count > 0;
         if (hasReferences && Curated(request.Model) is { AcceptsReferences: true }) {
             var images = request.ReferenceImages
-                .Select(GenerationHttp.DataUri).Where(uri => uri is not null).Cast<object>().ToList();
+                .Select(path => GenerationHttp.DataUri(path)).Where(uri => uri is not null).Cast<object>().ToList();
             if (images.Count > 0) input["reference_images"] = images;
             if (referenceVideoUrls is { Count: > 0 })
                 input["reference_videos"] = referenceVideoUrls.Cast<object>().ToList();
+            return input;
+        }
+
+        // FLUX.3 is one endpoint whose optional inputs pick the workflow:
+        // `images` (one opens the clip, two start and end it), `start_video`
+        // to continue from a clip's final frames — the schema forbids
+        // combining them — and neither for text-to-video. Its duration field
+        // is a string ("auto" or the seconds), unlike the families above.
+        if (Curated(request.Model) is { Family: "flux" } flux) {
+            input["duration"] = request.Seconds.ToString();
+            input["resolution"] = request.Resolution;
+            if (request.Draft && flux.Capabilities.Contains("draft"))
+                input["draft"] = true;
+            if (referenceVideoUrls is { Count: > 0 } videos)
+                input["start_video"] = videos[0];
+            else {
+                var images = new List<object>();
+                if (GenerationHttp.DataUri(request.FirstFrame) is { } opens) images.Add(opens);
+                if (GenerationHttp.DataUri(request.LastFrame) is { } ends) images.Add(ends);
+                if (images.Count > 0) input["images"] = images;
+            }
             return input;
         }
 

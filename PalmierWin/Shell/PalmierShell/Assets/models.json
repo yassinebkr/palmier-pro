@@ -76,6 +76,20 @@
         "id": "minimax/video-01",
         "name": "MiniMax Video-01",
         "durations": [6]
+      },
+      // One endpoint whose optional inputs pick the workflow: an images
+      // array (one opens the clip, two start and end it), start_video to
+      // continue a clip, neither for text-to-video. `draft` is a fast 720p
+      // preview flag. Accepts any whole second 5–20 ("auto" too); the picker
+      // offers the useful spread.
+      {
+        "id": "black-forest-labs/flux-3",
+        "name": "FLUX.3",
+        "durations": [5, 8, 10, 15, 20],
+        "capabilities": ["textToVideo", "firstFrame", "firstLastFrame", "extend", "draft"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
       }
     ],
     "fal": [
@@ -123,6 +137,38 @@
         "id": "fal-ai/minimax/hailuo-02/standard/text-to-video",
         "name": "Hailuo 02",
         "durations": [6, 10]
+      },
+      // FLUX.3 on fal is a family of single-workflow endpoints rather than
+      // one switched endpoint. Draft mode is its own endpoint family
+      // (…/draft, with a draft_cache the draft-enhance endpoint renders at
+      // full quality), not a flag here, so these entries carry no draft
+      // capability. All three take any whole second 5–20.
+      {
+        "id": "blackforestlabs/flux-3/first-last-frame-to-video",
+        "name": "FLUX.3 · first/last frame",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["firstLastFrame"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
+      },
+      {
+        "id": "blackforestlabs/flux-3/text-to-video",
+        "name": "FLUX.3 · text only",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["textToVideo"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
+      },
+      {
+        "id": "blackforestlabs/flux-3/extend-video",
+        "name": "FLUX.3 · extend",
+        "durations": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        "capabilities": ["extend"],
+        "resolutions": ["720p", "1080p"],
+        "synthesisesAudio": true,
+        "family": "flux"
       }
     ]
   }

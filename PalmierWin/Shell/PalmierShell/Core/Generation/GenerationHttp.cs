@@ -6,11 +6,11 @@ namespace PalmierShell.Core.Generation;
 public sealed class GenerationException(string message) : Exception(message);
 
 static class GenerationHttp {
-    /// Both providers accept a data URI wherever they take an image URL, which
-    /// avoids needing somewhere public to host the still.
-    public static string? DataUri(string? path) {
+    /// Both providers accept a data URI wherever they take a file URL, which
+    /// avoids needing somewhere public to host the media.
+    public static string? DataUri(string? path, string mime = "image/png") {
         if (path is null || !File.Exists(path)) return null;
-        return "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(path));
+        return $"data:{mime};base64," + Convert.ToBase64String(File.ReadAllBytes(path));
     }
 
     public static HttpClient Client(params (string Name, string Value)[] headers) {

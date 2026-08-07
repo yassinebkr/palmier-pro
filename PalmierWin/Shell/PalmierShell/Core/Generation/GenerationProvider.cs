@@ -27,6 +27,10 @@ public sealed record GenerationModel(string Id, string Name, int[] Durations) {
     /// reject.
     public string[] Capabilities { get; init; } = [];
 
+    /// The model family the request builders branch on when an id convention
+    /// is not enough ("flux" names its fields nothing like seedance or kling).
+    public string? Family { get; init; }
+
     /// How this endpoint takes reference stills, from its capabilities.
     public FrameInput Frames =>
         Capabilities.Contains("firstLastFrame", StringComparer.OrdinalIgnoreCase) ? FrameInput.FirstLast :
@@ -67,6 +71,9 @@ public sealed record GenerationRequest(string Prompt, string Model, int Seconds)
     public string Resolution { get; init; } = "720p";
     /// For endpoints with a dedicated negative field; ignored elsewhere.
     public string? NegativePrompt { get; init; }
+    /// A fast low-cost preview pass. Sent only to models that declare the
+    /// "draft" capability; everything else ignores it.
+    public bool Draft { get; init; }
     /// Local paths of reference media, in the order the prompt names them:
     /// [Image1] is ReferenceImages[0], [Video1] is ReferenceVideos[0].
     public IReadOnlyList<string> ReferenceImages { get; init; } = [];

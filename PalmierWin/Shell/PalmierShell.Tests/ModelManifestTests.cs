@@ -31,7 +31,7 @@ public sealed class ModelManifestTests : IDisposable {
         string[] replicateIds = [
             "bytedance/seedance-2.0", "bytedance/seedance-1.5-pro", "bytedance/seedance-1-pro",
             "kwaivgi/kling-v3-video", "kwaivgi/kling-v2.1", "google/veo-3", "google/veo-3-fast",
-            "minimax/video-01",
+            "minimax/video-01", "black-forest-labs/flux-3",
         ];
         var replicate = ModelManifest.For("replicate");
         Assert.Equal(replicateIds.Length, replicate.Count);
@@ -44,6 +44,8 @@ public sealed class ModelManifestTests : IDisposable {
             "bytedance/seedance-2.0/fast/image-to-video", "bytedance/seedance-2.0/fast/text-to-video",
             "fal-ai/kling-video/v2.1/standard/text-to-video", "fal-ai/veo3/fast",
             "fal-ai/minimax/hailuo-02/standard/text-to-video",
+            "blackforestlabs/flux-3/first-last-frame-to-video",
+            "blackforestlabs/flux-3/text-to-video", "blackforestlabs/flux-3/extend-video",
         ];
         var fal = ModelManifest.For("fal");
         Assert.Equal(falIds.Length, fal.Count);
@@ -68,6 +70,39 @@ public sealed class ModelManifestTests : IDisposable {
         Assert.All(fal.Where(m => m.Id.Contains("text-to-video")),
             m => Assert.DoesNotContain("firstLastFrame", m.Capabilities));
         Assert.Contains(fal, m => m.Id.Contains("image-to-video") && m.Capabilities.Contains("firstLastFrame"));
+    }
+
+    /// FLUX.3 is one switched endpoint on Replicate and a family of
+    /// single-workflow endpoints on fal; both sides declare the family and
+    /// the audio toggle their request builders branch on.
+    [Fact]
+    public void FluxEntriesCarryTheirCapabilitiesOnBothProviders() {
+        var replicate = ModelManifest.For("replicate").Single(m => m.Id == "black-forest-labs/flux-3");
+        Assert.Equal("flux", replicate.Family);
+        Assert.Equal(["textToVideo", "firstFrame", "firstLastFrame", "extend", "draft"],
+            replicate.Capabilities);
+        Assert.True(replicate.SynthesisesAudio);
+
+        var fal = ModelManifest.For("fal").Where(m => m.Family == "flux").ToList();
+        Assert.Equal(3, fal.Count);
+        Assert.All(fal, m => Assert.True(m.SynthesisesAudio));
+        Assert.Equal(["firstLastFrame"],
+            fal.Single(m => m.Id == "blackforestlabs/flux-3/first-last-frame-to-video").Capabilities);
+        Assert.Equal(["textToVideo"],
+            fal.Single(m => m.Id == "blackforestlabs/flux-3/text-to-video").Capabilities);
+        Assert.Equal(["extend"],
+            fal.Single(m => m.Id == "blackforestlabs/flux-3/extend-video").Capabilities);
+    }
+
+    /// The manifest's own rule: every offered resolution carries a verified
+    /// per-second rate, or the estimate beside the Generate button goes quiet.
+    [Fact]
+    public void EveryFluxResolutionIsPriced() {
+        foreach (var (provider, models) in new[] { ("replicate", ModelManifest.For("replicate")),
+                                                   ("fal", ModelManifest.For("fal")) })
+        foreach (var model in models.Where(m => m.Family == "flux"))
+        foreach (string resolution in model.Resolutions)
+            Assert.NotNull(GenerationPricing.For(provider, model.Id, 5, resolution));
     }
 
     [Fact]
