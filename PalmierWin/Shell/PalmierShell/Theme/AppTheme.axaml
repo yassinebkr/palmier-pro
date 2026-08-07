@@ -38,6 +38,19 @@
     <SolidColorBrush x:Key="ThemeTrackVideoBrush" Color="{StaticResource ThemeTrackVideoColor}"/>
     <SolidColorBrush x:Key="ThemeTrackAudioBrush" Color="{StaticResource ThemeTrackAudioColor}"/>
     <SolidColorBrush x:Key="ThemeTrackTextBrush" Color="{StaticResource ThemeTrackTextColor}"/>
+    <!-- Curve editors (inspector): plot size, point and grab-target diameters,
+         channel tints, and the faint grid — ported from macOS AppTheme.Curve.
+         The hit diameter far exceeds the dot so points are easy to grab. -->
+    <x:Double x:Key="CurveEditorHeight">180</x:Double>
+    <x:Double x:Key="CurvePointDiameter">9</x:Double>
+    <x:Double x:Key="CurvePointHitDiameter">30</x:Double>
+    <Color x:Key="CurveRedColor">#FFFF382E</Color>
+    <Color x:Key="CurveGreenColor">#FF52D15C</Color>
+    <Color x:Key="CurveBlueColor">#FF528FFF</Color>
+    <SolidColorBrush x:Key="CurveRedBrush" Color="{StaticResource CurveRedColor}"/>
+    <SolidColorBrush x:Key="CurveGreenBrush" Color="{StaticResource CurveGreenColor}"/>
+    <SolidColorBrush x:Key="CurveBlueBrush" Color="{StaticResource CurveBlueColor}"/>
+    <SolidColorBrush x:Key="CurveGridBrush" Color="#0FFFFFFF"/>
     <!-- Fluent theme overrides: kill the bright default focus/hover borders. -->
     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#40FFFFFF"/>
     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#33FFFFFF"/>

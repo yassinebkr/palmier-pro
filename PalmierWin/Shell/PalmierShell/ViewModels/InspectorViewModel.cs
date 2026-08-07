@@ -89,6 +89,16 @@ public sealed partial class InspectorViewModel : ObservableObject {
     /// handles from the committed params.
     public event Action? WheelsRefreshed;
 
+    // Curves: the committed grade/hue curve models of the selected clip. The
+    // editors own the in-flight drag; previews mutate these without an
+    // intent, commits write through CommitEffect — one undo entry per gesture.
+    public GradeCurve CurveGrade { get; private set; } = new();
+    public HueCurves HueCurveSet { get; private set; } = new();
+
+    /// Fired at the end of Refresh so the curve editors can reload their
+    /// points from the committed models.
+    public event Action? CurvesRefreshed;
+
     // Provenance for generated media: what made it, and from which stills.
     [ObservableProperty] bool isGenerated;
     [ObservableProperty] string generationModel = "";
@@ -135,6 +145,8 @@ public sealed partial class InspectorViewModel : ObservableObject {
             ShowProvenance(clip?.MediaRef ?? (HasMediaSelection ? item?.Path : null));
             if (clip is null) {
                 ClipName = "";
+                CurveGrade = new GradeCurve();
+                HueCurveSet = new HueCurves();
                 return;
             }
             ClipName = Path.GetFileNameWithoutExtension(clip.MediaRef);
@@ -188,11 +200,14 @@ public sealed partial class InspectorViewModel : ObservableObject {
             ChromaSpill = clip.EffectNumber("key.chroma", "spill", 0.5);
             LutPath = clip.EffectOf("color.lut")?.Text("path") ?? "";
             LutIntensity = clip.EffectNumber("color.lut", "intensity", 1);
+            CurveGrade = GradeCurve.Parse(clip.EffectOf(GradeCurve.EffectType)?.Text(GradeCurve.ParamKey));
+            HueCurveSet = HueCurves.Parse(clip.EffectOf(HueCurves.EffectType)?.Text(HueCurves.ParamKey));
             UpdateWheelReadouts();
         } finally {
             refreshing = false;
         }
         WheelsRefreshed?.Invoke();
+        CurvesRefreshed?.Invoke();
     }
 
     /// The gesture state that would reproduce the committed params — the
@@ -227,6 +242,29 @@ public sealed partial class InspectorViewModel : ObservableObject {
         }
         CommitWheels();
         SetWheelReadout(kind, r, g, b);
+    }
+
+    /// Live curve drag: the model tracks the gesture — no intent, no undo.
+    public void PreviewCurve(GradeChannel channel, IReadOnlyList<CurvePoint> points) =>
+        CurveGrade = CurveGrade.With(channel, points);
+
+    public void PreviewHueCurve(HueChannel channel, IReadOnlyList<CurvePoint> points) =>
+        HueCurveSet = HueCurveSet.With(channel, points);
+
+    /// Curve drag end: one undo entry for the whole gesture. All channels
+    /// identity → the effect leaves the stack rather than storing a no-op.
+    public void CommitCurve(GradeChannel channel, IReadOnlyList<CurvePoint> points) {
+        if (timeline.SelectedClipId is null) return;
+        CurveGrade = CurveGrade.With(channel, points);
+        CommitEffect("Curves", GradeCurve.EffectType,
+            CurveGrade.IsIdentity ? null : new() { [GradeCurve.ParamKey] = CurveGrade.ToJson() });
+    }
+
+    public void CommitHueCurve(HueChannel channel, IReadOnlyList<CurvePoint> points) {
+        if (timeline.SelectedClipId is null) return;
+        HueCurveSet = HueCurveSet.With(channel, points);
+        CommitEffect("Hue Curves", HueCurves.EffectType,
+            HueCurveSet.IsIdentity ? null : new() { [HueCurves.ParamKey] = HueCurveSet.ToJson() });
     }
 
     void UpdateWheelReadouts() {

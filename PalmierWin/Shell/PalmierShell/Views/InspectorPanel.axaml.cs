@@ -11,11 +11,16 @@ public partial class InspectorPanel : UserControl {
         // TextBox bindings commit on focus loss; make Enter commit too.
         AddHandler(KeyDownEvent, OnFieldKeyDown, RoutingStrategies.Tunnel);
         DataContextChanged += (_, _) => {
-            if (vm is not null) vm.WheelsRefreshed -= SyncWheels;
+            if (vm is not null) {
+                vm.WheelsRefreshed -= SyncWheels;
+                vm.CurvesRefreshed -= SyncCurves;
+            }
             vm = DataContext as ViewModels.InspectorViewModel;
             if (vm is not null) {
                 vm.WheelsRefreshed += SyncWheels;
+                vm.CurvesRefreshed += SyncCurves;
                 SyncWheels();
+                SyncCurves();
             }
         };
     }
@@ -32,6 +37,54 @@ public partial class InspectorPanel : UserControl {
         var gamma = vm.WheelVector(Core.ColorWheelMath.WheelKind.Gamma);
         GammaWheel.WheelX = gamma.X; GammaWheel.WheelY = gamma.Y; GammaWheel.Offset = gamma.Offset;
     }
+
+    /// Re-loads each curve editor's points from the committed models after
+    /// any refresh. The editors own their in-flight drag, so this never
+    /// writes back.
+    void SyncCurves() {
+        if (vm is null) return;
+        GradeEditor.Points = vm.CurveGrade.Points((Core.GradeChannel)GradeEditor.Channel);
+        HueEditor.Points = vm.HueCurveSet.Points((Core.HueChannel)HueEditor.Channel);
+    }
+
+    void OnGradeChannelTab(object? sender, RoutedEventArgs e) {
+        if (sender is not RadioButton { Tag: string tag } || !int.TryParse(tag, out int channel)) return;
+        GradeEditor.Channel = channel;
+        if (vm is not null)
+            GradeEditor.Points = vm.CurveGrade.Points((Core.GradeChannel)channel);
+    }
+
+    void OnHueChannelTab(object? sender, RoutedEventArgs e) {
+        if (sender is not RadioButton { Tag: string tag } || !int.TryParse(tag, out int channel)) return;
+        HueEditor.Channel = channel;
+        if (vm is not null)
+            HueEditor.Points = vm.HueCurveSet.Points((Core.HueChannel)channel);
+    }
+
+    void OnGradeCurveChanged(object? sender, CurvePointsEventArgs e) {
+        if (sender is CurveEditor editor)
+            vm?.PreviewCurve((Core.GradeChannel)editor.Channel, e.Points);
+    }
+
+    void OnGradeCurveCommitted(object? sender, CurvePointsEventArgs e) {
+        if (sender is CurveEditor editor)
+            vm?.CommitCurve((Core.GradeChannel)editor.Channel, e.Points);
+    }
+
+    void OnHueCurveChanged(object? sender, CurvePointsEventArgs e) {
+        if (sender is CurveEditor editor)
+            vm?.PreviewHueCurve((Core.HueChannel)editor.Channel, e.Points);
+    }
+
+    void OnHueCurveCommitted(object? sender, CurvePointsEventArgs e) {
+        if (sender is CurveEditor editor)
+            vm?.CommitHueCurve((Core.HueChannel)editor.Channel, e.Points);
+    }
+
+    /// A canceled drag previewed points into the VM model without committing;
+    /// refresh restores the model from the stored effect so the canceled
+    /// channel cannot leak into a later commit on another channel.
+    void OnCurveCanceled(object? sender, EventArgs e) => vm?.Refresh();
 
     Core.ColorWheelMath.WheelKind KindOf(object? sender) =>
         ReferenceEquals(sender, LiftWheel) ? Core.ColorWheelMath.WheelKind.Lift

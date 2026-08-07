@@ -39,6 +39,31 @@
     <Style Selector="Button.key:pointerover">
       <Setter Property="Opacity" Value="1"/>
     </Style>
+    <!-- Channel tabs over the curve editors: quiet text chips, selected reads
+         as a raised pill. -->
+    <Style Selector="RadioButton.seg">
+      <Setter Property="MinWidth" Value="0"/>
+      <Setter Property="MinHeight" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="0,0,2,0"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="Foreground" Value="{StaticResource ThemeTextMutedBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Padding="10,3" CornerRadius="4" Background="{TemplateBinding Background}">
+            <ContentPresenter Content="{TemplateBinding Content}"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.seg:pointerover">
+      <Setter Property="Foreground" Value="{StaticResource ThemeTextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="RadioButton.seg:checked">
+      <Setter Property="Background" Value="{StaticResource ThemeRaisedBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource ThemeTextBrush}"/>
+    </Style>
   </UserControl.Styles>
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="12,8">
@@ -266,6 +291,48 @@
                            Foreground="{StaticResource ThemeTextMutedBrush}"/>
               </StackPanel>
             </Grid>
+          </Expander>
+
+          <!-- Curve editors: one channel tab strip over a square plot. A drag
+               previews live in the control and commits once on release. -->
+          <Expander Classes="section" Header="CURVES">
+            <StackPanel Spacing="6" Margin="0,4,0,0">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton Classes="seg" Content="Y" GroupName="GradeCurveChannel"
+                             IsChecked="True" Tag="0" Checked="OnGradeChannelTab"/>
+                <RadioButton Classes="seg" Content="R" GroupName="GradeCurveChannel"
+                             Tag="1" Checked="OnGradeChannelTab"/>
+                <RadioButton Classes="seg" Content="G" GroupName="GradeCurveChannel"
+                             Tag="2" Checked="OnGradeChannelTab"/>
+                <RadioButton Classes="seg" Content="B" GroupName="GradeCurveChannel"
+                             Tag="3" Checked="OnGradeChannelTab"/>
+              </StackPanel>
+              <views:CurveEditor x:Name="GradeEditor" Mode="Grade"
+                                 Height="{StaticResource CurveEditorHeight}"
+                                 Changed="OnGradeCurveChanged" Committed="OnGradeCurveCommitted"
+                                 Canceled="OnCurveCanceled"/>
+              <TextBlock Text="Drag to add or shape a point · double-click to remove" FontSize="9"
+                         Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            </StackPanel>
+          </Expander>
+
+          <Expander Classes="section" Header="HUE CURVES">
+            <StackPanel Spacing="6" Margin="0,4,0,0">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton Classes="seg" Content="Hue" GroupName="HueCurveChannel"
+                             IsChecked="True" Tag="0" Checked="OnHueChannelTab"/>
+                <RadioButton Classes="seg" Content="Sat" GroupName="HueCurveChannel"
+                             Tag="1" Checked="OnHueChannelTab"/>
+                <RadioButton Classes="seg" Content="Luma" GroupName="HueCurveChannel"
+                             Tag="2" Checked="OnHueChannelTab"/>
+              </StackPanel>
+              <views:CurveEditor x:Name="HueEditor" Mode="Hue"
+                                 Height="{StaticResource CurveEditorHeight}"
+                                 Changed="OnHueCurveChanged" Committed="OnHueCurveCommitted"
+                                 Canceled="OnCurveCanceled"/>
+              <TextBlock Text="Drag to add or shape a point · double-click to remove" FontSize="9"
+                         Foreground="{StaticResource ThemeTextMutedBrush}"/>
+            </StackPanel>
           </Expander>
 
           <Expander Classes="section" Header="CHROMA KEY">
