@@ -31,6 +31,10 @@ public sealed record GenerationModel(string Id, string Name, int[] Durations) {
     /// is not enough ("flux" names its fields nothing like seedance or kling).
     public string? Family { get; init; }
 
+    /// Kept in the manifest (and priced) but not offered in the picker — e.g.
+    /// the extend workflow until the composer's Enhance affordance lands.
+    public bool Hidden { get; init; }
+
     /// How this endpoint takes reference stills, from its capabilities.
     public FrameInput Frames =>
         Capabilities.Contains("firstLastFrame", StringComparer.OrdinalIgnoreCase) ? FrameInput.FirstLast :

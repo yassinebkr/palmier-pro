@@ -205,6 +205,7 @@ public static class ModelManifest {
             result[provider] = entries
                 .Where(e => e is { Id.Length: > 0, Name.Length: > 0 })
                 .Select(e => e!.ToModel())
+                .Where(m => !m.Hidden)
                 .ToList();
         }
         return result;
@@ -228,6 +229,7 @@ public static class ModelManifest {
         public int MaxReferenceImages { get; set; }
         public int MaxReferenceVideos { get; set; }
         public bool FramesAndReferencesExclusive { get; set; }
+        public bool Hidden { get; set; }
 
         public GenerationModel ToModel() => new(Id!, Name!, Durations ?? []) {
             Capabilities = Capabilities ?? [],
@@ -237,6 +239,7 @@ public static class ModelManifest {
             MaxReferenceImages = MaxReferenceImages,
             MaxReferenceVideos = MaxReferenceVideos,
             FramesAndReferencesExclusive = FramesAndReferencesExclusive,
+            Hidden = Hidden,
         };
     }
 }

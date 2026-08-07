@@ -45,7 +45,8 @@ public sealed class ModelManifestTests : IDisposable {
             "fal-ai/kling-video/v2.1/standard/text-to-video", "fal-ai/veo3/fast",
             "fal-ai/minimax/hailuo-02/standard/text-to-video",
             "blackforestlabs/flux-3/first-last-frame-to-video",
-            "blackforestlabs/flux-3/text-to-video", "blackforestlabs/flux-3/extend-video",
+            "blackforestlabs/flux-3/text-to-video",
+            // extend-video stays in the manifest but hidden until Enhance lands.
         ];
         var fal = ModelManifest.For("fal");
         Assert.Equal(falIds.Length, fal.Count);
@@ -84,8 +85,9 @@ public sealed class ModelManifestTests : IDisposable {
         Assert.True(replicate.SynthesisesAudio);
 
         var fal = ModelManifest.For("fal").Where(m => m.Family == "flux").ToList();
-        Assert.Equal(3, fal.Count);
+        Assert.Equal(2, fal.Count);
         Assert.All(fal, m => Assert.True(m.SynthesisesAudio));
+        Assert.DoesNotContain(fal, m => m.Id == "blackforestlabs/flux-3/extend-video");
         Assert.Equal(["firstLastFrame"],
             fal.Single(m => m.Id == "blackforestlabs/flux-3/first-last-frame-to-video").Capabilities);
         Assert.Equal(["textToVideo"],

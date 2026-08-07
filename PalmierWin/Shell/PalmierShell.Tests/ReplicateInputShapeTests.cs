@@ -149,6 +149,15 @@ public class ReplicateInputShapeTests : IDisposable {
         Assert.Equal(["duration", "generate_audio", "prompt", "resolution"], input.Keys.Order());
     }
 
+    /// A lone end frame is never sent: as images[0] it would open the clip —
+    /// the exact opposite of the intent, and the run would be paid for.
+    [Fact]
+    public void FluxLoneLastFrameSendsNoImages() {
+        var input = ReplicateProvider.BuildInput(
+            Request("black-forest-labs/flux-3") with { FirstFrame = null, LastFrame = "last.png" });
+        Assert.DoesNotContain("images", input.Keys);
+    }
+
     /// A video continues from its final frames under `start_video`, and the
     /// schema forbids combining it with images — the stills stay out.
     [Fact]

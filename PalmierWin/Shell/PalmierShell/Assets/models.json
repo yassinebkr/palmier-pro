@@ -168,7 +168,10 @@
         "capabilities": ["extend"],
         "resolutions": ["720p", "1080p"],
         "synthesisesAudio": true,
-        "family": "flux"
+        "family": "flux",
+        // Out of the picker until the composer's Enhance affordance lands —
+        // nothing can attach the required source video yet.
+        "hidden": true
       }
     ]
   }

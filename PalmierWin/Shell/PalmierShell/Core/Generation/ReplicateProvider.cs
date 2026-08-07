@@ -135,9 +135,15 @@ public sealed class ReplicateProvider : IGenerationProvider {
             if (referenceVideoUrls is { Count: > 0 } videos)
                 input["start_video"] = videos[0];
             else {
+                // Same rule as the other families: a lone end frame is never
+                // sent — as images[0] it would OPEN the clip, the exact
+                // opposite of the intent, and the run would be paid for.
                 var images = new List<object>();
-                if (GenerationHttp.DataUri(request.FirstFrame) is { } opens) images.Add(opens);
-                if (GenerationHttp.DataUri(request.LastFrame) is { } ends) images.Add(ends);
+                if (GenerationHttp.DataUri(request.FirstFrame) is { } opens) {
+                    images.Add(opens);
+                    if (GenerationHttp.DataUri(request.LastFrame) is { } ends)
+                        images.Add(ends);
+                }
                 if (images.Count > 0) input["images"] = images;
             }
             return input;
