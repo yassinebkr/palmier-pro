@@ -244,6 +244,11 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Set when the run should continue an existing clip and land after it.
     public EnhanceTarget? PendingEnhance { get; private set; }
 
+    /// Bumped on every arm and disarm, so asynchronous arm prep (frame
+    /// decodes, tail extractions) can tell a stale completion from the arm
+    /// it started under.
+    public int ArmGeneration { get; private set; }
+
     public bool HasFirstFrame => FirstFramePath is not null;
     public bool HasLastFrame => LastFramePath is not null;
 
@@ -609,16 +614,21 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     partial void OnSelectedResolutionChanged(string value) => RefreshDerived();
     partial void OnTunePromptChanged(bool value) => RefreshDerived();
 
+    /// Test seam: replaces the settings read. Never set in production code.
+    public Func<AppSettings> LoadSettings { get; set; } = SettingsStore.Load;
+
     /// Re-reads the provider's key; call after the settings pane saves.
     /// Also restores the provider's last-used model — but only over an
-    /// untouched default, never over a selection made this session.
+    /// untouched default, never over a selection made this session, and in
+    /// enhance mode never a model the narrowed picker does not offer.
     public async Task RefreshKeyAsync() {
-        var settings = await Task.Run(SettingsStore.Load);
+        var settings = await Task.Run(() => LoadSettings());
         HasApiKey = settings.KeyFor(SelectedProvider.Id).Length > 0;
         Message = HasApiKey ? null : $"Add a {SelectedProvider.Name} key in Settings → Generation.";
         if (ModelId == Models.FirstOrDefault()?.Id
             && settings.Models.TryGetValue(ModelMemoryKey, out var saved)
-            && saved.Length > 0)
+            && saved.Length > 0
+            && (PendingEnhance is null || Models.Any(m => m.Id == saved)))
             ModelId = saved;
     }
 
@@ -810,6 +820,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     public void BeginTransition(TransitionTarget target, string firstFrame, string lastFrame,
                                 int? firstFrameNumber = null, int? lastFrameNumber = null,
                                 string? locationTag = null) {
+        ArmGeneration++;
         PendingTransition = target;
         PendingShot = null;
         ClearEnhance();
@@ -836,6 +847,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Arms a generated shot for empty timeline space. `locationTag` is the
     /// nearest preceding clip's container location tag, when it has one.
     public void BeginShot(ShotTarget target, string? locationTag = null) {
+        ArmGeneration++;
         PendingShot = target;
         PendingTransition = null;
         ClearEnhance();
@@ -868,6 +880,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// The prompt is left for the user: it describes how the shot continues.
     /// `locationTag` is the clip's container location tag, when it has one.
     public void BeginEnhance(EnhanceTarget target, string tailVideoPath, string? locationTag = null) {
+        ArmGeneration++;
         PendingEnhance = target;
         PendingTransition = null;
         PendingShot = null;
@@ -999,6 +1012,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     }
 
     public void ClearPlacement() {
+        ArmGeneration++;
         PendingTransition = null;
         PendingShot = null;
         ClearEnhance();

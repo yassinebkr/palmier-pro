@@ -131,6 +131,33 @@ public class EnhanceTests {
         Assert.NotEqual(ExtendVideoId, vm.ModelId);
     }
 
+    /// The armed extend model is the narrowed list's first entry, which is
+    /// exactly where the saved-model restore is allowed to write — so an
+    /// unscoped restore would de-select it mid-arm.
+    [Fact]
+    public async Task ASavedPlainModelDoesNotReplaceTheArmedExtendModel() {
+        var vm = Vm();
+        await vm.Initialized;
+        vm.BeginEnhance(new EnhanceTarget("clip-1", "Clip One"), "tail.mp4");
+        Assert.Equal(ReplicateFluxId, vm.ModelId);
+
+        vm.LoadSettings = () =>
+            AppSettings.Default.WithModel("generate:replicate", "bytedance/seedance-2.0");
+        await vm.RefreshKeyAsync();
+        Assert.Equal(ReplicateFluxId, vm.ModelId);
+    }
+
+    [Fact]
+    public async Task ASavedModelStillRestoresOverAnUntouchedDefault() {
+        var vm = Vm();
+        await vm.Initialized;
+        vm.ModelId = vm.Models[0].Id;
+        vm.LoadSettings = () =>
+            AppSettings.Default.WithModel("generate:replicate", "google/veo-3");
+        await vm.RefreshKeyAsync();
+        Assert.Equal("google/veo-3", vm.ModelId);
+    }
+
     /// The request is the same assembly path Generate uses — checked here
     /// without spending money.
     [Fact]
@@ -256,5 +283,47 @@ public class EnhanceTests {
         Assert.Equal(2, h.VideoClips.Count);
         Assert.Equal(60, h.VideoClips[1].StartFrame);
         Assert.Equal(45, h.VideoClips[1].DurationFrames);
+    }
+
+    /// The extraction finishes after the user has armed something else: the
+    /// stale completion must not wipe the newer arm.
+    [Fact]
+    public async Task AStaleExtractionDoesNotClobberANewerArm() {
+        using var h = new Harness();
+        var composer = Vm();
+        await composer.Initialized;
+        string clipId = CoreApi.AddClip(h.Project, TestMediaPath("testsrc.mp4"), 60)!;
+        h.Timeline.Reload();
+        var release = new ManualResetEventSlim();
+
+        var arming = MainViewModel.BeginEnhanceAsync(h.Timeline, composer, clipId,
+            (_, _, _) => { release.Wait(); return "tail.mp4"; }, _ => null);
+        composer.BeginShot(new ShotTarget("T", 300, 60));
+        release.Set();
+        await arming;
+
+        Assert.NotNull(composer.PendingShot);
+        Assert.Null(composer.PendingEnhance);
+        Assert.Empty(composer.ReferenceVideos);
+    }
+
+    /// A failed re-arm must not leave the previous enhance armed while the
+    /// message names the clip that just failed.
+    [Fact]
+    public async Task AFailedRearmClearsThePreviousEnhance() {
+        using var h = new Harness();
+        var composer = Vm();
+        await composer.Initialized;
+        string clipId = CoreApi.AddClip(h.Project, TestMediaPath("testsrc.mp4"), 60)!;
+        h.Timeline.Reload();
+
+        await MainViewModel.BeginEnhanceAsync(h.Timeline, composer, clipId,
+            (_, _, _) => "tail.mp4", _ => null);
+        Assert.NotNull(composer.PendingEnhance);
+
+        await MainViewModel.BeginEnhanceAsync(h.Timeline, composer, clipId,
+            (_, _, _) => null, _ => null);
+        Assert.False(composer.HasPendingPlacement);
+        Assert.Contains("Could not extract", composer.Message);
     }
 }

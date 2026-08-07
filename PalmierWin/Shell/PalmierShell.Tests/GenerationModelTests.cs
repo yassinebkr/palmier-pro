@@ -40,4 +40,13 @@ public class GenerationModelTests {
         Assert.False(plain.CanExtend);
         Assert.False(plain.ExtendOnly);
     }
+
+    [Fact]
+    public void ATextToVideoModelThatAlsoExtendsIsNotExtendOnly() {
+        var model = new GenerationModel("x/extend-and-text", "X", [5]) {
+            Capabilities = ["textToVideo", "extend"],
+        };
+        Assert.True(model.CanExtend);
+        Assert.False(model.ExtendOnly);   // it still serves plain generations
+    }
 }

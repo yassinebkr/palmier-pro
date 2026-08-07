@@ -50,8 +50,12 @@ public sealed record GenerationModel(string Id, string Name, int[] Durations) {
     /// Extend is the only way this endpoint takes footage. Such a model is
     /// useless for a plain shot or transition — the request would go out
     /// without the source video it requires — so the picker offers it only
-    /// while an enhance is armed.
-    public bool ExtendOnly => CanExtend && !AcceptsFrames;
+    /// while an enhance is armed. A model that also does text-to-video or
+    /// takes frames serves plain generations fine and stays.
+    public bool ExtendOnly =>
+        CanExtend
+        && !AcceptsFrames
+        && !Capabilities.Contains("textToVideo", StringComparer.OrdinalIgnoreCase);
 
     /// Output resolutions the endpoint accepts; the first is its default.
     public string[] Resolutions { get; init; } = ["720p"];
