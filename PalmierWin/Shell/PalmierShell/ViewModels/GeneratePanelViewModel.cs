@@ -81,6 +81,23 @@ public sealed partial class ReferenceItemViewModel : ObservableObject {
     }
 }
 
+/// One row of the recent-generations list: the take's prompt, model and age,
+/// plus an Import action while the file is on disk and not yet in the library.
+public sealed partial class RecentGenerationViewModel : ObservableObject {
+    public string MediaPath { get; }
+    public string PromptExcerpt { get; }
+    public string Detail { get; }
+    [ObservableProperty] bool canImport;
+
+    public RecentGenerationViewModel(RecentGeneration entry, bool canImport, DateTimeOffset now) {
+        MediaPath = entry.MediaPath;
+        CanImport = canImport;
+        Detail = $"{entry.Model} · {RelativeTime.Ago(entry.CreatedUtc, now)}";
+        string oneLine = entry.Prompt.ReplaceLineEndings(" ").Trim();
+        PromptExcerpt = oneLine.Length <= 60 ? oneLine : oneLine[..60].TrimEnd() + "…";
+    }
+}
+
 /// The Generate panel: prompt, provider, model, duration. Finished clips are
 /// imported into the media library like any other file.
 public sealed partial class GeneratePanelViewModel : ObservableObject {
@@ -262,6 +279,32 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [ObservableProperty] bool hasApiKey;
     [ObservableProperty] string? message;
 
+    /// Where the next take lands, in one persistent header line. Message is
+    /// transient — a capture warning replaces the arm's text — so the target
+    /// statement lives here and the arm messages are composed from it.
+    string targetSummary = DefaultTargetSummary;
+    const string DefaultTargetSummary = "New shot into the media library";
+
+    public string TargetSummary =>
+        UseLocationContext && LocationStatus is { } status
+            ? $"{targetSummary} · {status}"
+            : targetSummary;
+
+    void SetTargetSummary(string summary) {
+        targetSummary = summary;
+        OnPropertyChanged(nameof(TargetSummary));
+    }
+
+    /// The prompt builder's fold follows the user, across sessions. Persisted
+    /// on every toggle; restored once at construction.
+    [ObservableProperty] bool promptBuilderExpanded = true;
+    bool restoringBuilderState;
+
+    partial void OnPromptBuilderExpandedChanged(bool value) {
+        if (restoringBuilderState) return;
+        _ = Task.Run(() => SettingsStore.Update(s => s with { PromptBuilderExpanded = value }));
+    }
+
     /// The guided builder's sections. A chip appends its phrase to the same
     /// editable prompt text — the builder is an assist, never a gate.
     public IReadOnlyList<PromptChipGroup> PromptChipGroups => PromptBuilder.Groups;
@@ -406,6 +449,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         OnPropertyChanged(nameof(FrameModeText));
         OnPropertyChanged(nameof(ReferenceConflict));
         OnPropertyChanged(nameof(CanAttachReferences));
+        OnPropertyChanged(nameof(TargetSummary));
     }
 
     /// Whether the reference section is offered at all for the current model.
@@ -445,12 +489,22 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         this.library = library;
         selectedProvider = Providers[0];
         SyncModels();
-        Initialized = RefreshKeyAsync();
+        Initialized = InitializeAsync();
     }
 
     /// The constructor's key/model restore, awaitable so callers (and tests)
     /// can order against it instead of racing its Message writes.
     public Task Initialized { get; }
+
+    /// One settings read at construction: the persisted panel state plus the
+    /// key/model restore every settings read shares.
+    async Task InitializeAsync() {
+        var settings = await Task.Run(() => LoadSettings());
+        restoringBuilderState = true;
+        PromptBuilderExpanded = settings.PromptBuilderExpanded;
+        restoringBuilderState = false;
+        ApplySettings(settings);
+    }
 
     void SyncModels() => SyncModels(keepSelection: false);
 
@@ -621,8 +675,9 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     /// Also restores the provider's last-used model — but only over an
     /// untouched default, never over a selection made this session, and in
     /// enhance mode never a model the narrowed picker does not offer.
-    public async Task RefreshKeyAsync() {
-        var settings = await Task.Run(() => LoadSettings());
+    public async Task RefreshKeyAsync() => ApplySettings(await Task.Run(() => LoadSettings()));
+
+    void ApplySettings(AppSettings settings) {
         HasApiKey = settings.KeyFor(SelectedProvider.Id).Length > 0;
         Message = HasApiKey ? null : $"Add a {SelectedProvider.Name} key in Settings → Generation.";
         if (ModelId == Models.FirstOrDefault()?.Id
@@ -738,6 +793,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
                 if (claim.TryClaim()) EnhanceReady?.Invoke(enhance, path);
                 else Message = "Second take imported to Enhanced — swap it in if you prefer it.";
             }
+            await RefreshRecentAsync();
         } catch (OperationCanceledException) {
             Jobs.Remove(job);
             job.Finish();
@@ -757,6 +813,59 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
     [RelayCommand]
     void DismissJob(GenerationJobViewModel? job) {
         if (job is not null) Jobs.Remove(job);
+    }
+
+    /// Finished takes still on disk, newest first. Rebuilt on every composer
+    /// open and after each completed job; the section stays collapsed, and
+    /// hidden while empty.
+    public ObservableCollection<RecentGenerationViewModel> RecentGenerations { get; } = new();
+
+    public bool HasRecentGenerations => RecentGenerations.Count > 0;
+
+    /// Test seam: where the history is read from. Production reads the real
+    /// generation output directory. Never set in production code.
+    public Func<string> HistoryDirectory { get; set; } = () => GenerationService.OutputDirectory;
+
+    /// Serializes concurrent rebuilds: a window open racing a job completion
+    /// must not interleave two writers to the same list.
+    int recentGeneration;
+
+    public async Task RefreshRecentAsync() {
+        int generation = ++recentGeneration;
+        HashSet<string> known;
+        IReadOnlyList<RecentGeneration> entries;
+        try {
+            string directory = HistoryDirectory();
+            known = library().Select(item => item.Path)
+                             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            entries = await Task.Run(() => GenerationHistory.Load(directory));
+        } catch (Exception ex) {
+            // Bookkeeping, fail-soft: the last good list stands, and a refresh
+            // failure must never fail the run that just finished.
+            SessionLog.Event("generate", $"recent-generations refresh failed: {ex.Message}");
+            return;
+        }
+        if (generation != recentGeneration) return;   // a newer load owns the list
+        RecentGenerations.Clear();
+        var now = DateTimeOffset.Now;
+        foreach (var entry in entries)
+            RecentGenerations.Add(new RecentGenerationViewModel(
+                entry, canImport: !known.Contains(entry.MediaPath), now));
+        OnPropertyChanged(nameof(HasRecentGenerations));
+    }
+
+    /// Re-imports a take that is on disk but not in the library. The media
+    /// panel dedupes by path, and the button hides either way — but a take
+    /// deleted between the refresh and the click says so, not vanishes silently.
+    [RelayCommand]
+    async Task ImportRecent(RecentGenerationViewModel? row) {
+        if (row is null || !row.CanImport) return;
+        row.CanImport = false;
+        if (!File.Exists(row.MediaPath)) {
+            Message = "Couldn't import — the file is gone.";
+            return;
+        }
+        await importAsync(row.MediaPath, null);
     }
 
     [RelayCommand]
@@ -829,8 +938,8 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         SetLastFrame(lastFrame, lastFrameNumber);
         string moved = MoveToFrameCapableModel();
         string where = target.FillsGap ? "the gap at" : "the cut at";
-        Message = $"Transition across {where} {Timecode.Format(target.BoundaryFrame, 30)} — " +
-                  "describe the motion, then Generate." + moved;
+        SetTargetSummary($"Transition across {where} {Timecode.Format(target.BoundaryFrame, 30)}");
+        Message = targetSummary + " — describe the motion, then Generate." + moved;
         ResetSpans();
         ResetLocation(locationTag);
         if (target.FillsGap && target.DurationFrames > 0) PreferDuration(target.DurationFrames);
@@ -856,10 +965,11 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         ClearLastFrame();
         ResetSpans();
         ResetLocation(locationTag);
-        Message = target.AvailableFrames > 0
+        SetTargetSummary(target.AvailableFrames > 0
             ? $"New shot for the {target.AvailableFrames / 30.0:0.#} s gap at " +
-              $"{Timecode.Format(target.StartFrame, 30)} — describe it, then Generate."
-            : $"New shot at {Timecode.Format(target.StartFrame, 30)} — describe it, then Generate.";
+              $"{Timecode.Format(target.StartFrame, 30)}"
+            : $"New shot at {Timecode.Format(target.StartFrame, 30)}");
+        Message = targetSummary + " — describe it, then Generate.";
         if (target.AvailableFrames > 0) PreferDuration(target.AvailableFrames);
     }
 
@@ -870,8 +980,8 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         if (PendingShot is null || (!hasFirst && !hasLast)) return;
         string frames = hasFirst && hasLast ? "the clips on both sides"
             : hasFirst ? "the clip before it" : "the clip after it";
-        Message = $"New shot to sit between {frames} — describe it, then Generate." +
-                  MoveToFrameCapableModel();
+        SetTargetSummary($"New shot to sit between {frames}");
+        Message = targetSummary + " — describe it, then Generate." + MoveToFrameCapableModel();
     }
 
     /// Arms an enhance: the run continues the tail of the target's clip,
@@ -894,8 +1004,9 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         ReferenceImages.Clear();
         ReferenceVideos.Clear();
         AddReferenceVideo(tailVideoPath);
+        SetTargetSummary($"Extend '{target.ClipName}'");
         if (ReferenceVideos.Count > 0) {
-            Message = $"Extend '{target.ClipName}' — describe what happens next, then Generate." + moved;
+            Message = targetSummary + " — describe what happens next, then Generate." + moved;
         } else {
             ReferencesChanged();   // the clears above still changed the state
             Message = $"{SelectedProvider.Name} has no model that can extend a clip.";
@@ -1017,6 +1128,7 @@ public sealed partial class GeneratePanelViewModel : ObservableObject {
         PendingShot = null;
         ClearEnhance();
         ResetLocation(null);
+        SetTargetSummary(DefaultTargetSummary);
         OnPropertyChanged(nameof(ShowSpanPickers));
         OnPropertyChanged(nameof(HasPendingPlacement));
     }
