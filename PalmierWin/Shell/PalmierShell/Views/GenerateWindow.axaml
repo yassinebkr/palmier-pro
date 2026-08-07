@@ -15,65 +15,6 @@
   <!-- Its own window because the composer is a form: docked in the library it
        was cut off at the bottom, which hid the price and the Generate button.
        Scrolls, so a long prompt preview cannot push anything out of reach. -->
-  <Window.Styles>
-    <!-- Same accordion section language as the inspector: header row +
-         chevron over a hairline, no box chrome. The Fluent Expander theme
-         left-aligns and min-widths the control, so the template is local. -->
-    <Style Selector="Expander.section">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-      <Setter Property="MinWidth" Value="0"/>
-      <Setter Property="Template">
-        <ControlTemplate>
-          <StackPanel Margin="0,6,0,0">
-            <ToggleButton Classes="hdr" IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
-                          Background="Transparent" BorderThickness="0" Padding="6,2" Margin="-6,0,0,0"
-                          HorizontalAlignment="Stretch"
-                          HorizontalContentAlignment="Stretch" Cursor="Hand">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="{TemplateBinding Header}" FontSize="10" VerticalAlignment="Center"
-                           Foreground="{StaticResource ThemeTextMutedBrush}"/>
-                <Path Grid.Column="1" Classes="chev" Data="M 0,0 L 5,4 L 0,8 Z" Stretch="Uniform"
-                      Width="6" Height="8" Margin="6,0,0,0" VerticalAlignment="Center"
-                      Fill="{StaticResource ThemeTextMutedBrush}">
-                  <Path.RenderTransform>
-                    <RotateTransform Angle="0"/>
-                  </Path.RenderTransform>
-                  <Path.Transitions>
-                    <Transitions>
-                      <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12"/>
-                    </Transitions>
-                  </Path.Transitions>
-                </Path>
-              </Grid>
-            </ToggleButton>
-            <Border Height="1" Background="{StaticResource ThemeBorderBrush}" Margin="0,2,0,0"/>
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              IsVisible="{TemplateBinding IsExpanded}"
-                              HorizontalAlignment="Stretch"
-                              Margin="0,4,0,2"/>
-          </StackPanel>
-        </ControlTemplate>
-      </Setter>
-    </Style>
-    <Style Selector="Expander.section /template/ ToggleButton:checked Path.chev">
-      <Setter Property="RenderTransform" Value="rotate(90deg)"/>
-    </Style>
-    <Style Selector="Expander.section /template/ ToggleButton:checked">
-      <Setter Property="Background" Value="Transparent"/>
-    </Style>
-    <Style Selector="Expander.section /template/ ToggleButton:pointerover">
-      <Setter Property="Background" Value="Transparent"/>
-    </Style>
-    <!-- Hover feedback is a barely-there wash, not the button grey. -->
-    <Style Selector="ToggleButton.hdr:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#0FFFFFFF"/>
-      <Setter Property="CornerRadius" Value="4"/>
-    </Style>
-    <!-- Expanded must not read as a selected chip. -->
-    <Style Selector="ToggleButton.hdr:checked /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent"/>
-    </Style>
-  </Window.Styles>
   <Grid RowDefinitions="32,*,Auto">
     <!-- App-drawn title strip: the OS chrome is gone everywhere, sub-windows
          included, so each window carries its own. -->
