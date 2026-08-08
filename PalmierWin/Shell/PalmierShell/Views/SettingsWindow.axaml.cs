@@ -62,7 +62,9 @@ public partial class SettingsWindow : Window {
 
     async void OnAgentModeChecked(object? sender, RoutedEventArgs e) {
         if (loadingAgentMode || main is null) return;
-        string mode = AgentModeExternal.IsChecked == true
+        // Read the sender, not the other radio: group unchecking can land
+        // after this event, so the other button's IsChecked may still be true.
+        string mode = sender == AgentModeExternal
             ? AppSettings.AgentModeExternal : AppSettings.AgentModeInline;
         await main.Mcp.SetAgentModeAsync(mode);
     }
